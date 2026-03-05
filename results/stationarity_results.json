@@ -1,0 +1,90 @@
+[
+  {
+    "variable": "O2",
+    "n": 256,
+    "adf_stat": -4.010376559160646,
+    "adf_p": 0.0013571406472132742,
+    "adf_stationary": true,
+    "kpss_stat": 0.04625452989669541,
+    "kpss_p": 0.1,
+    "kpss_stationary": true,
+    "conclusion": "stationary"
+  },
+  {
+    "variable": "CO2",
+    "n": 255,
+    "adf_stat": -2.723116250921715,
+    "adf_p": 0.07012285477490743,
+    "adf_stationary": false,
+    "kpss_stat": 0.09737775999643285,
+    "kpss_p": 0.1,
+    "kpss_stationary": true,
+    "conclusion": "uncertain"
+  },
+  {
+    "variable": "Temperature",
+    "n": 256,
+    "adf_stat": -2.8681187229270266,
+    "adf_p": 0.04918294801258767,
+    "adf_stationary": true,
+    "kpss_stat": 0.05726191181601015,
+    "kpss_p": 0.1,
+    "kpss_stationary": true,
+    "conclusion": "stationary"
+  },
+  {
+    "variable": "Salinity",
+    "n": 256,
+    "adf_stat": -3.4198229964268747,
+    "adf_p": 0.010301385696731715,
+    "adf_stationary": true,
+    "kpss_stat": 0.32207871148470124,
+    "kpss_p": 0.1,
+    "kpss_stationary": true,
+    "conclusion": "stationary"
+  },
+  {
+    "variable": "pH",
+    "n": 256,
+    "adf_stat": -1.9971306384012577,
+    "adf_p": 0.2878326297462842,
+    "adf_stationary": false,
+    "kpss_stat": 0.15504095216089292,
+    "kpss_p": 0.1,
+    "kpss_stationary": true,
+    "conclusion": "uncertain"
+  },
+  {
+    "variable": "EC50",
+    "n": 158,
+    "adf_stat": -0.46160493957104054,
+    "adf_p": 0.8992937797030758,
+    "adf_stationary": false,
+    "kpss_stat": 1.4240917686986017,
+    "kpss_p": 0.01,
+    "kpss_stationary": false,
+    "conclusion": "non-stationary"
+  },
+  {
+    "variable": "mhw_peak_intensity",
+    "n": 276,
+    "adf_stat": -5.38921212056952,
+    "adf_p": 3.5684768872707464e-06,
+    "adf_stationary": true,
+    "kpss_stat": 1.208979317554353,
+    "kpss_p": 0.01,
+    "kpss_stationary": false,
+    "conclusion": "uncertain"
+  },
+  {
+    "variable": "mhw_days",
+    "n": 276,
+    "adf_stat": -5.495037747274771,
+    "adf_p": 2.1328390436318815e-06,
+    "adf_stationary": true,
+    "kpss_stat": 1.061477613097169,
+    "kpss_p": 0.01,
+    "kpss_stationary": false,
+    "conclusion": "uncertain"
+  }
+]

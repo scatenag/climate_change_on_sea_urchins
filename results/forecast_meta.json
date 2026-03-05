@@ -1,0 +1,20 @@
+{
+  "optimal_lag": 2,
+  "scenarios": {
+    "bad": {
+      "final_mean": 33.7335558022167,
+      "final_ci_lower": 7.738935750341234,
+      "final_ci_upper": 59.728175854092164
+    },
+    "mean": {
+      "final_mean": 34.370048752906236,
+      "final_ci_lower": 8.37542870103077,
+      "final_ci_upper": 60.3646688047817
+    },
+    "good": {
+      "final_mean": 35.00654170359577,
+      "final_ci_lower": 9.011921651720307,
+      "final_ci_upper": 61.00116175547124
+    }
+  }
+}

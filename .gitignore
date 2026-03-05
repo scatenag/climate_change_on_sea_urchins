@@ -1,0 +1,16 @@
+# Raw NetCDF downloads (large, reproducible via scripts)
+data/raw/
+*.nc
+
+# Copernicus credentials
+.copernicusmarine/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS
+.DS_Store
