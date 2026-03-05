@@ -119,10 +119,10 @@ tabs = st.tabs([
     "Overview",
     "Time Series",
     "Marine Heatwaves",
-    "MHW → Gameti (lag)",
+    "MHW → Gametes (lag)",
     "Pre / Post 2016",
-    "Correlazioni",
-    "Stazionarietà",
+    "Correlations",
+    "Stationarity",
     "Forecast EC50",
     "About",
 ])
@@ -137,16 +137,16 @@ df_real = df[df["EC50_imputed"] == False].copy()
 with tabs[0]:
     st.title("Climate Change on Sea Urchins 🦔")
     st.markdown(
-        "Studio sull'impatto dei cambiamenti climatici e delle **Marine Heatwaves** "
-        "sulla sensibilità dei gameti di *Paracentrotus lividus* nel Mar Ligure."
+        "Study on the impact of climate change and **Marine Heatwaves** "
+        "on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea."
     )
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Periodo", f"{df['Datetime'].dt.year.min()}–{df['Datetime'].dt.year.max()}")
-    c2.metric("Mesi totali", len(df))
-    c3.metric("Misure EC50 reali", int((~df["EC50_imputed"]).sum()))
-    c4.metric("MHW rilevate", len(mhw_events))
-    c5.metric("Mesi con MHW", int((df["mhw_days"] > 0).sum()))
+    c1.metric("Period", f"{df['Datetime'].dt.year.min()}–{df['Datetime'].dt.year.max()}")
+    c2.metric("Total months", len(df))
+    c3.metric("Real EC50 measurements", int((~df["EC50_imputed"]).sum()))
+    c4.metric("MHW detected", len(mhw_events))
+    c5.metric("Months with MHW", int((df["mhw_days"] > 0).sum()))
 
     # Map
     fig_map = go.Figure(go.Scattermapbox(
@@ -167,18 +167,40 @@ with tabs[0]:
 # TAB 2 — Time Series
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[1]:
-    st.header("Serie temporali")
+    st.header("Time Series")
 
     cols_opts = ["Temperature", "Salinity", "O2", "pH", "CO2", "EC50"]
-    c1, c2, c3 = st.columns([3, 1, 1])
-    with c1:
-        selected = st.multiselect("Variabili da visualizzare", cols_opts,
-                                  default=["Temperature", "EC50"])
-    with c2:
-        show_mhw   = st.checkbox("Shading MHW", value=True)
-        show_trend = st.checkbox("Mostra trend", value=True)
-    with c3:
-        show_decomp = st.checkbox("Decomposizione stagionale", value=False)
+
+    with st.form("ts_form"):
+        c1, c2, c3 = st.columns([3, 1, 1])
+        with c1:
+            st.multiselect("Variables to display", cols_opts,
+                           default=["Temperature", "EC50"], key="ts_selected")
+        with c2:
+            st.checkbox("MHW shading",           value=True,  key="ts_show_mhw")
+            st.checkbox("Show trend",             value=True,  key="ts_show_trend")
+        with c3:
+            st.checkbox("Seasonal decomposition", value=False, key="ts_show_decomp")
+        submitted = st.form_submit_button("▶ Update", use_container_width=False)
+
+    if submitted:
+        st.session_state["ts_committed"] = {
+            "selected":    st.session_state.ts_selected,
+            "show_mhw":    st.session_state.ts_show_mhw,
+            "show_trend":  st.session_state.ts_show_trend,
+            "show_decomp": st.session_state.ts_show_decomp,
+        }
+
+    _ts = st.session_state.get("ts_committed", {
+        "selected":    ["Temperature", "EC50"],
+        "show_mhw":    True,
+        "show_trend":  True,
+        "show_decomp": False,
+    })
+    selected    = _ts["selected"]
+    show_mhw    = _ts["show_mhw"]
+    show_trend  = _ts["show_trend"]
+    show_decomp = _ts["show_decomp"]
 
     if selected:
         n_rows = len(selected)
@@ -203,7 +225,7 @@ with tabs[1]:
                 # Imputed series (faint)
                 fig.add_trace(go.Scatter(
                     x=df["Datetime"], y=df["EC50"],
-                    mode="lines", name="EC50 (imputato)",
+                    mode="lines", name="EC50 (imputed)",
                     line=dict(color="rgba(0,119,182,0.3)", width=1),
                     showlegend=(i == 1),
                 ), row=i, col=1)
@@ -219,7 +241,7 @@ with tabs[1]:
                 # Real measurements
                 fig.add_trace(go.Scatter(
                     x=real["Datetime"], y=real["EC50"],
-                    mode="markers", name="EC50 (reale)",
+                    mode="markers", name="EC50 (real)",
                     marker=dict(color=OCEAN, size=5),
                     showlegend=(i == 1),
                 ), row=i, col=1)
@@ -231,16 +253,18 @@ with tabs[1]:
                     showlegend=True,
                 ), row=i, col=1)
 
-            # Trend overlay
+            # Trend overlay — rolling mean (window=13, centered) to cover full data range
             if show_trend:
-                tr = load_trend(col)
-                if not tr.empty:
-                    fig.add_trace(go.Scatter(
-                        x=tr["Datetime"], y=tr["trend"],
-                        mode="lines", name=f"{col} trend",
-                        line=dict(color=color, width=2.5, dash="dot"),
-                        showlegend=(i == 1),
-                    ), row=i, col=1)
+                src = df[~df["EC50_imputed"]][["Datetime","EC50"]].rename(columns={"EC50": col}) \
+                      if col == "EC50" else df[["Datetime", col]]
+                src = src.dropna(subset=[col]).set_index("Datetime")[col]
+                trend_vals = src.rolling(13, center=True, min_periods=6).mean()
+                fig.add_trace(go.Scatter(
+                    x=trend_vals.index, y=trend_vals.values,
+                    mode="lines", name=f"{col} trend",
+                    line=dict(color=color, width=2.5, dash="dot"),
+                    showlegend=(i == 1),
+                ), row=i, col=1)
 
             fig.update_yaxes(title_text=col, row=i, col=1)
 
@@ -279,26 +303,36 @@ with tabs[1]:
 
     # ── Seasonal decomposition ────────────────────────────────────────────────
     if show_decomp and selected:
-        st.subheader("Decomposizione stagionale (moltiplicativa, periodo=12)")
+        from statsmodels.tsa.seasonal import seasonal_decompose
+        st.subheader("Seasonal decomposition (additive, period=12)")
         for col in selected:
-            tr = load_trend(col)
-            if tr.empty:
-                st.info(f"Nessun dato di decomposizione per {col}. Rieseguire `python analysis/run_all.py`.")
+            src = df[~df["EC50_imputed"]][["Datetime","EC50"]].rename(columns={"EC50": col}) \
+                  if col == "EC50" else df[["Datetime", col]]
+            series = (src.dropna(subset=[col])
+                        .set_index("Datetime")[col]
+                        .asfreq("MS")
+                        .interpolate("linear"))
+            if len(series) < 24:
+                st.info(f"Insufficient data for decomposition of {col}.")
                 continue
-            sub = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
-                                subplot_titles=["Trend", "Stagionalità", "Residuo"])
+            try:
+                dec = seasonal_decompose(series, model="additive", period=12, extrapolate_trend="freq")
+            except Exception as e:
+                st.warning(f"Decomposition {col}: {e}")
+                continue
             color = col_colors.get(col, NEUTRAL)
-            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["trend"],
+            sub = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
+                                subplot_titles=["Trend", "Seasonal", "Residual"])
+            sub.add_trace(go.Scatter(x=dec.trend.index, y=dec.trend.values,
                                      mode="lines", line=dict(color=color, width=2),
                                      name="Trend"), row=1, col=1)
-            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["seasonal"],
+            sub.add_trace(go.Scatter(x=dec.seasonal.index, y=dec.seasonal.values,
                                      mode="lines", line=dict(color=OCEAN, width=1.2),
-                                     name="Stagionale"), row=2, col=1)
-            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["residual"],
+                                     name="Seasonal"), row=2, col=1)
+            sub.add_trace(go.Scatter(x=dec.resid.index, y=dec.resid.values,
                                      mode="lines", line=dict(color="grey", width=1),
-                                     name="Residuo"), row=3, col=1)
-            sub.update_layout(height=450, title_text=f"Decomposizione: {col}",
-                              showlegend=False)
+                                     name="Residual"), row=3, col=1)
+            sub.update_layout(height=450, title_text=f"Decomposition: {col}", showlegend=False)
             st.plotly_chart(sub, use_container_width=True)
 
 
@@ -312,7 +346,7 @@ with tabs[2]:
     fig3 = go.Figure()
     fig3.add_trace(go.Scatter(
         x=df["Datetime"], y=df["Temperature"],
-        mode="lines", name="SST mensile",
+        mode="lines", name="Monthly SST",
         line=dict(color=OCEAN, width=1.5),
     ))
     for _, ev in mhw_events.iterrows():
@@ -322,7 +356,7 @@ with tabs[2]:
             x0=str(ev["start_date"])[:10], x1=str(ev["end_date"])[:10],
             fillcolor=cat_color, opacity=0.2, line_width=0,
         )
-    fig3.update_layout(title="Temperatura SST con shading MHW", height=300,
+    fig3.update_layout(title="SST Temperature with MHW shading", height=300,
                        yaxis_title="°C")
     st.plotly_chart(fig3, use_container_width=True)
 
@@ -331,17 +365,17 @@ with tabs[2]:
         col1, col2 = st.columns(2)
         with col1:
             fig_cnt = px.bar(mhw_annual, x="year", y="event_count",
-                             title="Numero eventi MHW per anno",
+                             title="MHW events per year",
                              color_discrete_sequence=[OCEAN])
             st.plotly_chart(fig_cnt, use_container_width=True)
         with col2:
             fig_int = px.bar(mhw_annual, x="year", y="max_intensity",
-                             title="Intensità massima MHW (°C sopra soglia)",
+                             title="Max MHW intensity (°C above threshold)",
                              color_discrete_sequence=[WARM])
             st.plotly_chart(fig_int, use_container_width=True)
 
     # Event catalog
-    st.subheader("Catalogo eventi")
+    st.subheader("Event catalog")
     disp_cols = [c for c in ["start_date","end_date","duration_days","intensity_max",
                               "intensity_cumulative","category"] if c in mhw_events.columns]
     st.dataframe(mhw_events[disp_cols].sort_values("start_date", ascending=False),
@@ -352,9 +386,9 @@ with tabs[2]:
 # TAB 4 — MHW → Gameti (lag)
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[3]:
-    st.header("MHW → Sensibilità dei gameti: analisi del ritardo")
+    st.header("MHW → Gamete sensitivity: lag analysis")
 
-    sub = st.tabs(["CCF / Spearman lag", "Granger causality", "Analisi R (SEA + DLNM)"])
+    sub = st.tabs(["CCF / Spearman lag", "Granger causality", "R analysis (SEA + DLNM)"])
 
     # ── CCF
     with sub[0]:
@@ -373,8 +407,8 @@ with tabs[3]:
             fig_ccf.add_hline(y=0, line_color="black", line_width=0.8)
             fig_ccf.update_layout(
                 title=f"Spearman r: MHW_intensity(t−k) → {var_sel}(t)<br>"
-                      f"<sub>Rosso = p&lt;0.05; solo misure reali EC50</sub>",
-                xaxis_title="Lag k (mesi)",
+                      f"<sub>Red = p&lt;0.05; real EC50 measurements only</sub>",
+                xaxis_title="Lag k (months)",
                 yaxis_title="Spearman r",
                 height=400,
             )
@@ -382,12 +416,12 @@ with tabs[3]:
 
             sig = sub_ccf[sub_ccf["p_value"] < 0.05]
             if not sig.empty:
-                st.success(f"Lag significativi (p<0.05): {sig['lag'].tolist()} — "
+                st.success(f"Significant lags (p<0.05): {sig['lag'].tolist()} — "
                            f"peak lag: {sub_ccf.loc[sub_ccf['spearman_r'].abs().idxmax(), 'lag']}")
             else:
-                st.info("Nessun lag significativo a p<0.05")
+                st.info("No significant lag at p<0.05")
         else:
-            st.warning("Eseguire prima `python analysis/run_all.py`")
+            st.warning("Run `python analysis/run_all.py` first")
 
     # ── Granger
     with sub[1]:
@@ -413,9 +447,9 @@ with tabs[3]:
                                  y0=-0.5, y1=len(pivot.index)-0.5,
                                  line=dict(color="rgba(0,0,0,0)"))
                 st.plotly_chart(fig_gr, use_container_width=True)
-                st.caption("Verde = significativo. Soglia p<0.05 → log10 < −1.30")
+                st.caption("Green = significant. Threshold p<0.05 → log10 < −1.30")
         else:
-            st.warning("Eseguire prima `python analysis/run_all.py`")
+            st.warning("Run `python analysis/run_all.py` first")
 
     # ── R results
     with sub[2]:
@@ -433,19 +467,19 @@ with tabs[3]:
                 ))
             fig_sea.add_trace(go.Scatter(
                 x=sea_df["lag"], y=sea_df["mean_ec50"],
-                mode="lines+markers", name="EC50 composita",
+                mode="lines+markers", name="Composite EC50",
                 line=dict(color=WARM, width=2),
             ))
             fig_sea.add_hline(y=float(sea_df["mean_ec50"].mean()), line_dash="dash", line_color="grey",
-                              annotation_text="media complessiva")
+                              annotation_text="overall mean")
             fig_sea.add_vline(x=0, line_dash="dash", line_color="black")
-            fig_sea.update_layout(title="SEA: EC50 composita attorno ai picchi MHW (lag 0 = picco evento)",
-                                  xaxis_title="Lag (mesi)", yaxis_title="EC50 medio (mg/L)",
+            fig_sea.update_layout(title="SEA: composite EC50 around MHW peaks (lag 0 = event peak)",
+                                  xaxis_title="Lag (months)", yaxis_title="Mean EC50 (mg/L)",
                                   height=400)
             st.plotly_chart(fig_sea, use_container_width=True)
 
         if not dlnm_lag.empty:
-            st.subheader("DLNM — Profilo di risposta cumulativa per lag")
+            st.subheader("DLNM — Cumulative lag-response profile")
             fig_dlnm = go.Figure()
             if "ci_lower" in dlnm_lag.columns:
                 fig_dlnm.add_trace(go.Scatter(
@@ -456,36 +490,35 @@ with tabs[3]:
                 ))
             fig_dlnm.add_trace(go.Scatter(
                 x=dlnm_lag["lag"], y=dlnm_lag["cumulative_rr"],
-                mode="lines+markers", name="RR cumulativo",
+                mode="lines+markers", name="Cumulative RR",
                 line=dict(color=OCEAN, width=2),
             ))
             fig_dlnm.add_hline(y=0, line_dash="dash", line_color="grey",
-                              annotation_text="nessun effetto")
-            fig_dlnm.update_layout(title="DLNM: variazione cumulativa EC50 per lag (a intensità MHW media)",
-                                   xaxis_title="Lag (mesi)", yaxis_title="ΔΔEC50 cumulativo (mg/L)",
+                              annotation_text="no effect")
+            fig_dlnm.update_layout(title="DLNM: cumulative EC50 change by lag (at mean MHW intensity)",
+                                   xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (mg/L)",
                                    height=400)
             st.plotly_chart(fig_dlnm, use_container_width=True)
 
         # Mixed effects model predictions
         me_df = load_csv("../mixed_effects_predictions.csv")
         if not me_df.empty:
-            st.subheader("Modello misto: EC50 post-evento per intensità MHW")
-            # Convert intensity to string for discrete line coloring
+            st.subheader("Mixed effects model: predicted EC50 by MHW intensity")
             me_df = me_df.copy()
-            me_df["Intensità (°C)"] = me_df["intensity_max"].apply(lambda x: f"{x:.1f} °C")
+            me_df["Intensity (°C)"] = me_df["intensity_max"].apply(lambda x: f"{x:.1f} °C")
             fig_me = px.line(
                 me_df, x="lag_post_end", y="EC50_pred",
-                color="Intensità (°C)",
+                color="Intensity (°C)",
                 color_discrete_sequence=px.colors.sequential.Reds[2:],
-                labels={"lag_post_end": "Mesi dopo fine evento",
-                        "EC50_pred": "EC50 predetto (mg/L)"},
-                title="EC50 previsto nei 12 mesi post-MHW per diversa intensità",
+                labels={"lag_post_end": "Months after event end",
+                        "EC50_pred": "Predicted EC50 (mg/L)"},
+                title="Predicted EC50 in the 12 months post-MHW by intensity",
             )
             fig_me.update_layout(height=400)
             st.plotly_chart(fig_me, use_container_width=True)
 
         if sea_df.empty and dlnm_df.empty:
-            st.info("Eseguire `Rscript scripts/mhw_lag_analysis.R` per generare i risultati R.")
+            st.info("Run `Rscript scripts/mhw_lag_analysis.R` to generate R results.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -498,14 +531,13 @@ with tabs[4]:
     period_means = load_csv("period_means.csv")
 
     if kruskal:
-        # Boxplots from distribution CSVs
-        col_sel = st.selectbox("Variabile", list(kruskal.keys()))
+        col_sel = st.selectbox("Variable", list(kruskal.keys()))
         dist_df = load_csv(f"dist_{col_sel}.csv")
         if not dist_df.empty:
             fig_box = px.box(dist_df, x="period", y=col_sel, color="period",
                              color_discrete_map={dist_df["period"].iloc[0]: COOL,
                                                  dist_df["period"].iloc[-1]: WARM},
-                             title=f"{col_sel} — distribuzione pre/post 2016",
+                             title=f"{col_sel} — distribution pre/post 2016",
                              points="all")
             fig_box.update_layout(height=450, showlegend=False)
             st.plotly_chart(fig_box, use_container_width=True)
@@ -519,14 +551,14 @@ with tabs[4]:
             c4.metric("MW p-value", f"{res.get('mannwhitney_p', 0):.2e}")
 
     if not period_means.empty:
-        st.subheader("Variazioni medie pre→post 2016")
+        st.subheader("Mean changes pre→post 2016")
         pm = period_means.copy()
         pm["change_pct"] = pm["change_pct"].round(1)
         fig_chg = px.bar(pm, x="variable", y="change_pct",
                          color="change_pct",
                          color_continuous_scale=["#2a9d8f", "white", "#e76f51"],
                          color_continuous_midpoint=0,
-                         title="Variazione % media post-2016 vs pre-2016",
+                         title="Mean % change post-2016 vs pre-2016",
                          labels={"change_pct": "Δ %"})
         fig_chg.add_hline(y=0, line_color="black")
         fig_chg.update_layout(height=400)
@@ -537,15 +569,14 @@ with tabs[4]:
 # TAB 6 — Correlazioni
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[5]:
-    st.header("Matrici di correlazione Spearman")
+    st.header("Spearman Correlation Matrices")
 
-    period_tab = st.radio("Periodo", ["Tutto", "Pre-2016", "Post-2016"], horizontal=True)
-    label_map  = {"Tutto": "all", "Pre-2016": "pre", "Post-2016": "post"}
+    period_tab = st.radio("Period", ["All", "Pre-2016", "Post-2016"], horizontal=True)
+    label_map  = {"All": "all", "Pre-2016": "pre", "Post-2016": "post"}
     lbl        = label_map[period_tab]
 
     try:
         r_df, p_df = load_corr(lbl)
-        # Mask non-significant
         r_masked = r_df.copy()
         r_masked[p_df > 0.05] = 0
 
@@ -553,22 +584,22 @@ with tabs[5]:
             r_masked,
             color_continuous_scale="RdBu_r",
             zmin=-1, zmax=1,
-            title=f"Spearman r — {period_tab} (solo p<0.05 colorato)",
+            title=f"Spearman r — {period_tab} (only p<0.05 shown)",
             text_auto=".2f",
         )
         fig_corr.update_layout(height=550)
         st.plotly_chart(fig_corr, use_container_width=True)
 
-        st.caption("Le celle bianche indicano correlazioni non significative (p≥0.05).")
+        st.caption("White cells indicate non-significant correlations (p≥0.05).")
     except FileNotFoundError:
-        st.warning("Eseguire prima `python analysis/run_all.py`")
+        st.warning("Run `python analysis/run_all.py` first")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — Stazionarietà
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[6]:
-    st.header("Test di stazionarietà (ADF + KPSS)")
+    st.header("Stationarity Tests (ADF + KPSS)")
 
     stat_res = load_json("stationarity_results.json")
     if stat_res:
@@ -576,15 +607,15 @@ with tabs[6]:
         for r in stat_res:
             if "error" not in r:
                 rows.append({
-                    "Variabile":      r["variable"],
-                    "n":              r["n"],
-                    "ADF stat":       f"{r['adf_stat']:.3f}",
-                    "ADF p":          f"{r['adf_p']:.4f}",
-                    "ADF stat?":      "✓" if r["adf_stationary"] else "✗",
-                    "KPSS stat":      f"{r['kpss_stat']:.3f}" if r.get("kpss_stat") else "—",
-                    "KPSS p":         f"{r['kpss_p']:.4f}"    if r.get("kpss_p")    else "—",
-                    "KPSS stat?":     "✓" if r.get("kpss_stationary") else "✗",
-                    "Conclusione":    r["conclusion"],
+                    "Variable":   r["variable"],
+                    "n":          r["n"],
+                    "ADF stat":   f"{r['adf_stat']:.3f}",
+                    "ADF p":      f"{r['adf_p']:.4f}",
+                    "ADF stat?":  "✓" if r["adf_stationary"] else "✗",
+                    "KPSS stat":  f"{r['kpss_stat']:.3f}" if r.get("kpss_stat") else "—",
+                    "KPSS p":     f"{r['kpss_p']:.4f}"    if r.get("kpss_p")    else "—",
+                    "KPSS stat?": "✓" if r.get("kpss_stationary") else "✗",
+                    "Conclusion": r["conclusion"],
                 })
         stat_table = pd.DataFrame(rows)
 
@@ -593,10 +624,10 @@ with tabs[6]:
             if val == "non-stationary": return "background-color: #f8d7da"
             return "background-color: #fff3cd"
 
-        styled = stat_table.style.applymap(color_conclusion, subset=["Conclusione"])
+        styled = stat_table.style.applymap(color_conclusion, subset=["Conclusion"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
     else:
-        st.warning("Eseguire prima `python analysis/run_all.py`")
+        st.warning("Run `python analysis/run_all.py` first")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -607,7 +638,7 @@ with tabs[7]:
 
     meta = load_json("forecast_meta.json")
     if meta:
-        st.info(f"Lag ottimale MHW→EC50 usato nel modello: **{meta.get('optimal_lag', '?')} mesi**")
+        st.info(f"Optimal MHW→EC50 lag used in the model: **{meta.get('optimal_lag', '?')} months**")
 
     fc_bad  = load_csv("forecast_bad.csv")
     fc_mean = load_csv("forecast_mean.csv")
@@ -619,7 +650,7 @@ with tabs[7]:
                 fc["Datetime"] = pd.to_datetime(fc["Datetime"])
 
         year_range = st.slider(
-            "Anno massimo visualizzato",
+            "Maximum year to display",
             min_value=int(fc_mean["Datetime"].dt.year.min()),
             max_value=int(fc_mean["Datetime"].dt.year.max()),
             value=int(fc_mean["Datetime"].dt.year.max()),
@@ -631,19 +662,19 @@ with tabs[7]:
         real = df[~df["EC50_imputed"]]
         fig_fc.add_trace(go.Scatter(
             x=df["Datetime"], y=df["EC50"],
-            mode="lines", name="EC50 storico (incl. imputati)",
+            mode="lines", name="Historical EC50 (incl. imputed)",
             line=dict(color="rgba(0,119,182,0.4)", width=1),
         ))
         fig_fc.add_trace(go.Scatter(
             x=real["Datetime"], y=real["EC50"],
-            mode="markers", name="EC50 (misura reale)",
+            mode="markers", name="EC50 (real measurement)",
             marker=dict(color=OCEAN, size=4),
         ))
 
         for fc_df, color, name in [
-            (fc_bad,  "#d62828", "Scenario peggiore"),
-            (fc_mean, NEUTRAL,   "Scenario medio"),
-            (fc_good, COOL,      "Scenario migliore"),
+            (fc_bad,  "#d62828", "Worst scenario"),
+            (fc_mean, NEUTRAL,   "Mean scenario"),
+            (fc_good, COOL,      "Best scenario"),
         ]:
             sub = fc_df[fc_df["Datetime"].dt.year <= year_range]
             fig_fc.add_trace(go.Scatter(
@@ -661,23 +692,23 @@ with tabs[7]:
         fig_fc.add_vline(x=str(df["Datetime"].max())[:10], line_dash="dash",
                          line_color="grey")
         fig_fc.update_layout(
-            title="Previsione EC50 2025–2040 per scenario MHW",
-            xaxis_title="Anno", yaxis_title="EC50 (mg/L)",
+            title="EC50 Forecast 2025–2040 by MHW scenario",
+            xaxis_title="Year", yaxis_title="EC50 (mg/L)",
             height=500,
         )
         st.plotly_chart(fig_fc, use_container_width=True)
 
         col1, col2, col3 = st.columns(3)
-        for col_w, fc_df, label in [(col1, fc_bad, "Peggiore"), (col2, fc_mean, "Medio"), (col3, fc_good, "Migliore")]:
+        for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
             with col_w:
                 st.download_button(
-                    f"Scarica {label} CSV",
+                    f"Download {label} CSV",
                     data=fc_df.to_csv(index=False),
-                    file_name=f"forecast_{label.lower()}.csv",
+                    file_name=f"forecast_{label}.csv",
                     mime="text/csv",
                 )
     else:
-        st.warning("Eseguire prima `python analysis/run_all.py`")
+        st.warning("Run `python analysis/run_all.py` first")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -686,41 +717,41 @@ with tabs[7]:
 with tabs[8]:
     st.header("About")
     st.markdown("""
-### Metodi
+### Methods
 
-**Specie**: *Paracentrotus lividus* (riccio di mare viola)
-**Sito**: Golfo di La Spezia, Mar Ligure (44.1°N, 9.8°E)
-**Periodo**: 2003–2025
+**Species**: *Paracentrotus lividus* (purple sea urchin)
+**Site**: Gulf of La Spezia, Ligurian Sea (44.1°N, 9.8°E)
+**Period**: 2003–2025
 
-**EC50**: Concentrazione efficace mediana in bioassay su embrioni di riccio.
-Indica la sensibilità degli embrioni a un tossico standard.
-~50% dei mesi manca la misura reale; questi mesi vengono imputati con una media mobile
-centrata (finestra 12 mesi) — **solo le misure reali vengono usate nei test statistici**.
+**EC50**: Median effective concentration from sea urchin embryo bioassays.
+Measures embryo sensitivity to a standard toxicant.
+~50% of months lack a real measurement; these are imputed with a centred rolling mean
+(window 12 months) — **only real measurements are used in statistical tests**.
 
-**Marine Heatwaves**: definizione Hobday et al. (2016).
-- Soglia: 90° percentile della climatologia giornaliera (baseline 2003–2012, finestra 11 giorni)
-- Durata minima: 5 giorni consecutivi
-- Gap allowance: ≤2 giorni
+**Marine Heatwaves**: definition from Hobday et al. (2016).
+- Threshold: 90th percentile of daily climatology (baseline 2003–2012, 11-day window)
+- Minimum duration: 5 consecutive days
+- Gap allowance: ≤2 days
 
-**Analisi causale MHW → EC50**:
-- Cross-correlazione di Spearman a lag 0–12 mesi
+**MHW → EC50 causal analysis**:
+- Spearman cross-correlation at lags 0–12 months
 - Granger causality (statsmodels)
-- SEA — Superposed Epoch Analysis con bootstrap n=999 (R)
-- DLNM — Distributed Lag Non-Linear Model, pacchetto `dlnm` R (Gasparrini 2011)
+- SEA — Superposed Epoch Analysis with bootstrap n=999 (R)
+- DLNM — Distributed Lag Non-Linear Model, R package `dlnm` (Gasparrini 2011)
 
-**Forecast**: SARIMAX(1,0,1)(1,0,1,12) con MHW come regressore esogeno al lag ottimale.
+**Forecast**: SARIMAX(1,0,1)(1,0,1,12) with MHW as exogenous regressor at the optimal lag.
 
-### Fonti dati
+### Data sources
 
-| Dato | Fonte |
-|------|-------|
-| SST mensile e giornaliera, Salinità, O₂, pH, CO₂ | Copernicus Marine Service (MEDSEA_MULTIYEAR) |
-| EC50 bioassay mensile | Google Sheets — laboratorio DISTAV, Università di Genova |
+| Data | Source |
+|------|--------|
+| Monthly and daily SST, Salinity, O₂, pH, CO₂ | Copernicus Marine Service (MEDSEA_MULTIYEAR) |
+| Monthly EC50 bioassay | Google Sheets — DISTAV laboratory, University of Genova |
 
-### Letteratura chiave
+### Key references
 
-- Hobday et al. (2016) — definizione Marine Heatwave
+- Hobday et al. (2016) — Marine Heatwave definition
 - Gasparrini (2011) — DLNM framework
-- Carryover effects MHW su *P. lividus* — [PMC9805142](https://pmc.ncbi.nlm.nih.gov/articles/PMC9805142/)
+- Carryover effects of MHW on *P. lividus* — [PMC9805142](https://pmc.ncbi.nlm.nih.gov/articles/PMC9805142/)
 - Transgenerational plasticity MHW sea urchin — [Frontiers 2023](https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2023.1212781/full)
 """)
