@@ -2,7 +2,7 @@
 Download monthly environmental variables from Copernicus Marine Service.
 
 Site: Golfo di La Spezia / Mar Ligure (~44.1°N, 9.8°E), depth 0–10m
-Period: 2003-01-01 → 2024-04-30 (full period, not just update)
+Period: 2003-01-01 → present (full period, not just update)
 
 Output: data/env_copernicus.csv
         Columns: Datetime, Temperature, Salinity, O2, pH, CO2
@@ -14,16 +14,18 @@ Authentication (run once interactively):
     copernicusmarine login
 
 Dataset IDs (MEDSEA_MULTIYEAR_PHY_006_004 + MEDSEA_MULTIYEAR_BGC_006_008):
-    Temperature: cmems_mod_med_phy-tem_my_4.2km_P1M-m  (var: thetao, °C)
-    Salinity:    cmems_mod_med_phy-sal_my_4.2km_P1M-m  (var: so, PSU)
-    O2:          cmems_mod_med_bgc-oxy_my_4.2km_P1M-m  (var: o2, mmol/m³ = µmol/L)
-    pH + CO2:    cmems_mod_med_bgc-car_my_4.2km_P1M-m  (var: ph, spco2 µatm)
+    Temperature: cmems_mod_med_phy-temp_my_4.2km_P1M-m  (var: thetao, °C)
+    Salinity:    cmems_mod_med_phy-sal_my_4.2km_P1M-m   (var: so, PSU)
+    O2:          cmems_mod_med_bgc-bio_my_4.2km_P1M-m   (var: o2, mmol/m³ = µmol/L)
+    pH:          cmems_mod_med_bgc-car_my_4.2km_P1M-m   (var: ph)
+    CO2:         cmems_mod_med_bgc-co2_my_4.2km_P1M-m   (var: spco2 µatm)
 
-Fallback datasets if multiyear does not cover Apr 2024:
+Fallback datasets (MEDSEA_ANALYSISFORECAST) for months not yet in multiyear:
     Temperature: cmems_mod_med_phy-tem_anfc_4.2km_P1M-m
     Salinity:    cmems_mod_med_phy-sal_anfc_4.2km_P1M-m
-    O2:          cmems_mod_med_bgc-oxy_anfc_4.2km_P1M-m
-    pH + CO2:    cmems_mod_med_bgc-car_anfc_4.2km_P1M-m
+    O2:          cmems_mod_med_bgc-bio_anfc_4.2km_P1M-m
+    pH:          cmems_mod_med_bgc-car_anfc_4.2km_P1M-m
+    CO2:         cmems_mod_med_bgc-co2_anfc_4.2km_P1M-m
 
 NOTE on CO2 units:
     The original data.csv CO2 column has values ~33–58 (unit unknown).
@@ -46,7 +48,7 @@ BBOX_DELTA = 0.1          # ±0.1° bounding box around the site
 DEPTH_MIN = 0.0
 DEPTH_MAX = 10.0
 START = "2003-01-01"
-END   = "2024-04-30"
+END   = "2025-12-31"   # MEDSEA_MULTIYEAR is updated with ~1 month lag; extend as needed
 
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUT_PATH = Path(__file__).parent.parent / "data" / "env_copernicus.csv"
@@ -55,7 +57,7 @@ OUT_PATH = Path(__file__).parent.parent / "data" / "env_copernicus.csv"
 DATASETS = [
     {
         "name": "temperature",
-        "dataset_id": "cmems_mod_med_phy-tem_my_4.2km_P1M-m",
+        "dataset_id": "cmems_mod_med_phy-temp_my_4.2km_P1M-m",
         "fallback_id": "cmems_mod_med_phy-tem_anfc_4.2km_P1M-m",
         "variables": ["thetao"],
         "filename": "raw_temperature.nc",
@@ -69,8 +71,8 @@ DATASETS = [
     },
     {
         "name": "oxygen",
-        "dataset_id": "cmems_mod_med_bgc-oxy_my_4.2km_P1M-m",
-        "fallback_id": "cmems_mod_med_bgc-oxy_anfc_4.2km_P1M-m",
+        "dataset_id": "cmems_mod_med_bgc-bio_my_4.2km_P1M-m",
+        "fallback_id": "cmems_mod_med_bgc-bio_anfc_4.2km_P1M-m",
         "variables": ["o2"],
         "filename": "raw_o2.nc",
     },
@@ -78,8 +80,15 @@ DATASETS = [
         "name": "carbonate",
         "dataset_id": "cmems_mod_med_bgc-car_my_4.2km_P1M-m",
         "fallback_id": "cmems_mod_med_bgc-car_anfc_4.2km_P1M-m",
-        "variables": ["ph", "spco2"],
+        "variables": ["ph"],
         "filename": "raw_carbonate.nc",
+    },
+    {
+        "name": "co2",
+        "dataset_id": "cmems_mod_med_bgc-co2_my_4.2km_P1M-m",
+        "fallback_id": "cmems_mod_med_bgc-co2_anfc_4.2km_P1M-m",
+        "variables": ["spco2"],
+        "filename": "raw_co2.nc",
     },
 ]
 
