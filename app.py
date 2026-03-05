@@ -366,13 +366,15 @@ with tabs[3]:
         me_df = load_csv("../mixed_effects_predictions.csv")
         if not me_df.empty:
             st.subheader("Modello misto: EC50 post-evento per intensità MHW")
+            # Convert intensity to string for discrete line coloring
+            me_df = me_df.copy()
+            me_df["Intensità (°C)"] = me_df["intensity_max"].apply(lambda x: f"{x:.1f} °C")
             fig_me = px.line(
                 me_df, x="lag_post_end", y="EC50_pred",
-                color="intensity_max",
-                color_continuous_scale="Reds",
+                color="Intensità (°C)",
+                color_discrete_sequence=px.colors.sequential.Reds[2:],
                 labels={"lag_post_end": "Mesi dopo fine evento",
-                        "EC50_pred": "EC50 predetto (mg/L)",
-                        "intensity_max": "Intensità max (°C)"},
+                        "EC50_pred": "EC50 predetto (mg/L)"},
                 title="EC50 previsto nei 12 mesi post-MHW per diversa intensità",
             )
             fig_me.update_layout(height=400)
