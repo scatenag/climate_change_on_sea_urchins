@@ -46,7 +46,29 @@ def load_main():
                     on="Datetime", how="left")
     df   = df.merge(ci[["Datetime","EC50_imputed","EC50_ci_upper","EC50_ci_lower"]],
                     on="Datetime", how="left")
+
+    # Fill Temperature gaps (after Copernicus monthly ends) from daily SST
+    sst_path = ROOT / "data" / "sst_daily.csv"
+    if sst_path.exists():
+        sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
+        sst["month"] = sst["Datetime"].dt.to_period("M").dt.to_timestamp()
+        sst_monthly = sst.groupby("month")["Temperature"].mean().reset_index()
+        sst_monthly.columns = ["Datetime", "Temperature_sst"]
+        df = df.merge(sst_monthly, on="Datetime", how="left")
+        mask = df["Temperature"].isna() & df["Temperature_sst"].notna()
+        df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
+        df.drop(columns=["Temperature_sst"], inplace=True)
+
     return df, ci, mhwe, mhwa
+
+
+@st.cache_data
+def load_trend(col: str) -> pd.DataFrame:
+    path = RESULTS / f"trend_{col}.csv"
+    if not path.exists():
+        return pd.DataFrame()
+    t = pd.read_csv(path, parse_dates=["Datetime"])
+    return t
 
 
 @st.cache_data
@@ -148,54 +170,132 @@ with tabs[1]:
     st.header("Serie temporali")
 
     cols_opts = ["Temperature", "Salinity", "O2", "pH", "CO2", "EC50"]
-    selected  = st.multiselect("Variabili da visualizzare", cols_opts,
-                               default=["Temperature", "EC50"])
-    show_mhw  = st.checkbox("Mostra shading MHW", value=True)
+    c1, c2, c3 = st.columns([3, 1, 1])
+    with c1:
+        selected = st.multiselect("Variabili da visualizzare", cols_opts,
+                                  default=["Temperature", "EC50"])
+    with c2:
+        show_mhw   = st.checkbox("Shading MHW", value=True)
+        show_trend = st.checkbox("Mostra trend", value=True)
+    with c3:
+        show_decomp = st.checkbox("Decomposizione stagionale", value=False)
 
     if selected:
-        fig = make_subplots(rows=len(selected), cols=1, shared_xaxes=True,
-                            vertical_spacing=0.04)
+        n_rows = len(selected)
+        row_heights = [1.0] * n_rows
+        fig = make_subplots(
+            rows=n_rows, cols=1, shared_xaxes=True,
+            vertical_spacing=0.05,
+            row_heights=row_heights,
+        )
+
+        col_colors = {
+            "Temperature": "#e63946", "Salinity": "#457b9d",
+            "O2": "#2a9d8f",          "pH": "#e9c46a",
+            "CO2": "#f4a261",         "EC50": OCEAN,
+        }
+
         for i, col in enumerate(selected, 1):
+            color = col_colors.get(col, NEUTRAL)
+
             if col == "EC50":
-                # Real measurements
                 real = df[~df["EC50_imputed"]]
+                # Imputed series (faint)
                 fig.add_trace(go.Scatter(
                     x=df["Datetime"], y=df["EC50"],
-                    mode="lines", name="EC50 (incl. imputati)",
-                    line=dict(color="rgba(0,119,182,0.4)", width=1),
+                    mode="lines", name="EC50 (imputato)",
+                    line=dict(color="rgba(0,119,182,0.3)", width=1),
+                    showlegend=(i == 1),
                 ), row=i, col=1)
+                # CI band
+                ci_ok = ci_df.dropna(subset=["EC50_ci_upper","EC50_ci_lower"])
+                if not ci_ok.empty:
+                    fig.add_trace(go.Scatter(
+                        x=pd.concat([ci_ok["Datetime"], ci_ok["Datetime"][::-1]]),
+                        y=pd.concat([ci_ok["EC50_ci_upper"], ci_ok["EC50_ci_lower"][::-1]]),
+                        fill="toself", fillcolor="rgba(0,119,182,0.12)",
+                        line=dict(width=0), showlegend=False,
+                    ), row=i, col=1)
+                # Real measurements
                 fig.add_trace(go.Scatter(
                     x=real["Datetime"], y=real["EC50"],
                     mode="markers", name="EC50 (reale)",
                     marker=dict(color=OCEAN, size=5),
-                ), row=i, col=1)
-                # CI band
-                ci_ok = ci_df.dropna(subset=["EC50_ci_upper","EC50_ci_lower"])
-                fig.add_trace(go.Scatter(
-                    x=pd.concat([ci_ok["Datetime"], ci_ok["Datetime"][::-1]]),
-                    y=pd.concat([ci_ok["EC50_ci_upper"], ci_ok["EC50_ci_lower"][::-1]]),
-                    fill="toself", fillcolor="rgba(0,119,182,0.15)",
-                    line=dict(width=0), showlegend=False, name="CI 95%",
+                    showlegend=(i == 1),
                 ), row=i, col=1)
             else:
                 fig.add_trace(go.Scatter(
                     x=df["Datetime"], y=df[col],
                     mode="lines", name=col,
-                    line=dict(color=NEUTRAL, width=1.5),
+                    line=dict(color=color, width=1.5),
+                    showlegend=True,
                 ), row=i, col=1)
+
+            # Trend overlay
+            if show_trend:
+                tr = load_trend(col)
+                if not tr.empty:
+                    fig.add_trace(go.Scatter(
+                        x=tr["Datetime"], y=tr["trend"],
+                        mode="lines", name=f"{col} trend",
+                        line=dict(color=color, width=2.5, dash="dot"),
+                        showlegend=(i == 1),
+                    ), row=i, col=1)
+
             fig.update_yaxes(title_text=col, row=i, col=1)
 
+        # MHW shading — use add_shape per row (avoids annotation issues)
         if show_mhw:
             for _, ev in mhw_events.iterrows():
-                fig.add_vrect(
-                    x0=str(ev["start_date"])[:10], x1=str(ev["end_date"])[:10],
-                    fillcolor="rgba(231,111,81,0.1)", line_width=0,
-                )
-        # 2016 line
-        fig.add_vline(x="2016-01-01", line_dash="dash", line_color="grey")
+                x0 = str(ev["start_date"])[:10]
+                x1 = str(ev["end_date"])[:10]
+                for row_i in range(1, n_rows + 1):
+                    fig.add_shape(
+                        type="rect",
+                        x0=x0, x1=x1, y0=0, y1=1,
+                        xref="x", yref=f"y{row_i} domain",
+                        fillcolor="rgba(231,111,81,0.10)", line_width=0,
+                    )
 
-        fig.update_layout(height=250 * len(selected), showlegend=True)
+        # 2016 split line — use add_shape (not add_vline, which breaks on subplots with string x)
+        for row_i in range(1, n_rows + 1):
+            fig.add_shape(
+                type="line",
+                x0="2016-01-01", x1="2016-01-01", y0=0, y1=1,
+                xref="x", yref=f"y{row_i} domain",
+                line=dict(dash="dash", color="grey", width=1),
+            )
+
+        fig.update_layout(
+            height=max(300, 230 * n_rows),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
+        )
         st.plotly_chart(fig, use_container_width=True)
+
+    # ── Seasonal decomposition ────────────────────────────────────────────────
+    if show_decomp and selected:
+        st.subheader("Decomposizione stagionale (moltiplicativa, periodo=12)")
+        for col in selected:
+            tr = load_trend(col)
+            if tr.empty:
+                st.info(f"Nessun dato di decomposizione per {col}. Rieseguire `python analysis/run_all.py`.")
+                continue
+            sub = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
+                                subplot_titles=["Trend", "Stagionalità", "Residuo"])
+            color = col_colors.get(col, NEUTRAL)
+            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["trend"],
+                                     mode="lines", line=dict(color=color, width=2),
+                                     name="Trend"), row=1, col=1)
+            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["seasonal"],
+                                     mode="lines", line=dict(color=OCEAN, width=1.2),
+                                     name="Stagionale"), row=2, col=1)
+            sub.add_trace(go.Scatter(x=tr["Datetime"], y=tr["residual"],
+                                     mode="lines", line=dict(color="grey", width=1),
+                                     name="Residuo"), row=3, col=1)
+            sub.update_layout(height=450, title_text=f"Decomposizione: {col}",
+                              showlegend=False)
+            st.plotly_chart(sub, use_container_width=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
