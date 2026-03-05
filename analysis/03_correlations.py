@@ -72,8 +72,14 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
 def run():
     df, _, _, _ = load_data()
 
-    # df already has EC50 rolling-mean-imputed (done in load_data / common.py)
     df_work = df.set_index("Datetime")
+
+    # Mirror notebook cell 7: apply rolling mean to ALL EC50 values (not just NaN).
+    # The original notebook smooths the full EC50 series before decomposition,
+    # which reduces measurement noise and produces meaningful trend correlations.
+    df_work["EC50"] = df_work["EC50"].rolling(
+        window=12, min_periods=1, center=True
+    ).mean()
 
     pre_mask  = df_work.index <  pd.Timestamp(SPLIT_YEAR + "-01-01")
     post_mask = df_work.index >= pd.Timestamp(SPLIT_YEAR + "-01-01")

@@ -43,6 +43,19 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
         df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
     )
 
+    # Fill Temperature gaps (after Copernicus monthly ends) from daily SST monthly averages.
+    # Without this, 2024 rows show only Jan–Apr (winter avg ~14°C), breaking trend analysis.
+    sst_path = ROOT / "data" / "sst_daily.csv"
+    if sst_path.exists():
+        sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
+        sst["month"] = sst["Datetime"].dt.to_period("M").dt.to_timestamp()
+        sst_monthly = sst.groupby("month")["Temperature"].mean().reset_index()
+        sst_monthly.columns = ["Datetime", "Temperature_sst"]
+        df = df.merge(sst_monthly, on="Datetime", how="left")
+        mask = df["Temperature"].isna() & df["Temperature_sst"].notna()
+        df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
+        df.drop(columns=["Temperature_sst"], inplace=True)
+
     df_full = df.copy()
     df_real = df[~df["EC50_imputed"]].copy().reset_index(drop=True)
 
