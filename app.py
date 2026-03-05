@@ -245,6 +245,10 @@ with tabs[1]:
             fig.update_yaxes(title_text=col, row=i, col=1)
 
         # MHW shading — use add_shape per row (avoids annotation issues)
+        # Plotly first axis is "y domain", second is "y2 domain", etc.
+        def _yref(row_i: int) -> str:
+            return "y domain" if row_i == 1 else f"y{row_i} domain"
+
         if show_mhw:
             for _, ev in mhw_events.iterrows():
                 x0 = str(ev["start_date"])[:10]
@@ -253,7 +257,7 @@ with tabs[1]:
                     fig.add_shape(
                         type="rect",
                         x0=x0, x1=x1, y0=0, y1=1,
-                        xref="x", yref=f"y{row_i} domain",
+                        xref="x", yref=_yref(row_i),
                         fillcolor="rgba(231,111,81,0.10)", line_width=0,
                     )
 
@@ -262,7 +266,7 @@ with tabs[1]:
             fig.add_shape(
                 type="line",
                 x0="2016-01-01", x1="2016-01-01", y0=0, y1=1,
-                xref="x", yref=f"y{row_i} domain",
+                xref="x", yref=_yref(row_i),
                 line=dict(dash="dash", color="grey", width=1),
             )
 
