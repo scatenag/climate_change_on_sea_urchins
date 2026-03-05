@@ -11,6 +11,8 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import streamlit as st
+from scipy import stats
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -100,6 +102,121 @@ def load_r_results():
     dlnm = load_csv("../dlnm_results.csv")
     dlnm_lag = load_csv("../dlnm_lag_profile.csv")
     return sea, dlnm, dlnm_lag
+
+
+@st.cache_data
+def compute_correlations(df: pd.DataFrame) -> dict:
+    """
+    Compute Spearman correlation matrices (all/pre/post) directly from the
+    loaded DataFrame — avoids relying on pre-computed CSVs that may be stale.
+    Mirrors the logic of analysis/03_correlations.py.
+    """
+    env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
+    mhw_cols = ["mhw_peak_intensity", "mhw_days"]
+
+    env_cols = [c for c in env_cols if c in df.columns]
+    mhw_cols = [c for c in mhw_cols if c in df.columns]
+    all_cols  = env_cols + mhw_cols
+
+    df_work = df.set_index("Datetime").copy()
+    # Use only real EC50 measurements (set imputed to NaN) then apply rolling mean
+    # to smooth measurement noise — mirrors notebook cell 7 / analysis script
+    df_work.loc[df_work["EC50_imputed"] == True, "EC50"] = np.nan
+    df_work["EC50"] = df_work["EC50"].rolling(window=12, min_periods=1, center=True).mean()
+
+    split     = pd.Timestamp("2016-01-01")
+    pre_mask  = df_work.index < split
+    post_mask = df_work.index >= split
+
+    def _extract_trends(subset):
+        trend = pd.DataFrame(index=subset.index)
+        for col in env_cols:
+            series = subset[col].copy() if col in subset.columns else pd.Series(dtype=float)
+            valid  = series.dropna()
+            if len(valid) < 24:
+                trend[col] = series
+                continue
+            try:
+                dec = seasonal_decompose(
+                    series.interpolate("linear"),
+                    model="multiplicative",
+                    period=12,
+                    extrapolate_trend="freq",
+                    two_sided=False,
+                )
+                trend[col] = dec.trend.values
+            except Exception:
+                trend[col] = series
+        for col in mhw_cols:
+            if col in subset.columns:
+                trend[col] = subset[col].values
+        return trend
+
+    def _spearman_matrix(tdf):
+        n = len(all_cols)
+        r_mat = np.eye(n)
+        p_mat = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i + 1, n):
+                if all_cols[i] not in tdf.columns or all_cols[j] not in tdf.columns:
+                    r_mat[i, j] = r_mat[j, i] = np.nan
+                    p_mat[i, j] = p_mat[j, i] = np.nan
+                    continue
+                a = tdf[all_cols[i]].dropna()
+                b = tdf[all_cols[j]].dropna()
+                common = a.index.intersection(b.index)
+                if len(common) >= 5:
+                    r, p = stats.spearmanr(a[common], b[common])
+                else:
+                    r, p = np.nan, np.nan
+                r_mat[i, j] = r_mat[j, i] = r
+                p_mat[i, j] = p_mat[j, i] = p
+        return (pd.DataFrame(r_mat, index=all_cols, columns=all_cols),
+                pd.DataFrame(p_mat, index=all_cols, columns=all_cols))
+
+    results = {}
+    for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
+        subset = df_work[mask]
+        r_df, p_df = _spearman_matrix(_extract_trends(subset))
+        results[label] = (r_df, p_df)
+    return results
+
+
+@st.cache_data
+def compute_ccf(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute Spearman cross-correlations between mhw_peak_intensity(t-k) and
+    each variable(t) at lags 0–12, using only real EC50 measurements.
+    Mirrors analysis/05_mhw_analysis.py — avoids stale ccf_results.csv.
+    """
+    TAU_MAX  = 12
+    env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
+    targets  = [c for c in env_cols if c in df.columns]
+    driver   = "mhw_peak_intensity"
+    if driver not in df.columns:
+        return pd.DataFrame()
+
+    df_ccf = df.copy()
+    df_ccf.loc[df_ccf["EC50_imputed"] == True, "EC50"] = np.nan
+
+    rows = []
+    mhw  = df_ccf[driver].values
+    for target in targets:
+        src = df_ccf[target].values
+        for lag in range(0, TAU_MAX + 1):
+            if lag == 0:
+                x, y = mhw, src
+            else:
+                x, y = mhw[:-lag], src[lag:]
+            mask = ~(np.isnan(x) | np.isnan(y))
+            xa, ya = x[mask], y[mask]
+            if len(xa) >= 10:
+                r, p = stats.spearmanr(xa, ya)
+            else:
+                r, p = np.nan, np.nan
+            rows.append(dict(variable=target, lag=lag,
+                             spearman_r=r, p_value=p, n=int(mask.sum())))
+    return pd.DataFrame(rows)
 
 
 # ── Helper: MHW shading on a plotly figure ────────────────────────────────────
@@ -392,7 +509,7 @@ with tabs[3]:
 
     # ── CCF
     with sub[0]:
-        ccf_df = load_csv("ccf_results.csv")
+        ccf_df = compute_ccf(df)
         if not ccf_df.empty:
             var_sel = st.selectbox("Variabile", ccf_df["variable"].unique(),
                                    index=list(ccf_df["variable"].unique()).index("EC50")
@@ -421,7 +538,7 @@ with tabs[3]:
             else:
                 st.info("No significant lag at p<0.05")
         else:
-            st.warning("Run `python analysis/run_all.py` first")
+            st.warning("mhw_peak_intensity column not found in data.")
 
     # ── Granger
     with sub[1]:
@@ -575,24 +692,22 @@ with tabs[5]:
     label_map  = {"All": "all", "Pre-2016": "pre", "Post-2016": "post"}
     lbl        = label_map[period_tab]
 
-    try:
-        r_df, p_df = load_corr(lbl)
-        r_masked = r_df.copy()
-        r_masked[p_df > 0.05] = 0
+    corr_data = compute_correlations(df)
+    r_df, p_df = corr_data[lbl]
+    r_masked = r_df.copy()
+    r_masked[p_df > 0.05] = 0
 
-        fig_corr = px.imshow(
-            r_masked,
-            color_continuous_scale="RdBu_r",
-            zmin=-1, zmax=1,
-            title=f"Spearman r — {period_tab} (only p<0.05 shown)",
-            text_auto=".2f",
-        )
-        fig_corr.update_layout(height=550)
-        st.plotly_chart(fig_corr, use_container_width=True)
+    fig_corr = px.imshow(
+        r_masked,
+        color_continuous_scale="RdBu_r",
+        zmin=-1, zmax=1,
+        title=f"Spearman r — {period_tab} (only p<0.05 shown)",
+        text_auto=".2f",
+    )
+    fig_corr.update_layout(height=550)
+    st.plotly_chart(fig_corr, use_container_width=True)
 
-        st.caption("White cells indicate non-significant correlations (p≥0.05).")
-    except FileNotFoundError:
-        st.warning("Run `python analysis/run_all.py` first")
+    st.caption("White cells indicate non-significant correlations (p≥0.05).")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
