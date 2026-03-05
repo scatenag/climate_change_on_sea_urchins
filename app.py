@@ -746,7 +746,7 @@ Measures embryo sensitivity to a standard toxicant.
 | Data | Source |
 |------|--------|
 | Monthly and daily SST, Salinity, O₂, pH, CO₂ | Copernicus Marine Service (MEDSEA_MULTIYEAR) |
-| Monthly EC50 bioassay | Google Sheets — DISTAV laboratory, University of Genova |
+| Monthly EC50 bioassay | ISPRA — Istituto Superiore per la Protezione e la Ricerca Ambientale |
 
 ### Key references
 
