@@ -1,13 +1,49 @@
 """
 Spearman correlation matrices — All / Pre-2016 / Post-2016.
+
+Mirrors the original notebook approach:
+  1. EC50 filled with rolling mean (window=12, centered) — same as notebook cell 7
+  2. Seasonal decomposition (multiplicative, period=12) on each variable
+  3. Spearman r computed on the TREND components — same as notebook cells 25-27
+
+MHW columns (mhw_peak_intensity, mhw_days) are included raw (no decomposition,
+as they are already summary metrics without strong seasonality).
+
 Outputs: results/corr_all.csv, results/corr_pre.csv, results/corr_post.csv
          results/corr_pval_all.csv, results/corr_pval_pre.csv, results/corr_pval_post.csv
 """
-import json
 import numpy as np
 import pandas as pd
 from scipy import stats
+from statsmodels.tsa.seasonal import seasonal_decompose
 from common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
+
+
+def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.DataFrame:
+    """
+    Run seasonal decomposition on each column and return a DataFrame of trend components.
+    Uses multiplicative model with extrapolate_trend='freq' to avoid edge NaNs.
+    Columns with fewer than 2*period non-NaN values are returned as-is.
+    """
+    trend_df = pd.DataFrame(index=df.index)
+    for col in cols:
+        series = df[col].copy()
+        valid = series.dropna()
+        if len(valid) < 2 * period:
+            trend_df[col] = series
+            continue
+        try:
+            dec = seasonal_decompose(
+                series.interpolate("linear"),
+                model="multiplicative",
+                period=period,
+                extrapolate_trend="freq",
+                two_sided=False,
+            )
+            trend_df[col] = dec.trend.values
+        except Exception:
+            trend_df[col] = series
+    return trend_df
 
 
 def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -34,23 +70,34 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
 
 
 def run():
-    df, df_real, events, _ = load_data()
+    df, _, _, _ = load_data()
 
-    # Use df_full but swap imputed EC50 with real only — replace imputed rows with NaN
-    df_corr = df.copy()
-    df_corr.loc[df_corr["EC50_imputed"], "EC50"] = np.nan
+    # df already has EC50 rolling-mean-imputed (done in load_data / common.py)
+    df_work = df.set_index("Datetime")
 
-    pre  = df_corr[df_corr["Datetime"] <  SPLIT_YEAR + "-01-01"]
-    post = df_corr[df_corr["Datetime"] >= SPLIT_YEAR + "-01-01"]
+    pre_mask  = df_work.index <  pd.Timestamp(SPLIT_YEAR + "-01-01")
+    post_mask = df_work.index >= pd.Timestamp(SPLIT_YEAR + "-01-01")
 
-    cols = ALL_COLS + MHW_COLS
+    env_cols = ALL_COLS   # O2, CO2, Temperature, Salinity, pH, EC50
+    mhw_cols = MHW_COLS   # mhw_peak_intensity, mhw_days
+    all_cols  = env_cols + mhw_cols
 
-    for label, subset in [("all", df_corr), ("pre", pre), ("post", post)]:
-        r_df, p_df = spearman_matrix(subset, cols)
+    for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
+        subset = df_work[mask]
+
+        # Trend components for env variables
+        trend_env = extract_trends(subset, env_cols)
+
+        # MHW columns raw (no decomposition)
+        trend_mhw = subset[mhw_cols].copy()
+
+        combined = pd.concat([trend_env, trend_mhw], axis=1)
+
+        r_df, p_df = spearman_matrix(combined, all_cols)
         r_df.to_csv(RESULTS / f"corr_{label}.csv")
         p_df.to_csv(RESULTS / f"corr_pval_{label}.csv")
 
-    print(f"✓ correlations: matrices saved for {len(cols)} variables (all/pre/post)")
+    print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {len(all_cols)} vars)")
 
 
 if __name__ == "__main__":
