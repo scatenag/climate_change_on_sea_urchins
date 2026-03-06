@@ -4,6 +4,7 @@ Loads pre-computed CSVs from results/ — no live analysis.
 """
 import json
 from pathlib import Path
+from PIL import Image
 
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Sea Urchins & Climate Change",
-    page_icon="🐚",
+    page_icon=Image.open("assets/sea_urchin.png"),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -31,7 +32,7 @@ COOL    = "#2a9d8f"
 NEUTRAL = "#457b9d"
 
 SPLIT_YEAR = 2016
-SITE = dict(lat=44.1, lon=9.8, name="Golfo di La Spezia")
+SITE = dict(lat=44.02, lon=9.83, name="Golfo di La Spezia")
 
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
