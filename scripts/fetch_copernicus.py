@@ -134,7 +134,7 @@ def nc_to_monthly_series(nc_path: Path, var_name: str) -> pd.Series:
     Extract a monthly time series for a variable at the study site.
     Averages spatially over the bounding box and vertically over the depth layer.
     """
-    ds = xr.open_dataset(nc_path)
+    ds = xr.open_dataset(nc_path, engine="h5netcdf")
     da = ds[var_name]
 
     # Average over spatial dimensions

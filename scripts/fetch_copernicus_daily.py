@@ -3,14 +3,14 @@ Download daily SST from Copernicus Marine for Marine Heatwave detection.
 
 marineHeatWaves.detect() requires daily data — monthly data is NOT sufficient.
 
-Site: Golfo di La Spezia / Mar Ligure (~44.1°N, 9.8°E), surface layer
+Site: Golfo di La Spezia / Mar Ligure (43.4278°N, 10.3956°E), surface layer
 Period: 2003-01-01 → 2024-04-30
 
 Output: data/sst_daily.csv
         Columns: Datetime (daily), Temperature
 
-Dataset: cmems_mod_med_phy-tem_my_4.2km_P1D-m (daily temperature)
-Fallback: cmems_mod_med_phy-tem_anfc_4.2km_P1D-m
+Dataset: cmems_mod_med_phy-temp_my_4.2km_P1D-m (daily temperature)
+Fallback: cmems_mod_med_phy-temp_anfc_4.2km_P1D-m
 """
 
 import copernicusmarine
@@ -19,8 +19,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-SITE_LAT = 44.1
-SITE_LON = 9.8
+SITE_LAT = 43.4278
+SITE_LON = 10.3956
 BBOX_DELTA = 0.1
 DEPTH_MIN = 0.0
 DEPTH_MAX = 5.0    # surface only for SST
@@ -30,8 +30,8 @@ END   = "2024-04-30"
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUT_PATH = Path(__file__).parent.parent / "data" / "sst_daily.csv"
 
-DATASET_ID          = "cmems_mod_med_phy-tem_my_4.2km_P1D-m"
-DATASET_ID_FALLBACK = "cmems_mod_med_phy-tem_anfc_4.2km_P1D-m"
+DATASET_ID          = "cmems_mod_med_phy-temp_my_4.2km_P1D-m"
+DATASET_ID_FALLBACK = "cmems_mod_med_phy-temp_anfc_4.2km_P1D-m"
 RAW_FILE = RAW_DIR / "raw_temperature_daily.nc"
 
 
@@ -67,7 +67,7 @@ def download():
 
 
 def nc_to_daily_series() -> pd.DataFrame:
-    ds = xr.open_dataset(RAW_FILE)
+    ds = xr.open_dataset(RAW_FILE, engine="h5netcdf")
     da = ds["thetao"]
 
     # Spatial mean over bounding box
