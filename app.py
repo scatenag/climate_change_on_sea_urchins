@@ -17,7 +17,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Sea Urchins & Climate Change",
-    page_icon="🦔",
+    page_icon="🐚",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -419,7 +419,7 @@ df_real = df[df["EC50_imputed"] == False].copy()
 # TAB 1 — Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[0]:
-    st.title("Climate Change on Sea Urchins 🦔")
+    st.title("Climate Change on Sea Urchins 🐚")
     st.markdown(
         "Study on the impact of climate change and **Marine Heatwaves** "
         "on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea."
@@ -644,18 +644,45 @@ with tabs[2]:
                        yaxis_title="°C")
     st.plotly_chart(fig3, use_container_width=True)
 
-    # Annual bars
+    # Annual bars with trend lines
     if not mhw_annual.empty:
         col1, col2 = st.columns(2)
+        yrs = mhw_annual["year"].values
+
+        def _trend_line(x, y):
+            from scipy.stats import linregress
+            slope, intercept, *_ = linregress(x, y)
+            return intercept + slope * x
+
         with col1:
-            fig_cnt = px.bar(mhw_annual, x="year", y="event_count",
-                             title="MHW events per year",
-                             color_discrete_sequence=[OCEAN])
+            fig_cnt = go.Figure()
+            fig_cnt.add_trace(go.Bar(
+                x=yrs, y=mhw_annual["event_count"],
+                name="Events", marker_color=OCEAN, opacity=0.85,
+            ))
+            fig_cnt.add_trace(go.Scatter(
+                x=yrs, y=_trend_line(yrs, mhw_annual["event_count"].values),
+                name="Trend", mode="lines",
+                line=dict(color="#e63946", width=2.5, dash="dash"),
+            ))
+            fig_cnt.update_layout(title="MHW events per year",
+                                  xaxis_title="Year", yaxis_title="Count",
+                                  legend=dict(orientation="h", y=1.12))
             st.plotly_chart(fig_cnt, use_container_width=True)
         with col2:
-            fig_int = px.bar(mhw_annual, x="year", y="max_intensity",
-                             title="Max MHW intensity (°C above threshold)",
-                             color_discrete_sequence=[WARM])
+            fig_int = go.Figure()
+            fig_int.add_trace(go.Bar(
+                x=yrs, y=mhw_annual["max_intensity"],
+                name="Max intensity", marker_color=WARM, opacity=0.85,
+            ))
+            fig_int.add_trace(go.Scatter(
+                x=yrs, y=_trend_line(yrs, mhw_annual["max_intensity"].values),
+                name="Trend", mode="lines",
+                line=dict(color="#e63946", width=2.5, dash="dash"),
+            ))
+            fig_int.update_layout(title="Max MHW intensity (°C above threshold)",
+                                  xaxis_title="Year", yaxis_title="°C",
+                                  legend=dict(orientation="h", y=1.12))
             st.plotly_chart(fig_int, use_container_width=True)
 
     # Event catalog
