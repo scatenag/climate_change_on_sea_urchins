@@ -32,7 +32,7 @@ COOL    = "#2a9d8f"
 NEUTRAL = "#457b9d"
 
 SPLIT_YEAR = 2016
-SITE = dict(lat=44.02, lon=9.83, name="Golfo di La Spezia")
+SITE = dict(lat=43.4278, lon=10.3956, name="Golfo di La Spezia")
 
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
@@ -420,7 +420,11 @@ df_real = df[df["EC50_imputed"] == False].copy()
 # TAB 1 — Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[0]:
-    st.title("Climate Change on Sea Urchins 🐚")
+    _ico_col, _title_col = st.columns([1, 12])
+    with _ico_col:
+        st.image("assets/sea_urchin.png", width=80)
+    with _title_col:
+        st.title("Climate Change on Sea Urchins")
     st.markdown(
         "Study on the impact of climate change and **Marine Heatwaves** "
         "on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea."
@@ -1384,7 +1388,7 @@ with tabs[8]:
 ### Methods
 
 **Species**: *Paracentrotus lividus* (purple sea urchin)
-**Site**: Gulf of La Spezia, Ligurian Sea (44.1°N, 9.8°E)
+**Site**: Gulf of La Spezia, Ligurian Sea (43.4278°N, 10.3956°E)
 **Period**: 2003–2025
 
 **EC50**: Median effective concentration from sea urchin embryo bioassays.

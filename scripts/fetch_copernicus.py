@@ -1,10 +1,8 @@
 """
 Download monthly environmental variables from Copernicus Marine Service.
 
-Site: Golfo di La Spezia / Mar Ligure (~44.02°N, 9.83°E), depth 0–10m
+Site: Golfo di La Spezia / Mar Ligure (43.4278°N, 10.3956°E), depth 0–10m
       Bounding box ±0.1° averaged over marine grid cells only (4.2km model).
-      NOTE: 44.1°N 9.8°E is on land in the Copernicus grid — use centroid of
-      confirmed sea cells: lat≈44.02, lon≈9.83 (verified from raw_temperature.nc)
 Period: 2003-01-01 → present (full period, not just update)
 
 Output: data/env_copernicus.csv
@@ -45,8 +43,8 @@ import numpy as np
 from pathlib import Path
 
 # ── Site configuration ────────────────────────────────────────────────────────
-SITE_LAT = 44.02   # centroid of confirmed marine grid cells (verified from raw_temperature.nc)
-SITE_LON = 9.83
+SITE_LAT = 43.4278
+SITE_LON = 10.3956
 BBOX_DELTA = 0.1          # ±0.1° bounding box around the site
 DEPTH_MIN = 0.0
 DEPTH_MAX = 10.0
