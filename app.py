@@ -1247,20 +1247,30 @@ with tabs[5]:
 
     corr_data = compute_correlations(df)
     r_df, p_df = corr_data[lbl]
-    r_masked = r_df.copy()
-    r_masked[p_df > 0.05] = 0
+
+    # Build text annotations: show r value, append * if p>=0.05
+    text_mat = r_df.map(lambda v: f"{v:.2f}")
+    ns_mask  = p_df >= 0.05
+    text_mat = text_mat.where(~ns_mask, other=r_df.map(lambda v: f"{v:.2f}") + " *")
+    # Keep diagonal clean
+    for col in text_mat.columns:
+        if col in text_mat.index:
+            text_mat.loc[col, col] = "1.00"
 
     fig_corr = px.imshow(
-        r_masked,
+        r_df,
         color_continuous_scale="RdBu_r",
         zmin=-1, zmax=1,
-        title=f"Spearman r — {period_tab} (only p<0.05 shown)",
-        text_auto=".2f",
+        title=f"Spearman r — {period_tab}",
+    )
+    fig_corr.update_traces(
+        text=text_mat.values,
+        texttemplate="%{text}",
     )
     fig_corr.update_layout(height=550)
     st.plotly_chart(fig_corr, use_container_width=True)
 
-    st.caption("White cells indicate non-significant correlations (p≥0.05).")
+    st.caption("\\* p≥0.05 (not statistically significant). All other values: p<0.05.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
