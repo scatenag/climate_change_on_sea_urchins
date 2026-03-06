@@ -420,11 +420,11 @@ df_real = df[df["EC50_imputed"] == False].copy()
 # TAB 1 — Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[0]:
-    _ico_col, _title_col = st.columns([1, 12])
-    with _ico_col:
-        st.image("assets/sea_urchin.png", width=80)
+    _title_col, _ico_col = st.columns([12, 1])
     with _title_col:
         st.title("Climate Change on Sea Urchins")
+    with _ico_col:
+        st.image("assets/sea_urchin_transparent.png", width=80)
     st.markdown(
         "Study on the impact of climate change and **Marine Heatwaves** "
         "on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea."
