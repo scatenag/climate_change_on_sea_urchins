@@ -32,7 +32,7 @@ COOL    = "#2a9d8f"
 NEUTRAL = "#457b9d"
 
 SPLIT_YEAR = 2016
-SITE = dict(lat=43.4278, lon=10.3956, name="Golfo di La Spezia")
+SITE = dict(lat=43.4278, lon=10.3956, name="Livorno Sud")
 
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
@@ -1388,7 +1388,7 @@ with tabs[8]:
 ### Methods
 
 **Species**: *Paracentrotus lividus* (purple sea urchin)
-**Site**: Gulf of La Spezia, Ligurian Sea (43.4278°N, 10.3956°E)
+**Site**: Livorno Sud, Tyrrhenian Sea (43.4278°N, 10.3956°E)
 **Period**: 2003–2025
 
 **EC50**: Median effective concentration from sea urchin embryo bioassays.
