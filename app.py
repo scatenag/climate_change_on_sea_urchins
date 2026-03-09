@@ -1314,33 +1314,9 @@ with tabs[6]:
 with tabs[7]:
     st.header("Forecast EC50")
 
-    meta = load_json("forecast_meta.json")
-    if meta:
-        st.info(
-            f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months** · "
-            "Model: SARIMAX(1,0,1)(1,0,1,12) + climate scenario adjustment · "
-            "Scenarios diverge by the observed post-2016 climate impact rate (±½ × 2.1 EC₅₀/yr)"
-        )
-
-    fc_bad  = load_csv("forecast_bad.csv")
-    fc_mean = load_csv("forecast_mean.csv")
-    fc_good = load_csv("forecast_good.csv")
-
-    if not fc_bad.empty:
-        for fc in [fc_bad, fc_mean, fc_good]:
-            if "Datetime" in fc.columns:
-                fc["Datetime"] = pd.to_datetime(fc["Datetime"])
-
-        year_range = st.slider(
-            "Maximum year to display",
-            min_value=int(fc_mean["Datetime"].dt.year.min()),
-            max_value=int(fc_mean["Datetime"].dt.year.max()),
-            value=int(fc_mean["Datetime"].dt.year.max()),
-        )
-
+    def _fc_plot(fc_triples, title, year_range, last_obs_date, key_suffix):
+        """Render a forecast plotly figure with CI bands and download buttons."""
         fig_fc = go.Figure()
-
-        # Historical real EC50
         real = df[~df["EC50_imputed"]]
         fig_fc.add_trace(go.Scatter(
             x=df["Datetime"], y=df["EC50"],
@@ -1352,17 +1328,13 @@ with tabs[7]:
             mode="markers", name="EC50 (real measurement)",
             marker=dict(color=OCEAN, size=4),
         ))
-
-        for fc_df, color, name in [
-            (fc_bad,  "#d62828", "Worst (high MHW, accelerated stress)"),
-            (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
-            (fc_good, COOL,      "Best (climate mitigation)"),
-        ]:
+        for fc_df, color, name in fc_triples:
             sub = fc_df[fc_df["Datetime"].dt.year <= year_range]
             fig_fc.add_trace(go.Scatter(
                 x=pd.concat([sub["Datetime"], sub["Datetime"][::-1]]),
                 y=pd.concat([sub["CI_upper"], sub["CI_lower"][::-1]]),
-                fill="toself", fillcolor=f"rgba{tuple(int(color.lstrip('#')[i:i+2], 16) for i in (0,2,4)) + (0.12,)}",
+                fill="toself",
+                fillcolor=f"rgba{tuple(int(color.lstrip('#')[i:i+2], 16) for i in (0,2,4)) + (0.12,)}",
                 line=dict(width=0), showlegend=False,
             ))
             fig_fc.add_trace(go.Scatter(
@@ -1370,27 +1342,100 @@ with tabs[7]:
                 mode="lines", name=name,
                 line=dict(color=color, width=2),
             ))
-
-        fig_fc.add_vline(x=str(df["Datetime"].max())[:10], line_dash="dash",
-                         line_color="grey")
-        fig_fc.update_layout(
-            title="EC50 Forecast 2026–2040 — Three Climate Scenarios",
-            xaxis_title="Year", yaxis_title="EC50 (mg/L)",
-            height=500,
-        )
+        fig_fc.add_vline(x=str(last_obs_date)[:10], line_dash="dash", line_color="grey")
+        fig_fc.update_layout(title=title, xaxis_title="Year", yaxis_title="EC50 (mg/L)", height=500)
         st.plotly_chart(fig_fc, use_container_width=True)
 
-        col1, col2, col3 = st.columns(3)
-        for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
-            with col_w:
-                st.download_button(
-                    f"Download {label} CSV",
-                    data=fc_df.to_csv(index=False),
-                    file_name=f"forecast_{label}.csv",
-                    mime="text/csv",
-                )
-    else:
-        st.warning("Run `python analysis/run_all.py` first")
+    fc_tab_sarimax, fc_tab_bio = st.tabs([
+        "Approccio A — SARIMAX statistico",
+        "Approccio B — Modello biologico (stocastico)",
+    ])
+
+    # ── Approach A: biological scenario model ────────────────────────────────
+    with fc_tab_bio:
+        st.markdown(
+            "**Approccio esteso**: più complesso e con parametri parzialmente arbitrari, ma motivato dalla biologia.  \n"
+            "A differenza del SARIMAX, i tre scenari divergono immediatamente (t=0) con forme qualitativamente diverse:  \n"
+            "- **Worst**: declino accelerato (threshold-crossing, λ crescente 0.005→0.028). σ×1.5  \n"
+            "- **Mean**: plateau di compensazione (24 mesi, plasticità fenotipica) poi declino asintotico ~11. σ×1.0  \n"
+            "- **Best**: ormesi (+8 EC₅₀ in 18 mesi, upregulation HSP) poi stabilizzazione ~26. σ×0.7  \n"
+            "Rumore: bootstrap residui decomposizione stagionale (ramp-in 3 mesi)."
+        )
+        bio_bad  = load_csv("forecast_bio_bad.csv")
+        bio_mean = load_csv("forecast_bio_mean.csv")
+        bio_good = load_csv("forecast_bio_good.csv")
+
+        if not bio_bad.empty:
+            for _fc in [bio_bad, bio_mean, bio_good]:
+                if "Datetime" in _fc.columns:
+                    _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
+            year_range_bio = st.slider(
+                "Anno massimo", key="yr_bio",
+                min_value=int(bio_mean["Datetime"].dt.year.min()),
+                max_value=int(bio_mean["Datetime"].dt.year.max()),
+                value=int(bio_mean["Datetime"].dt.year.max()),
+            )
+            _fc_plot(
+                [
+                    (bio_bad,  "#d62828", "Worst (threshold-crossing)"),
+                    (bio_mean, NEUTRAL,   "Mean (BAU: plateau → decline)"),
+                    (bio_good, COOL,      "Best (hormesis + stabilisation ~26)"),
+                ],
+                title="EC50 Forecast 2026–2040 — Approccio B: modello biologico",
+                year_range=year_range_bio,
+                last_obs_date=df["Datetime"].max(),
+                key_suffix="bio",
+            )
+            col1, col2, col3 = st.columns(3)
+            for col_w, fc_df, label in [(col1, bio_bad, "bio_worst"), (col2, bio_mean, "bio_mean"), (col3, bio_good, "bio_best")]:
+                with col_w:
+                    st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
+                                       file_name=f"forecast_{label}.csv", mime="text/csv")
+        else:
+            st.warning("Eseguire la cella EC50 del notebook per generare forecast_bio_*.csv")
+
+    # ── Approach B: SARIMAX statistical model ────────────────────────────────
+    with fc_tab_sarimax:
+        meta = load_json("forecast_meta.json")
+        st.markdown(
+            "**Modello baseline**: SARIMAX(1,0,1)(1,0,1,12) con MHW peak intensity come regressore esogeno.  \n"
+            "Linee smussate e quasi-sinusoidali — più interpretabili, ma meno realistiche sul lungo periodo.  \n"
+            "Scenari divergono alla velocità del cambiamento post-2016 osservato (±½ × 2.1 EC₅₀/yr)."
+        )
+        if meta:
+            st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
+        fc_bad  = load_csv("forecast_bad.csv")
+        fc_mean = load_csv("forecast_mean.csv")
+        fc_good = load_csv("forecast_good.csv")
+
+        if not fc_bad.empty:
+            for _fc in [fc_bad, fc_mean, fc_good]:
+                if "Datetime" in _fc.columns:
+                    _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
+            year_range_sx = st.slider(
+                "Anno massimo", key="yr_sarimax",
+                min_value=int(fc_mean["Datetime"].dt.year.min()),
+                max_value=int(fc_mean["Datetime"].dt.year.max()),
+                value=int(fc_mean["Datetime"].dt.year.max()),
+            )
+            _fc_plot(
+                [
+                    (fc_bad,  "#d62828", "Worst (high MHW, accelerated stress)"),
+                    (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
+                    (fc_good, COOL,      "Best (climate mitigation)"),
+                ],
+                title="EC50 Forecast 2026–2040 — Approccio A: SARIMAX statistico",
+                year_range=year_range_sx,
+                last_obs_date=df["Datetime"].max(),
+                key_suffix="sarimax",
+            )
+            col1, col2, col3 = st.columns(3)
+            for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
+                with col_w:
+                    st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
+                                       file_name=f"forecast_{label}.csv", mime="text/csv")
+        else:
+            st.warning("Run `python analysis/run_all.py` first")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
