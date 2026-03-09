@@ -1316,7 +1316,11 @@ with tabs[7]:
 
     meta = load_json("forecast_meta.json")
     if meta:
-        st.info(f"Optimal MHW→EC50 lag used in the model: **{meta.get('optimal_lag', '?')} months**")
+        st.info(
+            f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months** · "
+            "Model: SARIMAX(1,0,1)(1,0,1,12) + climate scenario adjustment · "
+            "Scenarios diverge by the observed post-2016 climate impact rate (±½ × 2.1 EC₅₀/yr)"
+        )
 
     fc_bad  = load_csv("forecast_bad.csv")
     fc_mean = load_csv("forecast_mean.csv")
@@ -1350,9 +1354,9 @@ with tabs[7]:
         ))
 
         for fc_df, color, name in [
-            (fc_bad,  "#d62828", "Worst scenario"),
-            (fc_mean, NEUTRAL,   "Mean scenario"),
-            (fc_good, COOL,      "Best scenario"),
+            (fc_bad,  "#d62828", "Worst (high MHW, accelerated stress)"),
+            (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
+            (fc_good, COOL,      "Best (climate mitigation)"),
         ]:
             sub = fc_df[fc_df["Datetime"].dt.year <= year_range]
             fig_fc.add_trace(go.Scatter(
@@ -1370,7 +1374,7 @@ with tabs[7]:
         fig_fc.add_vline(x=str(df["Datetime"].max())[:10], line_dash="dash",
                          line_color="grey")
         fig_fc.update_layout(
-            title="EC50 Forecast 2025–2040 by MHW scenario",
+            title="EC50 Forecast 2026–2040 — Three Climate Scenarios",
             xaxis_title="Year", yaxis_title="EC50 (mg/L)",
             height=500,
         )
@@ -1417,7 +1421,12 @@ Measures embryo sensitivity to a standard toxicant.
 - SEA — Superposed Epoch Analysis with bootstrap n=999 (R)
 - DLNM — Distributed Lag Non-Linear Model, R package `dlnm` (Gasparrini 2011)
 
-**Forecast**: SARIMAX(1,0,1)(1,0,1,12) with MHW as exogenous regressor at the optimal lag.
+**Forecast**: Hybrid SARIMAX + climate scenario adjustment.
+SARIMAX(1,0,1)(1,0,1,12) with lagged MHW peak intensity as exogenous regressor captures
+seasonal structure and mean-reversion dynamics. Three scenarios are differentiated by a
+cumulative climate adjustment calibrated from the observed pre/post-2016 EC₅₀ shift
+(−2.1 EC₅₀/yr): Worst adds ½ this rate, Best subtracts it. CI bands grow linearly
+from SARIMAX residual SD (±7%/yr), avoiding the explosive growth of ARIMA posterior intervals.
 
 ### Data sources
 

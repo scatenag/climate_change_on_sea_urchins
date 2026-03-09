@@ -2,19 +2,19 @@
   "optimal_lag": 2,
   "scenarios": {
     "bad": {
-      "final_mean": 33.7335558022167,
-      "final_ci_lower": 7.738935750341234,
-      "final_ci_upper": 59.728175854092164
+      "final_mean": 15.820532443793633,
+      "final_ci_lower": 0.0,
+      "final_ci_upper": 39.32144268805197
     },
     "mean": {
-      "final_mean": 34.370048752906236,
-      "final_ci_lower": 8.37542870103077,
-      "final_ci_upper": 60.3646688047817
+      "final_mean": 34.09375090294802,
+      "final_ci_lower": 10.592840658689681,
+      "final_ci_upper": 57.59466114720635
     },
     "good": {
-      "final_mean": 35.00654170359577,
-      "final_ci_lower": 9.011921651720307,
-      "final_ci_upper": 61.00116175547124
+      "final_mean": 51.212482106065046,
+      "final_ci_lower": 27.71157186180671,
+      "final_ci_upper": 74.71339235032337
     }
   }
 }
