@@ -1361,49 +1361,54 @@ with tabs[7]:
         with st.expander("Variables and equations"):
             st.markdown(
                 "**Step 1 — OLS regression** fit on real EC₅₀ measurements using all five environmental variables:  \n"
-                "Temperature (°C), CO₂ / pCO₂ (µatm), O₂ (µmol/L), pH, Salinity (PSU)"
+                "Temperature (°C), CO₂ (µatm), O₂ (µmol/L), pH, Salinity (PSU)"
             )
             st.latex(r"""
                 \text{EC}_{50} = \beta_0
-                + \beta_T\,T
-                + \beta_{\text{CO}_2}\,\text{CO}_2
+                + \beta_T\,T + \beta_{\text{CO}_2}\,\text{CO}_2
                 + \beta_{\text{O}_2}\,\text{O}_2
                 + \beta_{\text{pH}}\,\text{pH}
-                + \beta_S\,S
-                + \varepsilon
+                + \beta_S\,S + \varepsilon
             """)
             st.markdown(
                 "**Step 2 — Scenario projections** of all five variables (2026–2040):  \n"
                 "each variable is extrapolated along its historical linear trend; "
-                "the cumulative drift from the last observed value is scaled by:  \n"
-                "- Worst: ×1.5 &nbsp;|&nbsp; Mean: ×1.0 &nbsp;|&nbsp; Best: ×0.5  \n\n"
-                "**Step 3 — Data-driven equilibria**: OLS(env_scenario at t = 180 months) → eq_worst, eq_mean, eq_best.  \n"
-                "These replace the arbitrary fixed equilibria of simpler approaches."
+                "the cumulative drift is scaled by ×1.5 / ×1.0 / ×0.5 for worst / mean / best.  \n\n"
+                "**Step 3 — Equilibrium calibration**:  \n"
+                "The OLS absolute predictions are unreliable at long range (R²=0.30, collinear predictors), "
+                "but the **differences between scenarios** are robust.  \n"
+                "- OLS spread: Δ(bad−mean) and Δ(good−mean) at t=180  \n"
+                "- Absolute anchor: SARIMAX mean scenario at t=180 (best statistical BAU estimate)  \n"
+                "- eq_sc = SARIMAX_anchor + OLS_spread_sc"
             )
-            st.markdown("**Step 4 — Biological mechanism shapes** (path from last observed EC₅₀ to equilibrium):  \n\n"
-                        "**Worst** — accelerating threshold-crossing decline:")
             st.latex(r"""
-                \text{EC}_{50}(t) = eq_\text{worst} + \bigl(\text{EC}_{50}(t-1) - eq_\text{worst}\bigr)\,e^{-\lambda(t)}
-                \qquad \lambda(t) = 0.005 + 0.023\bigl(1 - e^{-t/28}\bigr)
+                eq_{\text{sc}} = \hat{y}_{\text{SARIMAX,mean}}(180)
+                + \bigl[\hat{y}_{\text{OLS}}(\mathbf{X}_{\text{sc},180})
+                       - \hat{y}_{\text{OLS}}(\mathbf{X}_{\text{mean},180})\bigr]
             """)
-            st.markdown("**Mean** — phenotypic compensation plateau, then asymptotic decline to eq_mean:")
+            st.markdown("**Step 4 — Biological mechanism shapes** (path from last EC₅₀ to equilibrium):  \n\n"
+                        "**Worst** — accelerating convergence (limited recovery, high uncertainty):")
+            st.latex(r"""
+                \text{EC}_{50}(t) = eq_{\text{worst}} + \bigl(\text{EC}_{50}(t-1) - eq_{\text{worst}}\bigr)\,e^{-\lambda(t)}
+                \;\; \lambda(t) = 0.005 + 0.023\bigl(1-e^{-t/28}\bigr)
+            """)
+            st.markdown("**Mean** — phenotypic compensation plateau, then convergence:")
             st.latex(r"""
                 \text{EC}_{50}(t) = \begin{cases}
-                    \text{EC}_{50,0} + 0.15\,t & t \leq 24\text{ months} \\[4pt]
-                    eq_\text{mean} + (v_0 - eq_\text{mean})\,e^{-0.010\,(t-24)} & t > 24
+                    \text{EC}_{50,0} + 0.15\,t & t \leq 24 \\[3pt]
+                    eq_{\text{mean}} + (v_0 - eq_{\text{mean}})\,e^{-0.010(t-24)} & t > 24
                 \end{cases}
             """)
-            st.markdown("**Best** — hormesis (+8 EC₅₀ units, 18 months) then convergence to eq_best:")
+            st.markdown("**Best** — hormesis (+8 units, 18 months) then strong recovery:")
             st.latex(r"""
                 \text{EC}_{50}(t) = \begin{cases}
-                    \text{EC}_{50,0} + 8\,\sin\!\left(\dfrac{\pi}{2}\cdot\dfrac{t}{18}\right) & t \leq 18\text{ months} \\[8pt]
-                    eq_\text{best} + (\text{peak} - eq_\text{best})\,e^{-0.005\,(t-18)} & t > 18
+                    \text{EC}_{50,0} + 8\sin\!\left(\tfrac{\pi}{2}\tfrac{t}{18}\right) & t \leq 18 \\[4pt]
+                    eq_{\text{best}} + (\text{peak} - eq_{\text{best}})\,e^{-0.005(t-18)} & t > 18
                 \end{cases}
             """)
             st.markdown(
-                "**Variability**: residuals resampled from OLS historical residuals, "
-                "scaled ×1.5 / ×1.0 / ×0.7 for worst/mean/best — "
-                "stressed populations show more erratic responses than healthy ones."
+                "**Variability**: resampled from seasonal-decomposition residuals of the observed EC₅₀, "
+                "scaled ×1.5 / ×1.0 / ×0.7 — stressed populations show more erratic responses."
             )
         bio_bad  = load_csv("forecast_bio_bad.csv")
         bio_mean = load_csv("forecast_bio_mean.csv")
@@ -1443,26 +1448,27 @@ with tabs[7]:
         meta = load_json("forecast_meta.json")
         st.markdown(
             "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with three exogenous regressors: "
-            "CO₂, Temperature, and lagged MHW peak intensity. "
+            "pH, Temperature, and lagged MHW peak intensity. "
             "Scenario divergence is driven entirely by the projected trajectories of those variables — "
-            "no arbitrary post-hoc adjustment. Note: SARIMAX tends to mean-revert over long horizons, "
-            "so scenario lines remain relatively close."
+            "no arbitrary post-hoc adjustment. "
+            "Trained on post-2016 data only (the current declining climate regime)."
         )
         with st.expander("Variables and equations"):
             lag_k = meta.get("optimal_lag", "k") if meta else "k"
-            exog_vars = meta.get("exog_vars", ["CO2", "Temperature", "mhw_lagged"]) if meta else ["CO2", "Temperature", "mhw_lagged"]
             st.markdown(
                 f"**Input variables:**  \n"
                 f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
-                f"- *Exogenous 1*: CO₂ / pCO₂ (µatm) — strongest Spearman r with EC₅₀ (r = −0.80)  \n"
-                f"- *Exogenous 2*: Temperature (°C) — r = −0.68  \n"
-                f"- *Exogenous 3*: MHW peak intensity (t − {lag_k}) — lagged by {lag_k} month(s), r = −0.39  \n"
-                f"\n**Scenario projections** for all three exogenous variables:  \n"
-                f"each variable is extrapolated along its historical linear trend, "
-                f"then the cumulative drift from the last observed value is scaled by:  \n"
-                f"- Worst: ×1.5 (faster warming / acidification / more MHW)  \n"
-                f"- Mean: ×1.0 (business-as-usual)  \n"
-                f"- Best: ×0.5 (climate mitigation)"
+                f"- *Exogenous 1*: pH — most biologically direct driver; correct sign: lower pH → lower EC₅₀ (r ≈ +0.76)  \n"
+                f"- *Exogenous 2*: Temperature (°C) — thermal stress; r = −0.68  \n"
+                f"- *Exogenous 3*: MHW peak intensity (t − {lag_k}) — marine heatwave intensity, lagged {lag_k} month(s)  \n"
+                f"CO₂ excluded: r(pH, CO₂) = −0.98 (collinear with pH). "
+                f"O₂ and Salinity also excluded (collinear or weak signal). "
+                f"All 5 variables are used in Approach B via OLS.  \n\n"
+                f"**Training window: post-2016 only.** "
+                f"Full-period training causes SARIMAX to mean-revert toward the pre-2016 mean (~40–55 mg/L), "
+                f"which is no longer the relevant climate regime.  \n\n"
+                f"**Scenario projections:** each variable extrapolated along its historical linear trend; "
+                f"drift scaled by ×1.5 / ×1.0 / ×0.5 for worst / mean / best."
             )
             st.markdown("**SARIMAX model equation:**")
             st.latex(r"""
@@ -1471,7 +1477,7 @@ with tabs[7]:
                 + \theta_1\,\varepsilon(t-1)
                 + \Phi_1\,\text{EC}_{50}(t-12)
                 + \Theta_1\,\varepsilon(t-12)
-                + \beta_1\,\text{CO}_2(t)
+                + \beta_1\,\text{pH}(t)
                 + \beta_2\,T(t)
                 + \beta_3\,\text{MHW}(t-k)
                 + \varepsilon(t)

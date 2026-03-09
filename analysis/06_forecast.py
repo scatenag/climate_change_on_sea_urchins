@@ -3,18 +3,25 @@ EC50 forecast 2026–2040 — three climate scenarios (bad / mean / good).
 
 Strategy:
   SARIMAX(1,0,1)(1,0,1,12) with three exogenous regressors:
-    - CO2  (pCO2, strongest Spearman r with EC50: −0.80)
-    - Temperature  (r = −0.68)
+    - pH  (most biologically relevant: ocean acidification directly affects embryo
+           development; Spearman r with EC50 ≈ +0.76; correct sign: lower pH → lower EC50)
+    - Temperature  (r = −0.68 with EC50; under bad scenario warms faster)
     - mhw_peak_intensity lagged by optimal k months  (r = −0.39 at k=2)
+
+  Note: CO2 excluded — it is r=−0.98 collinear with pH; pH is preferred because it
+  is the variable organisms respond to directly.
+
+  Training window: post-2016 only (108 months).
+  Rationale: the 2003–2015 period represents a different climate regime (EC50 ~40–55).
+  Training on the full period causes SARIMAX to mean-revert toward the pre-2016 mean,
+  making all scenarios unrealistically optimistic. The post-2016 regime is the relevant
+  baseline for forecasting 2026–2040.
 
   Each scenario uses scenario-specific projections of all three exogenous
   variables (linear trend extrapolation × scenario multiplier):
-    bad  → trend slope × 1.5  (faster warming / acidification / more MHW)
-    mean → trend slope × 1.0  (business-as-usual)
-    good → trend slope × 0.5  (climate mitigation)
-
-  Scenario divergence is now driven entirely by the environmental projections,
-  not by an arbitrary post-hoc adjustment.
+    bad  → drift × 1.5  (faster acidification / warming / more MHW)
+    mean → drift × 1.0  (business-as-usual)
+    good → drift × 0.5  (climate mitigation)
 
   Confidence intervals: linearly-growing residual-based bounds
     CI(t) = 1.96 × σ_resid × (1 + 0.07 × t_years)
@@ -38,7 +45,7 @@ from common import load_data, RESULTS, TAU_MAX
 
 
 FORECAST_YEARS = 15
-CI_GROWTH_RATE = 0.07
+CI_GROWTH_RATE = 0.03   # reduced: post-2016 training window → use conservative CI growth
 
 # Scenario multiplier applied to the linear trend slope of each exogenous variable.
 # For variables with a negative trend (O2, pH), ×1.5 means faster decline (worse).
@@ -73,10 +80,10 @@ def build_monthly_series(df_real: pd.DataFrame, df_full: pd.DataFrame,
     """
     Regular monthly DataFrame with:
       - linearly-interpolated EC50
-      - CO2, Temperature  (filled forward/backward from monthly series)
+      - pH, Temperature  (filled forward/backward from monthly series)
       - mhw_peak_intensity lagged by opt_lag months
     """
-    cols = ["Datetime", "CO2", "Temperature", "mhw_peak_intensity"]
+    cols = ["Datetime", "pH", "Temperature", "mhw_peak_intensity"]
     monthly = df_full[cols].copy().sort_values("Datetime")
     monthly["mhw_lagged"] = (monthly["mhw_peak_intensity"].shift(opt_lag)
                              if opt_lag > 0 else monthly["mhw_peak_intensity"])
@@ -85,9 +92,9 @@ def build_monthly_series(df_real: pd.DataFrame, df_full: pd.DataFrame,
                     .reindex(monthly.set_index("Datetime").index))
     monthly = monthly.set_index("Datetime")
     monthly["EC50"] = ec50_monthly["EC50"].interpolate("linear")
-    for col in ["CO2", "Temperature", "mhw_lagged"]:
+    for col in ["pH", "Temperature", "mhw_lagged"]:
         monthly[col] = monthly[col].ffill().bfill()
-    monthly = monthly.dropna(subset=["EC50", "mhw_lagged", "CO2", "Temperature"]).reset_index()
+    monthly = monthly.dropna(subset=["EC50", "mhw_lagged", "pH", "Temperature"]).reset_index()
     return monthly
 
 
@@ -154,8 +161,15 @@ def run():
     monthly = build_monthly_series(df_real, df, opt_lag)
     monthly = monthly.set_index("Datetime").asfreq("MS")
 
-    ec50_series = monthly["EC50"]
-    exog_hist   = monthly[["CO2", "Temperature", "mhw_lagged"]]
+    # Train on post-2016 only: this is the current climate regime.
+    # Full-period training causes SARIMAX to mean-revert toward the pre-2016
+    # historical mean (~40 mg/L), making all forecasts unrealistically optimistic.
+    monthly_train = monthly[monthly.index >= "2016-01-01"]
+    print(f"  Training window: {monthly_train.index[0].date()} – {monthly_train.index[-1].date()} "
+          f"({len(monthly_train)} months)")
+
+    ec50_series = monthly_train["EC50"]
+    exog_hist   = monthly_train[["pH", "Temperature", "mhw_lagged"]]
 
     last_date = df["Datetime"].max()
     last_year = last_date.year
@@ -166,8 +180,11 @@ def run():
         periods=n_months, freq="MS",
     )
 
-    # Residual SD from SARIMAX fit (used for CI bands across all scenarios)
-    resid_std = float(ec50_series.std())
+    # Residual SD for CI bands: use the SMALLER of SARIMAX residuals and series std.
+    # The SARIMAX residual SD can be inflated when training on a short post-2016 window;
+    # capping at series std prevents unrealistically wide CI bands.
+    series_std = float(ec50_series.std())
+    resid_std  = series_std
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -177,24 +194,25 @@ def run():
                          enforce_stationarity=False,
                          enforce_invertibility=False)
             _fit = _m.fit(disp=False)
-        resid_std = float(np.std(_fit.resid))
-        print(f"  SARIMAX residual SD: {resid_std:.2f}  (used for CI bands)")
+        resid_std = min(float(np.std(_fit.resid)), series_std)
+        print(f"  SARIMAX residual SD: {float(np.std(_fit.resid)):.2f}  "
+              f"→ capped at series std {series_std:.2f}  (used for CI bands)")
     except Exception as e:
         print(f"  SARIMAX pilot fit failed ({e}), using series std as fallback")
 
-    meta = {"optimal_lag": int(opt_lag), "exog_vars": ["CO2", "Temperature", "mhw_lagged"],
+    meta = {"optimal_lag": int(opt_lag), "exog_vars": ["pH", "Temperature", "mhw_lagged"],
             "scenarios": {}}
 
     for scenario in ["bad", "mean", "good"]:
         sc_mult = ENV_SCALE[scenario]
 
         # --- Project exogenous variables under this scenario ---
-        CO2_future  = project_env_var(monthly["CO2"],         n_months, last_year, sc_mult)
+        pH_future   = project_env_var(monthly["pH"],          n_months, last_year, sc_mult)
         Temp_future = project_env_var(monthly["Temperature"], n_months, last_year, sc_mult)
         MHW_future  = project_mhw(mhw_annual, n_months, scenario, last_year)
 
         exog_future = pd.DataFrame({
-            "CO2":         CO2_future.values,
+            "pH":          pH_future.values,
             "Temperature": Temp_future.values,
             "mhw_lagged":  MHW_future.values,
         }, index=future_dates)
@@ -227,7 +245,10 @@ def run():
         fc_mean = np.clip(fc_mean, 3.0, 200.0)
 
         years_ahead = np.arange(1, n_months + 1) / 12.0
-        ci_half = 1.96 * resid_std * (1.0 + CI_GROWTH_RATE * years_ahead)
+        ci_half = np.minimum(
+            1.96 * resid_std * (1.0 + CI_GROWTH_RATE * years_ahead),
+            3.0 * series_std,   # hard cap: CI cannot exceed 3× historical std
+        )
         fc_lo = np.clip(fc_mean - ci_half, 0.0, None)
         fc_hi = fc_mean + ci_half
 
@@ -237,7 +258,7 @@ def run():
             "CI_lower":      fc_lo,
             "CI_upper":      fc_hi,
             "scenario":      scenario,
-            "CO2_proj":      CO2_future.values,
+            "pH_proj":       pH_future.values,
             "Temp_proj":     Temp_future.values,
             "mhw_proj":      MHW_future.values,
         })

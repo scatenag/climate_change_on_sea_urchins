@@ -1,25 +1,25 @@
 {
   "optimal_lag": 2,
   "exog_vars": [
-    "CO2",
+    "pH",
     "Temperature",
     "mhw_lagged"
   ],
   "scenarios": {
     "bad": {
-      "final_mean": 31.091705769056162,
-      "final_ci_lower": 8.677237193886121,
-      "final_ci_upper": 53.5061743442262
+      "final_mean": 19.387029333681895,
+      "final_ci_lower": 1.1284580574485155,
+      "final_ci_upper": 37.64560060991528
     },
     "mean": {
-      "final_mean": 33.99437732683281,
-      "final_ci_lower": 11.57990875166277,
-      "final_ci_upper": 56.40884590200285
+      "final_mean": 22.019276074486925,
+      "final_ci_lower": 3.7607047982535455,
+      "final_ci_upper": 40.27784735072031
     },
     "good": {
-      "final_mean": 35.583637314326694,
-      "final_ci_lower": 13.169168739156653,
-      "final_ci_upper": 57.998105889496735
+      "final_mean": 23.326660772699455,
+      "final_ci_lower": 5.068089496466076,
+      "final_ci_upper": 41.58523204893284
     }
   }
 }
