@@ -1349,18 +1349,21 @@ with tabs[7]:
 
     fc_tab_sarimax, fc_tab_bio = st.tabs([
         "Approach A — Statistical (SARIMAX)",
-        "Approach B — Biological scenario model (stochastic)",
+        "Approach B — Mechanistic scenario model",
     ])
 
     # ── Approach A: biological scenario model ────────────────────────────────
     with fc_tab_bio:
         st.markdown(
-            "**Extended approach**: more complex and with partially arbitrary parameters, but biologically motivated.  \n"
-            "Unlike SARIMAX, the three scenarios diverge immediately (t=0) with qualitatively different shapes:  \n"
+            "**Mechanistic approach**: each scenario follows a trajectory shaped by a distinct biological response mechanism.  \n"
+            "Unlike the SARIMAX baseline (smooth trend extrapolation), scenarios diverge immediately from the first month  \n"
+            "and follow qualitatively different paths — not just the same curve shifted up or down:  \n"
             "- **Worst**: accelerating decline (threshold-crossing, λ ramps 0.005→0.028). σ×1.5  \n"
             "- **Mean**: compensation plateau (24 months, phenotypic plasticity) then asymptotic decline to ~11. σ×1.0  \n"
             "- **Best**: hormesis (+8 EC₅₀ over 18 months, HSP upregulation) then stabilisation ~26. σ×0.7  \n"
-            "Noise: bootstrap from seasonal decomposition residuals (3-month ramp-in)."
+            "Variability around each trajectory is resampled from the historical residuals of the observed EC₅₀ series,  \n"
+            "scaled by scenario (higher in the worst case, lower in the best), reflecting that stressed populations  \n"
+            "tend to show more erratic responses than healthy ones."
         )
         bio_bad  = load_csv("forecast_bio_bad.csv")
         bio_mean = load_csv("forecast_bio_mean.csv")
@@ -1382,7 +1385,7 @@ with tabs[7]:
                     (bio_mean, NEUTRAL,   "Mean (BAU: plateau → decline)"),
                     (bio_good, COOL,      "Best (hormesis + stabilisation ~26)"),
                 ],
-                title="EC50 Forecast 2026–2040 — Approach B: biological scenario model",
+                title="EC50 Forecast 2026–2040 — Approach B: mechanistic scenario model",
                 year_range=year_range_bio,
                 last_obs_date=df["Datetime"].max(),
                 key_suffix="bio",
