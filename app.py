@@ -1322,6 +1322,7 @@ with tabs[7]:
             x=df["Datetime"], y=df["EC50"],
             mode="lines", name="Historical EC50 (incl. imputed)",
             line=dict(color="rgba(0,119,182,0.4)", width=1),
+            connectgaps=True,
         ))
         fig_fc.add_trace(go.Scatter(
             x=real["Datetime"], y=real["EC50"],
@@ -1347,19 +1348,19 @@ with tabs[7]:
         st.plotly_chart(fig_fc, use_container_width=True)
 
     fc_tab_sarimax, fc_tab_bio = st.tabs([
-        "Approccio A — SARIMAX statistico",
-        "Approccio B — Modello biologico (stocastico)",
+        "Approach A — Statistical (SARIMAX)",
+        "Approach B — Biological scenario model (stochastic)",
     ])
 
     # ── Approach A: biological scenario model ────────────────────────────────
     with fc_tab_bio:
         st.markdown(
-            "**Approccio esteso**: più complesso e con parametri parzialmente arbitrari, ma motivato dalla biologia.  \n"
-            "A differenza del SARIMAX, i tre scenari divergono immediatamente (t=0) con forme qualitativamente diverse:  \n"
-            "- **Worst**: declino accelerato (threshold-crossing, λ crescente 0.005→0.028). σ×1.5  \n"
-            "- **Mean**: plateau di compensazione (24 mesi, plasticità fenotipica) poi declino asintotico ~11. σ×1.0  \n"
-            "- **Best**: ormesi (+8 EC₅₀ in 18 mesi, upregulation HSP) poi stabilizzazione ~26. σ×0.7  \n"
-            "Rumore: bootstrap residui decomposizione stagionale (ramp-in 3 mesi)."
+            "**Extended approach**: more complex and with partially arbitrary parameters, but biologically motivated.  \n"
+            "Unlike SARIMAX, the three scenarios diverge immediately (t=0) with qualitatively different shapes:  \n"
+            "- **Worst**: accelerating decline (threshold-crossing, λ ramps 0.005→0.028). σ×1.5  \n"
+            "- **Mean**: compensation plateau (24 months, phenotypic plasticity) then asymptotic decline to ~11. σ×1.0  \n"
+            "- **Best**: hormesis (+8 EC₅₀ over 18 months, HSP upregulation) then stabilisation ~26. σ×0.7  \n"
+            "Noise: bootstrap from seasonal decomposition residuals (3-month ramp-in)."
         )
         bio_bad  = load_csv("forecast_bio_bad.csv")
         bio_mean = load_csv("forecast_bio_mean.csv")
@@ -1370,7 +1371,7 @@ with tabs[7]:
                 if "Datetime" in _fc.columns:
                     _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
             year_range_bio = st.slider(
-                "Anno massimo", key="yr_bio",
+                "Maximum year", key="yr_bio",
                 min_value=int(bio_mean["Datetime"].dt.year.min()),
                 max_value=int(bio_mean["Datetime"].dt.year.max()),
                 value=int(bio_mean["Datetime"].dt.year.max()),
@@ -1381,7 +1382,7 @@ with tabs[7]:
                     (bio_mean, NEUTRAL,   "Mean (BAU: plateau → decline)"),
                     (bio_good, COOL,      "Best (hormesis + stabilisation ~26)"),
                 ],
-                title="EC50 Forecast 2026–2040 — Approccio B: modello biologico",
+                title="EC50 Forecast 2026–2040 — Approach B: biological scenario model",
                 year_range=year_range_bio,
                 last_obs_date=df["Datetime"].max(),
                 key_suffix="bio",
@@ -1398,9 +1399,9 @@ with tabs[7]:
     with fc_tab_sarimax:
         meta = load_json("forecast_meta.json")
         st.markdown(
-            "**Modello baseline**: SARIMAX(1,0,1)(1,0,1,12) con MHW peak intensity come regressore esogeno.  \n"
-            "Linee smussate e quasi-sinusoidali — più interpretabili, ma meno realistiche sul lungo periodo.  \n"
-            "Scenari divergono alla velocità del cambiamento post-2016 osservato (±½ × 2.1 EC₅₀/yr)."
+            "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with MHW peak intensity as exogenous regressor.  \n"
+            "Smooth, quasi-sinusoidal lines — more interpretable, but less realistic over long horizons.  \n"
+            "Scenarios diverge at the observed post-2016 climate impact rate (±½ × 2.1 EC₅₀/yr)."
         )
         if meta:
             st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
@@ -1413,7 +1414,7 @@ with tabs[7]:
                 if "Datetime" in _fc.columns:
                     _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
             year_range_sx = st.slider(
-                "Anno massimo", key="yr_sarimax",
+                "Maximum year", key="yr_sarimax",
                 min_value=int(fc_mean["Datetime"].dt.year.min()),
                 max_value=int(fc_mean["Datetime"].dt.year.max()),
                 value=int(fc_mean["Datetime"].dt.year.max()),
@@ -1424,7 +1425,7 @@ with tabs[7]:
                     (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
                     (fc_good, COOL,      "Best (climate mitigation)"),
                 ],
-                title="EC50 Forecast 2026–2040 — Approccio A: SARIMAX statistico",
+                title="EC50 Forecast 2026–2040 — Approach A: SARIMAX statistical model",
                 year_range=year_range_sx,
                 last_obs_date=df["Datetime"].max(),
                 key_suffix="sarimax",
