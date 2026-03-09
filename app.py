@@ -1355,16 +1355,38 @@ with tabs[7]:
     # ── Approach A: biological scenario model ────────────────────────────────
     with fc_tab_bio:
         st.markdown(
-            "**Mechanistic approach**: each scenario follows a trajectory shaped by a distinct biological response mechanism.  \n"
-            "Unlike the SARIMAX baseline (smooth trend extrapolation), scenarios diverge immediately from the first month  \n"
-            "and follow qualitatively different paths — not just the same curve shifted up or down:  \n"
-            "- **Worst**: accelerating decline (threshold-crossing, λ ramps 0.005→0.028). σ×1.5  \n"
-            "- **Mean**: compensation plateau (24 months, phenotypic plasticity) then asymptotic decline to ~11. σ×1.0  \n"
-            "- **Best**: hormesis (+8 EC₅₀ over 18 months, HSP upregulation) then stabilisation ~26. σ×0.7  \n"
-            "Variability around each trajectory is resampled from the historical residuals of the observed EC₅₀ series,  \n"
-            "scaled by scenario (higher in the worst case, lower in the best), reflecting that stressed populations  \n"
-            "tend to show more erratic responses than healthy ones."
+            "**Mechanistic approach**: each scenario follows a trajectory shaped by a distinct biological response mechanism. "
+            "Unlike the SARIMAX baseline, scenarios diverge immediately from the first month with qualitatively different paths."
         )
+        with st.expander("Variables and equations"):
+            st.markdown("**Input variable:** last observed EC₅₀ value (starting point). "
+                        "No external climate regressors — scenario assumptions are encoded directly in the trajectory shape.")
+            st.markdown("**Worst** — accelerating threshold-crossing decline:")
+            st.latex(r"""
+                \text{EC}_{50}(t) = 3 + \bigl(\text{EC}_{50}(t-1) - 3\bigr)\,e^{-\lambda(t)}
+                \qquad \lambda(t) = 0.005 + 0.023\bigl(1 - e^{-t/28}\bigr)
+            """)
+            st.markdown("λ ramps from 0.005 (slow initial decline) to 0.028 (rapid collapse) — "
+                        "mimicking non-linear damage accumulation past a thermal tolerance threshold.")
+            st.markdown("**Mean** — phenotypic compensation plateau, then asymptotic decline:")
+            st.latex(r"""
+                \text{EC}_{50}(t) = \begin{cases}
+                    \text{EC}_{50,0} + 0.15\,t & t \leq 24\text{ months} \\[4pt]
+                    11 + (v_0 - 11)\,e^{-0.010\,(t-24)} & t > 24
+                \end{cases}
+            """)
+            st.markdown("**Best** — hormesis (mild stress → beneficial acclimation), then stabilisation:")
+            st.latex(r"""
+                \text{EC}_{50}(t) = \begin{cases}
+                    \text{EC}_{50,0} + 8\,\sin\!\left(\dfrac{\pi}{2}\cdot\dfrac{t}{18}\right) & t \leq 18\text{ months} \\[8pt]
+                    26 + (\text{peak} - 26)\,e^{-0.005\,(t-18)} & t > 18
+                \end{cases}
+            """)
+            st.markdown(
+                "**Variability**: residuals are resampled from the historical seasonal-decomposition residuals of the observed "
+                "EC₅₀ series, scaled ×1.5 / ×1.0 / ×0.7 for worst/mean/best — reflecting that physiologically stressed "
+                "populations respond more erratically than healthy ones."
+            )
         bio_bad  = load_csv("forecast_bio_bad.csv")
         bio_mean = load_csv("forecast_bio_mean.csv")
         bio_good = load_csv("forecast_bio_good.csv")
@@ -1402,10 +1424,38 @@ with tabs[7]:
     with fc_tab_sarimax:
         meta = load_json("forecast_meta.json")
         st.markdown(
-            "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with MHW peak intensity as exogenous regressor.  \n"
-            "Smooth, quasi-sinusoidal lines — more interpretable, but less realistic over long horizons.  \n"
-            "Scenarios diverge at the observed post-2016 climate impact rate (±½ × 2.1 EC₅₀/yr)."
+            "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with lagged MHW peak intensity as exogenous regressor. "
+            "Smooth, quasi-sinusoidal output — more interpretable, but scenarios converge over long horizons."
         )
+        with st.expander("Variables and equations"):
+            lag_k = meta.get("optimal_lag", "k") if meta else "k"
+            st.markdown(f"**Input variables:**  \n"
+                        f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
+                        f"- *Exogenous*: MHW peak intensity(t − {lag_k}) — marine heatwave intensity lagged by {lag_k} month(s) "
+                        f"(optimal lag selected by Spearman correlation)")
+            st.markdown("**SARIMAX model equation:**")
+            st.latex(r"""
+                \text{EC}_{50}(t) = c
+                + \phi_1\,\text{EC}_{50}(t-1)
+                + \theta_1\,\varepsilon(t-1)
+                + \Phi_1\,\text{EC}_{50}(t-12)
+                + \Theta_1\,\varepsilon(t-12)
+                + \beta\,\text{MHW}(t-k)
+                + \varepsilon(t)
+            """)
+            st.markdown("**Scenario adjustment** added on top of the SARIMAX mean forecast:")
+            st.latex(r"""
+                \Delta(t) = \begin{cases}
+                    +\tfrac{1}{2}\,r\,t & \text{Worst} \\[2pt]
+                    0                   & \text{Mean} \\[2pt]
+                    -\tfrac{1}{2}\,r\,t & \text{Best}
+                \end{cases}
+                \qquad r = \frac{\overline{\text{EC}_{50}}^{\,\text{post-2016}} - \overline{\text{EC}_{50}}^{\,\text{pre-2016}}}{9\text{ yr}}
+                \approx -2.1\ \text{EC}_{50}\,\text{yr}^{-1}
+            """)
+            st.markdown("**Confidence interval**: linearly growing from the SARIMAX residual standard deviation — "
+                        "CI(t) = 1.96 · σ_resid · (1 + 0.07 · t) — replacing the explosive posterior CI "
+                        "that SARIMAX produces over a 15-year horizon.")
         if meta:
             st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
         fc_bad  = load_csv("forecast_bad.csv")
