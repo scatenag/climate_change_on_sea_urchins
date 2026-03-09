@@ -1359,33 +1359,51 @@ with tabs[7]:
             "Unlike the SARIMAX baseline, scenarios diverge immediately from the first month with qualitatively different paths."
         )
         with st.expander("Variables and equations"):
-            st.markdown("**Input variable:** last observed EC₅₀ value (starting point). "
-                        "No external climate regressors — scenario assumptions are encoded directly in the trajectory shape.")
-            st.markdown("**Worst** — accelerating threshold-crossing decline:")
+            st.markdown(
+                "**Step 1 — OLS regression** fit on real EC₅₀ measurements using all five environmental variables:  \n"
+                "Temperature (°C), CO₂ / pCO₂ (µatm), O₂ (µmol/L), pH, Salinity (PSU)"
+            )
             st.latex(r"""
-                \text{EC}_{50}(t) = 3 + \bigl(\text{EC}_{50}(t-1) - 3\bigr)\,e^{-\lambda(t)}
+                \text{EC}_{50} = \beta_0
+                + \beta_T\,T
+                + \beta_{\text{CO}_2}\,\text{CO}_2
+                + \beta_{\text{O}_2}\,\text{O}_2
+                + \beta_{\text{pH}}\,\text{pH}
+                + \beta_S\,S
+                + \varepsilon
+            """)
+            st.markdown(
+                "**Step 2 — Scenario projections** of all five variables (2026–2040):  \n"
+                "each variable is extrapolated along its historical linear trend; "
+                "the cumulative drift from the last observed value is scaled by:  \n"
+                "- Worst: ×1.5 &nbsp;|&nbsp; Mean: ×1.0 &nbsp;|&nbsp; Best: ×0.5  \n\n"
+                "**Step 3 — Data-driven equilibria**: OLS(env_scenario at t = 180 months) → eq_worst, eq_mean, eq_best.  \n"
+                "These replace the arbitrary fixed equilibria of simpler approaches."
+            )
+            st.markdown("**Step 4 — Biological mechanism shapes** (path from last observed EC₅₀ to equilibrium):  \n\n"
+                        "**Worst** — accelerating threshold-crossing decline:")
+            st.latex(r"""
+                \text{EC}_{50}(t) = eq_\text{worst} + \bigl(\text{EC}_{50}(t-1) - eq_\text{worst}\bigr)\,e^{-\lambda(t)}
                 \qquad \lambda(t) = 0.005 + 0.023\bigl(1 - e^{-t/28}\bigr)
             """)
-            st.markdown("λ ramps from 0.005 (slow initial decline) to 0.028 (rapid collapse) — "
-                        "mimicking non-linear damage accumulation past a thermal tolerance threshold.")
-            st.markdown("**Mean** — phenotypic compensation plateau, then asymptotic decline:")
+            st.markdown("**Mean** — phenotypic compensation plateau, then asymptotic decline to eq_mean:")
             st.latex(r"""
                 \text{EC}_{50}(t) = \begin{cases}
                     \text{EC}_{50,0} + 0.15\,t & t \leq 24\text{ months} \\[4pt]
-                    11 + (v_0 - 11)\,e^{-0.010\,(t-24)} & t > 24
+                    eq_\text{mean} + (v_0 - eq_\text{mean})\,e^{-0.010\,(t-24)} & t > 24
                 \end{cases}
             """)
-            st.markdown("**Best** — hormesis (mild stress → beneficial acclimation), then stabilisation:")
+            st.markdown("**Best** — hormesis (+8 EC₅₀ units, 18 months) then convergence to eq_best:")
             st.latex(r"""
                 \text{EC}_{50}(t) = \begin{cases}
                     \text{EC}_{50,0} + 8\,\sin\!\left(\dfrac{\pi}{2}\cdot\dfrac{t}{18}\right) & t \leq 18\text{ months} \\[8pt]
-                    26 + (\text{peak} - 26)\,e^{-0.005\,(t-18)} & t > 18
+                    eq_\text{best} + (\text{peak} - eq_\text{best})\,e^{-0.005\,(t-18)} & t > 18
                 \end{cases}
             """)
             st.markdown(
-                "**Variability**: residuals are resampled from the historical seasonal-decomposition residuals of the observed "
-                "EC₅₀ series, scaled ×1.5 / ×1.0 / ×0.7 for worst/mean/best — reflecting that physiologically stressed "
-                "populations respond more erratically than healthy ones."
+                "**Variability**: residuals resampled from OLS historical residuals, "
+                "scaled ×1.5 / ×1.0 / ×0.7 for worst/mean/best — "
+                "stressed populations show more erratic responses than healthy ones."
             )
         bio_bad  = load_csv("forecast_bio_bad.csv")
         bio_mean = load_csv("forecast_bio_mean.csv")
@@ -1424,15 +1442,28 @@ with tabs[7]:
     with fc_tab_sarimax:
         meta = load_json("forecast_meta.json")
         st.markdown(
-            "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with lagged MHW peak intensity as exogenous regressor. "
-            "Smooth, quasi-sinusoidal output — more interpretable, but scenarios converge over long horizons."
+            "**Baseline model**: SARIMAX(1,0,1)(1,0,1,12) with three exogenous regressors: "
+            "CO₂, Temperature, and lagged MHW peak intensity. "
+            "Scenario divergence is driven entirely by the projected trajectories of those variables — "
+            "no arbitrary post-hoc adjustment. Note: SARIMAX tends to mean-revert over long horizons, "
+            "so scenario lines remain relatively close."
         )
         with st.expander("Variables and equations"):
             lag_k = meta.get("optimal_lag", "k") if meta else "k"
-            st.markdown(f"**Input variables:**  \n"
-                        f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
-                        f"- *Exogenous*: MHW peak intensity(t − {lag_k}) — marine heatwave intensity lagged by {lag_k} month(s) "
-                        f"(optimal lag selected by Spearman correlation)")
+            exog_vars = meta.get("exog_vars", ["CO2", "Temperature", "mhw_lagged"]) if meta else ["CO2", "Temperature", "mhw_lagged"]
+            st.markdown(
+                f"**Input variables:**  \n"
+                f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
+                f"- *Exogenous 1*: CO₂ / pCO₂ (µatm) — strongest Spearman r with EC₅₀ (r = −0.80)  \n"
+                f"- *Exogenous 2*: Temperature (°C) — r = −0.68  \n"
+                f"- *Exogenous 3*: MHW peak intensity (t − {lag_k}) — lagged by {lag_k} month(s), r = −0.39  \n"
+                f"\n**Scenario projections** for all three exogenous variables:  \n"
+                f"each variable is extrapolated along its historical linear trend, "
+                f"then the cumulative drift from the last observed value is scaled by:  \n"
+                f"- Worst: ×1.5 (faster warming / acidification / more MHW)  \n"
+                f"- Mean: ×1.0 (business-as-usual)  \n"
+                f"- Best: ×0.5 (climate mitigation)"
+            )
             st.markdown("**SARIMAX model equation:**")
             st.latex(r"""
                 \text{EC}_{50}(t) = c
@@ -1440,22 +1471,14 @@ with tabs[7]:
                 + \theta_1\,\varepsilon(t-1)
                 + \Phi_1\,\text{EC}_{50}(t-12)
                 + \Theta_1\,\varepsilon(t-12)
-                + \beta\,\text{MHW}(t-k)
+                + \beta_1\,\text{CO}_2(t)
+                + \beta_2\,T(t)
+                + \beta_3\,\text{MHW}(t-k)
                 + \varepsilon(t)
             """)
-            st.markdown("**Scenario adjustment** added on top of the SARIMAX mean forecast:")
-            st.latex(r"""
-                \Delta(t) = \begin{cases}
-                    +\tfrac{1}{2}\,r\,t & \text{Worst} \\[2pt]
-                    0                   & \text{Mean} \\[2pt]
-                    -\tfrac{1}{2}\,r\,t & \text{Best}
-                \end{cases}
-                \qquad r = \frac{\overline{\text{EC}_{50}}^{\,\text{post-2016}} - \overline{\text{EC}_{50}}^{\,\text{pre-2016}}}{9\text{ yr}}
-                \approx -2.1\ \text{EC}_{50}\,\text{yr}^{-1}
-            """)
-            st.markdown("**Confidence interval**: linearly growing from the SARIMAX residual standard deviation — "
-                        "CI(t) = 1.96 · σ_resid · (1 + 0.07 · t) — replacing the explosive posterior CI "
-                        "that SARIMAX produces over a 15-year horizon.")
+            st.markdown("**Confidence interval**: linearly growing — "
+                        "CI(t) = 1.96 · σ_resid · (1 + 0.07 · t) — "
+                        "replacing the explosive posterior CI that SARIMAX produces over a 15-year horizon.")
         if meta:
             st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
         fc_bad  = load_csv("forecast_bad.csv")
