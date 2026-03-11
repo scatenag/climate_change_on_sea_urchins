@@ -1,0 +1,54 @@
+name: Auto-update EC50 data
+
+on:
+  schedule:
+    # Every day at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout analysis-2025
+        uses: actions/checkout@v4
+        with:
+          ref: analysis-2025
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch EC50 from Google Sheets
+        run: python scripts/fetch_ec50.py
+
+      - name: Check if EC50 data changed
+        id: check
+        run: |
+          if git diff --quiet data/ec50_sheets.csv; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rebuild dataset and re-run analysis
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          python scripts/build_dataset.py
+          python analysis/run_all.py
+
+      - name: Commit and push updated results
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ec50_sheets.csv data_extended.csv data_ec50_ci.csv results/
+          git commit -m "Auto-update: new EC50 data from Google Sheets [skip ci]"
+          git push origin analysis-2025
