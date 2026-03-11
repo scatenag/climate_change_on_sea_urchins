@@ -43,16 +43,9 @@ SITE = dict(lat=43.4278, lon=10.3956, name="Livorno Sud")
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=3600)
-def fetch_ec50_live() -> pd.DataFrame:
-    """
-    Download EC50 data live from Google Sheets and aggregate to monthly rows.
-    Returns a DataFrame with columns:
-        Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n, EC50_imputed
-    EC50_imputed=False for all rows returned here (real measurements only).
-    Cache is refreshed every hour.
-    """
-    raw = pd.read_csv(EXPORT_URL)
+def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
+    """Aggregate raw EC50 bioassay rows to monthly values."""
+    raw = raw.copy()
     raw.columns = raw.columns.str.strip()
     raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
     raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
@@ -81,6 +74,30 @@ def fetch_ec50_live() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
+def fetch_ec50_live() -> tuple[pd.DataFrame, str]:
+    """
+    Fetch EC50 from Google Sheets (TTL 1 h).
+    Returns (monthly_df, source) where source is 'live' or 'static'.
+    Falls back to data_ec50_ci.csv if the network request fails.
+    """
+    try:
+        raw = pd.read_csv(EXPORT_URL, timeout=15)
+        monthly = _aggregate_ec50(raw)
+        return monthly, "live"
+    except Exception:
+        # Fallback: use the static CSV committed to the repo
+        ci_path = ROOT / "data_ec50_ci.csv"
+        fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
+        fallback["EC50_imputed"] = fallback["EC50_imputed"].astype(bool)
+        real = fallback[~fallback["EC50_imputed"]].copy()
+        cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_imputed"]
+        real = real[[c for c in cols if c in real.columns]]
+        if "EC50_n" not in real.columns:
+            real["EC50_n"] = 1
+        return real.reset_index(drop=True), "static"
+
+
+@st.cache_data(ttl=3600)
 def load_main():
     # Environmental data: static CSVs (Copernicus — does not change)
     df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
@@ -89,8 +106,8 @@ def load_main():
                        parse_dates=["start_date","end_date","peak_date"])
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
 
-    # EC50 data: live from Google Sheets
-    ec50_live = fetch_ec50_live()
+    # EC50 data: live from Google Sheets (with static fallback)
+    ec50_live, ec50_source = fetch_ec50_live()
 
     # Drop stale EC50 columns from the static dataset and replace with live data
     stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
@@ -123,7 +140,7 @@ def load_main():
         df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
         df.drop(columns=["Temperature_sst"], inplace=True)
 
-    return df, ec50_live, mhwe, mhwa
+    return df, ec50_live, mhwe, mhwa, ec50_source
 
 
 @st.cache_data
@@ -473,17 +490,23 @@ tabs = st.tabs([
     "About",
 ])
 
-df, ci_df, mhw_events, mhw_annual = load_main()
+df, ci_df, mhw_events, mhw_annual, _ec50_source = load_main()
 df_real = df[df["EC50_imputed"] == False].copy()
 
 # Show EC50 data freshness in the sidebar
 with st.sidebar:
     _last_ec50 = ci_df["Datetime"].max()
-    st.caption(
-        f"EC50 data: **{len(ci_df)} measurements** through "
-        f"**{_last_ec50.strftime('%b %Y')}**  \n"
-        "Live from Google Sheets · refreshed every hour"
-    )
+    if _ec50_source == "live":
+        st.caption(
+            f"EC50 data: **{len(ci_df)} measurements** through "
+            f"**{_last_ec50.strftime('%b %Y')}**  \n"
+            "Live from Google Sheets · refreshed every hour"
+        )
+    else:
+        st.warning(
+            f"EC50 data: offline snapshot through **{_last_ec50.strftime('%b %Y')}**  \n"
+            "Could not reach Google Sheets — showing last saved data."
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
