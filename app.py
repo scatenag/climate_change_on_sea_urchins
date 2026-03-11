@@ -1,6 +1,7 @@
 """
 Climate Change on Sea Urchins — Streamlit Dashboard
-Loads pre-computed CSVs from results/ — no live analysis.
+EC50 data fetched live from Google Sheets (TTL 1 h).
+Environmental variables and analysis results loaded from pre-computed CSVs.
 """
 import json
 from pathlib import Path
@@ -26,6 +27,11 @@ st.set_page_config(
 ROOT    = Path(__file__).parent
 RESULTS = ROOT / "results"
 
+SHEET_ID   = "1e0-16D84ehRyotSC2BH9e9YqAnZksbv4gZDFgyPki8g"
+EXPORT_URL = (
+    f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+)
+
 OCEAN   = "#0077b6"
 WARM    = "#e76f51"
 COOL    = "#2a9d8f"
@@ -37,18 +43,73 @@ SITE = dict(lat=43.4278, lon=10.3956, name="Livorno Sud")
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=3600)
+def fetch_ec50_live() -> pd.DataFrame:
+    """
+    Download EC50 data live from Google Sheets and aggregate to monthly rows.
+    Returns a DataFrame with columns:
+        Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n, EC50_imputed
+    EC50_imputed=False for all rows returned here (real measurements only).
+    Cache is refreshed every hour.
+    """
+    raw = pd.read_csv(EXPORT_URL)
+    raw.columns = raw.columns.str.strip()
+    raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
+    raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
+    raw["hw_upper"] = raw["UL"] - raw["EC50"]
+    raw["hw_lower"] = raw["EC50"] - raw["LL"]
+
+    agg = raw.groupby("Datetime").agg(
+        EC50=("EC50", "mean"),
+        EC50_std=("EC50", "std"),
+        EC50_n=("EC50", "count"),
+        mean_hw_upper=("hw_upper", "mean"),
+        mean_hw_lower=("hw_lower", "mean"),
+    ).reset_index()
+
+    agg["se"] = agg["EC50_std"] / np.sqrt(agg["EC50_n"])
+    agg["EC50_ci_upper"] = agg["EC50"] + np.maximum(
+        agg["mean_hw_upper"], 1.96 * agg["se"].fillna(0)
+    )
+    agg["EC50_ci_lower"] = agg["EC50"] - np.maximum(
+        agg["mean_hw_lower"], 1.96 * agg["se"].fillna(0)
+    )
+    agg["EC50_imputed"] = False
+
+    cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n", "EC50_imputed"]
+    return agg[cols].sort_values("Datetime").reset_index(drop=True)
+
+
 @st.cache_data
 def load_main():
+    # Environmental data: static CSVs (Copernicus — does not change)
     df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
-    ci   = pd.read_csv(ROOT / "data_ec50_ci.csv",   parse_dates=["Datetime"])
     mhwm = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
     mhwe = pd.read_csv(ROOT / "mhw_events.csv",
                        parse_dates=["start_date","end_date","peak_date"])
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
-    df   = df.merge(mhwm[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
-                    on="Datetime", how="left")
-    df   = df.merge(ci[["Datetime","EC50_imputed","EC50_ci_upper","EC50_ci_lower"]],
-                    on="Datetime", how="left")
+
+    # EC50 data: live from Google Sheets
+    ec50_live = fetch_ec50_live()
+
+    # Drop stale EC50 columns from the static dataset and replace with live data
+    stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
+                  if c in df.columns]
+    df = df.drop(columns=stale_cols)
+    df = df.merge(
+        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_imputed"]],
+        on="Datetime", how="left"
+    )
+    df["EC50_imputed"] = df["EC50_imputed"].fillna(True)
+
+    # Rolling-mean imputation for months without a real EC50 measurement
+    df["EC50"] = df["EC50"].fillna(
+        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
+    )
+
+    # Merge MHW monthly metrics
+    df = df.merge(mhwm[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
+                  on="Datetime", how="left")
 
     # Fill Temperature gaps (after Copernicus monthly ends) from daily SST
     sst_path = ROOT / "data" / "sst_daily.csv"
@@ -62,7 +123,7 @@ def load_main():
         df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
         df.drop(columns=["Temperature_sst"], inplace=True)
 
-    return df, ci, mhwe, mhwa
+    return df, ec50_live, mhwe, mhwa
 
 
 @st.cache_data
@@ -414,6 +475,15 @@ tabs = st.tabs([
 
 df, ci_df, mhw_events, mhw_annual = load_main()
 df_real = df[df["EC50_imputed"] == False].copy()
+
+# Show EC50 data freshness in the sidebar
+with st.sidebar:
+    _last_ec50 = ci_df["Datetime"].max()
+    st.caption(
+        f"EC50 data: **{len(ci_df)} measurements** through "
+        f"**{_last_ec50.strftime('%b %Y')}**  \n"
+        "Live from Google Sheets · refreshed every hour"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
