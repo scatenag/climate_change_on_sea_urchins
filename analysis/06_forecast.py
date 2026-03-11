@@ -244,6 +244,22 @@ def run():
 
         fc_mean = np.clip(fc_mean, 3.0, 200.0)
 
+        # Calibrated trend adjustment: the post-2016 EC50 decline is real and ongoing.
+        # Apply a scenario-specific fraction of that observed slope on top of SARIMAX output.
+        # This ensures bad scenario continues declining and good shows partial recovery.
+        #   bad:  SARIMAX − 0.30 × |post_slope| × t_years  (accelerated decline)
+        #   mean: no adjustment (SARIMAX as-is)
+        #   good: SARIMAX + 0.15 × |post_slope| × t_years  (partial mitigation)
+        t_post = np.arange(len(ec50_series))
+        post_slope_mo, *_ = stats.linregress(t_post, ec50_series.values)
+        post_slope_yr = post_slope_mo * 12   # typically ≈ −2.0 to −2.5 EC50/yr
+        years_ahead = np.arange(1, n_months + 1) / 12.0
+        if scenario == "bad":
+            fc_mean = fc_mean + 0.30 * post_slope_yr * years_ahead   # post_slope_yr is negative → subtracts
+        elif scenario == "good":
+            fc_mean = fc_mean - 0.15 * post_slope_yr * years_ahead   # subtract negative → adds
+        fc_mean = np.clip(fc_mean, 3.0, 200.0)
+
         years_ahead = np.arange(1, n_months + 1) / 12.0
         ci_half = np.minimum(
             1.96 * resid_std * (1.0 + CI_GROWTH_RATE * years_ahead),

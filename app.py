@@ -1482,9 +1482,22 @@ with tabs[7]:
                 + \beta_3\,\text{MHW}(t-k)
                 + \varepsilon(t)
             """)
-            st.markdown("**Confidence interval**: linearly growing — "
-                        "CI(t) = 1.96 · σ_resid · (1 + 0.07 · t) — "
-                        "replacing the explosive posterior CI that SARIMAX produces over a 15-year horizon.")
+            st.markdown("**Scenario adjustment** — on top of the SARIMAX forecast, a calibrated trend "
+                        "correction is applied to ensure the worst-case scenario continues along the "
+                        "observed post-2016 declining trajectory:")
+            st.latex(r"""
+                \hat{y}_{\text{sc}}(t) = \hat{y}_{\text{SARIMAX}}(t)
+                + \alpha_{\text{sc}} \cdot s_{\text{post}} \cdot t_{\text{years}}
+            """)
+            st.markdown(
+                r"where $s_{\text{post}}$ is the observed post-2016 EC₅₀ trend (yr⁻¹, typically ≈ −2.3), "
+                r"and $\alpha_{\text{sc}}$ = +0.30 for worst / 0 for mean / −0.15 for best.  \n"
+                "For the worst case this subtracts ~10 EC₅₀ units over 15 years; "
+                "for best it adds ~5 units (partial mitigation).  \n\n"
+                "**Confidence interval**: linearly growing, capped at 3 × historical σ — "
+                "CI(t) = 1.96 · σ_resid · (1 + 0.03 · t) — "
+                "replacing the explosive posterior CI that SARIMAX produces over a 15-year horizon."
+            )
         if meta:
             st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
         fc_bad  = load_csv("forecast_bad.csv")
@@ -1549,12 +1562,13 @@ Measures embryo sensitivity to a standard toxicant.
 - SEA — Superposed Epoch Analysis with bootstrap n=999 (R)
 - DLNM — Distributed Lag Non-Linear Model, R package `dlnm` (Gasparrini 2011)
 
-**Forecast**: Hybrid SARIMAX + climate scenario adjustment.
-SARIMAX(1,0,1)(1,0,1,12) with lagged MHW peak intensity as exogenous regressor captures
-seasonal structure and mean-reversion dynamics. Three scenarios are differentiated by a
-cumulative climate adjustment calibrated from the observed pre/post-2016 EC₅₀ shift
-(−2.1 EC₅₀/yr): Worst adds ½ this rate, Best subtracts it. CI bands grow linearly
-from SARIMAX residual SD (±7%/yr), avoiding the explosive growth of ARIMA posterior intervals.
+**Forecast**: SARIMAX(1,0,1)(1,0,1,12) with three exogenous regressors — pH, Temperature, and
+lagged MHW peak intensity — trained on post-2016 data only (the current declining climate
+regime). Exogenous variables are projected forward via linear trend extrapolation, with drift
+scaled ×1.5 / ×1.0 / ×0.5 for worst / mean / best scenarios. A calibrated post-2016 trend
+correction (α × s_post × t, where s_post ≈ −2.3 EC₅₀/yr) is added per scenario to ensure the
+worst case continues declining and the best case shows partial recovery. CI bands grow linearly
+from SARIMAX residual SD (capped at historical σ, +3%/yr), hard-capped at 3 × historical σ.
 
 ### Data sources
 
