@@ -80,7 +80,7 @@ def fetch_ec50_live() -> pd.DataFrame:
     return agg[cols].sort_values("Datetime").reset_index(drop=True)
 
 
-@st.cache_data
+@st.cache_data(ttl=3600)
 def load_main():
     # Environmental data: static CSVs (Copernicus — does not change)
     df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
