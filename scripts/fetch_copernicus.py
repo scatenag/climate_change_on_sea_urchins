@@ -49,7 +49,7 @@ BBOX_DELTA = 0.1          # ±0.1° bounding box around the site
 DEPTH_MIN = 0.0
 DEPTH_MAX = 10.0
 START = "2003-01-01"
-END   = "2025-12-31"   # MEDSEA_MULTIYEAR is updated with ~1 month lag; extend as needed
+END   = "2026-03-31"   # MEDSEA_MULTIYEAR is updated with ~1 month lag; extend as needed
 
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUT_PATH = Path(__file__).parent.parent / "data" / "env_copernicus.csv"
