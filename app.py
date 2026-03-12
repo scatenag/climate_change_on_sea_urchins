@@ -4,6 +4,7 @@ EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
 import json
+import warnings
 from pathlib import Path
 from PIL import Image
 
@@ -15,6 +16,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -181,6 +183,284 @@ def load_r_results():
     dlnm = load_csv("../dlnm_results.csv")
     dlnm_lag = load_csv("../dlnm_lag_profile.csv")
     return sea, dlnm, dlnm_lag
+
+
+# ── Forecast constants ────────────────────────────────────────────────────────
+_FC_YEARS      = 15
+_CI_GROWTH     = 0.03
+_ENV_SCALE     = {"bad": 1.5, "mean": 1.0, "good": 0.5}
+_MHW_SCALE     = {"bad": 2.0, "mean": 1.0, "good": 0.5}
+_TAU_MAX       = 12
+_TRAIN_START   = "2016-01-01"   # post-2016 training window
+
+
+def _fc_find_lag(df_real: pd.DataFrame, df_full: pd.DataFrame) -> int:
+    best_lag, best_r = 2, 0.0
+    for lag in range(0, _TAU_MAX + 1):
+        mhw_vals, ec50_vals = [], []
+        for _, row in df_real.iterrows():
+            target = row["Datetime"] - pd.DateOffset(months=lag)
+            diffs  = (df_full["Datetime"] - target).abs()
+            idx    = diffs.idxmin()
+            if diffs[idx] <= pd.Timedelta("20 days"):
+                mhw_vals.append(df_full.loc[idx, "mhw_peak_intensity"])
+                ec50_vals.append(row["EC50"])
+        xa, ya = np.array(mhw_vals), np.array(ec50_vals)
+        mask = ~(np.isnan(xa) | np.isnan(ya))
+        if mask.sum() < 10:
+            continue
+        r, _ = stats.spearmanr(xa[mask], ya[mask])
+        if abs(r) > best_r:
+            best_r, best_lag = abs(r), lag
+    return best_lag
+
+
+def _fc_build_monthly(df_real: pd.DataFrame, df_full: pd.DataFrame, lag: int) -> pd.DataFrame:
+    cols    = ["Datetime", "pH", "Temperature", "mhw_peak_intensity"]
+    monthly = df_full[cols].copy().sort_values("Datetime")
+    monthly["mhw_lagged"] = (monthly["mhw_peak_intensity"].shift(lag)
+                             if lag > 0 else monthly["mhw_peak_intensity"])
+    ec50_idx = df_real[["Datetime", "EC50"]].set_index("Datetime")
+    monthly  = monthly.set_index("Datetime")
+    monthly["EC50"] = ec50_idx.reindex(monthly.index)["EC50"].interpolate("linear")
+    for col in ["pH", "Temperature", "mhw_lagged"]:
+        monthly[col] = monthly[col].ffill().bfill()
+    return monthly.dropna(subset=["EC50", "mhw_lagged", "pH", "Temperature"]).reset_index()
+
+
+def _fc_project_env(series: pd.Series, n: int, last_year: int, mult: float) -> pd.Series:
+    series = series.dropna()
+    t      = np.arange(len(series))
+    slope, intercept, *_ = stats.linregress(t, series.values)
+    last_val = float(series.iloc[-1])
+    t_future = np.arange(len(series), len(series) + n)
+    delta    = (intercept + slope * t_future) - last_val
+    projected = last_val + delta * mult
+    detrended = series.values - (intercept + slope * t)
+    seasonal  = np.tile(detrended[-12:], n // 12 + 1)[:n]
+    future_dates = pd.date_range(
+        start=pd.Timestamp(f"{last_year + 1}-01-01"), periods=n, freq="MS"
+    )
+    return pd.Series(projected + seasonal, index=future_dates, name=series.name)
+
+
+def _fc_project_mhw(mhw_annual: pd.DataFrame, n: int, scenario: str, last_year: int) -> pd.Series:
+    scale  = _MHW_SCALE[scenario]
+    years  = mhw_annual["year"].values
+    intens = mhw_annual["max_intensity"].values
+    m, b, *_ = stats.linregress(years, intens)
+    future_dates = pd.date_range(
+        start=pd.Timestamp(f"{last_year + 1}-01-01"), periods=n, freq="MS"
+    )
+    yr_frac  = future_dates.year.values + future_dates.month.values / 12.0
+    trend    = np.clip(m * yr_frac + b, 0, None)
+    seasonal = 1.0 + 0.5 * np.sin(2 * np.pi * (future_dates.month.values - 8) / 12)
+    return pd.Series(trend * seasonal * scale, index=future_dates)
+
+
+@st.cache_data(show_spinner="Computing SARIMAX forecast…")
+def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
+                     mhw_annual: pd.DataFrame) -> dict:
+    """
+    Run SARIMAX forecast live on the (possibly filtered) dataset.
+    Returns dict with keys 'bad'/'mean'/'good' → DataFrames, plus 'meta'.
+    Also computes the mechanistic (bio) scenarios (Approach B).
+    """
+    opt_lag = _fc_find_lag(df_real, df)
+    monthly = _fc_build_monthly(df_real, df, opt_lag)
+    monthly = monthly.set_index("Datetime").asfreq("MS")
+
+    # Training window: post-_TRAIN_START only
+    train_start = pd.Timestamp(_TRAIN_START)
+    # If the filtered data doesn't reach _TRAIN_START, fall back to last half
+    if monthly.index[-1] <= train_start:
+        mid = monthly.index[len(monthly) // 2]
+        monthly_train = monthly[monthly.index >= mid]
+    else:
+        monthly_train = monthly[monthly.index >= train_start]
+
+    ec50_series = monthly_train["EC50"]
+    exog_hist   = monthly_train[["pH", "Temperature", "mhw_lagged"]]
+
+    last_date  = df["Datetime"].max()
+    last_year  = last_date.year
+    n_months   = _FC_YEARS * 12
+    future_dates = pd.date_range(
+        start=last_date + pd.DateOffset(months=1), periods=n_months, freq="MS"
+    )
+
+    series_std = float(ec50_series.std())
+    resid_std  = series_std
+    fit_obj    = None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _m = SARIMAX(ec50_series, exog=exog_hist,
+                         order=(1, 0, 1), seasonal_order=(1, 0, 1, 12),
+                         trend="c", enforce_stationarity=False, enforce_invertibility=False)
+            fit_obj   = _m.fit(disp=False)
+        resid_std = min(float(np.std(fit_obj.resid)), series_std)
+    except Exception:
+        pass
+
+    # Post-training slope for calibrated scenario adjustment
+    t_post = np.arange(len(ec50_series))
+    post_slope_mo, *_ = stats.linregress(t_post, ec50_series.values)
+    post_slope_yr     = post_slope_mo * 12
+
+    results = {}
+    years_ahead = np.arange(1, n_months + 1) / 12.0
+
+    for scenario in ["bad", "mean", "good"]:
+        sc_mult = _ENV_SCALE[scenario]
+        pH_fut   = _fc_project_env(monthly["pH"],          n_months, last_year, sc_mult)
+        Tmp_fut  = _fc_project_env(monthly["Temperature"], n_months, last_year, sc_mult)
+        mhw_fut  = (_fc_project_mhw(mhw_annual, n_months, scenario, last_year)
+                    if not mhw_annual.empty else pd.Series(np.zeros(n_months), index=future_dates))
+
+        exog_fut = pd.DataFrame(
+            {"pH": pH_fut.values, "Temperature": Tmp_fut.values, "mhw_lagged": mhw_fut.values},
+            index=future_dates,
+        )
+
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model = SARIMAX(ec50_series, exog=exog_hist,
+                                order=(1, 0, 1), seasonal_order=(1, 0, 1, 12),
+                                trend="c", enforce_stationarity=False, enforce_invertibility=False)
+                fit   = model.fit(disp=False)
+                fc    = fit.get_forecast(steps=n_months, exog=exog_fut)
+            fc_mean = np.asarray(fc.predicted_mean)
+        except Exception:
+            t_all   = np.arange(len(ec50_series))
+            slope, intercept, *_ = stats.linregress(t_all, ec50_series.values)
+            fc_mean = intercept + slope * (np.arange(n_months) + len(ec50_series))
+
+        fc_mean = np.clip(fc_mean, 3.0, 200.0)
+        if scenario == "bad":
+            fc_mean = fc_mean + 0.30 * post_slope_yr * years_ahead
+        elif scenario == "good":
+            fc_mean = fc_mean - 0.15 * post_slope_yr * years_ahead
+        fc_mean = np.clip(fc_mean, 3.0, 200.0)
+
+        ci_half = np.minimum(
+            1.96 * resid_std * (1.0 + _CI_GROWTH * years_ahead),
+            3.0 * series_std,
+        )
+        results[scenario] = pd.DataFrame({
+            "Datetime":      future_dates,
+            "EC50_forecast": fc_mean,
+            "CI_lower":      np.clip(fc_mean - ci_half, 0.0, None),
+            "CI_upper":      fc_mean + ci_half,
+            "scenario":      scenario,
+            "pH_proj":       pH_fut.values,
+            "Temp_proj":     Tmp_fut.values,
+            "mhw_proj":      mhw_fut.values,
+        })
+
+    # ── Mechanistic (bio) scenarios ─────────────────────────────────────────
+    # OLS on 5 env vars to compute scenario equilibria relative to SARIMAX anchor
+    _ENV_VARS = ["Temperature", "CO2", "O2", "pH", "Salinity"]
+    df_ols = df_real[[c for c in ["EC50"] + _ENV_VARS if c in df_real.columns]].dropna()
+    _sarimax_anchor = float(results["mean"]["EC50_forecast"].iloc[-1])
+
+    if len(df_ols) >= 10 and all(v in df_ols.columns for v in _ENV_VARS):
+        import statsmodels.api as sm
+        y_ols  = df_ols["EC50"].values
+        X_ols  = sm.add_constant(df_ols[_ENV_VARS].values)
+        ols    = sm.OLS(y_ols, X_ols).fit()
+
+        # Project all 5 env vars per scenario at t=180
+        _env_proj = {}
+        for sc in ["bad", "mean", "good"]:
+            _env_proj[sc] = {}
+            for v in _ENV_VARS:
+                if v in monthly.columns:
+                    proj = _fc_project_env(monthly[v], n_months, last_year, _ENV_SCALE[sc])
+                    _env_proj[sc][v] = float(proj.iloc[-1])
+                else:
+                    _env_proj[sc][v] = float(df[v].dropna().iloc[-1]) if v in df.columns else 0.0
+
+        ols_at   = {sc: float(ols.params @ np.array([1.0] + [_env_proj[sc][v] for v in _ENV_VARS]))
+                    for sc in ["bad", "mean", "good"]}
+        ols_spread = {sc: ols_at[sc] - ols_at["mean"] for sc in ["bad", "mean", "good"]}
+        eq_vals  = {sc: float(np.clip(_sarimax_anchor + ols_spread[sc], 3, 200))
+                    for sc in ["bad", "mean", "good"]}
+    else:
+        eq_vals = {"bad": _sarimax_anchor - 8, "mean": _sarimax_anchor,
+                   "good": _sarimax_anchor + 6}
+
+    # Noise from seasonal-decomposition residuals of EC50
+    ec50_full = df[~df["EC50_imputed"]]["EC50"].dropna()
+    try:
+        _dec  = seasonal_decompose(ec50_full.values, model="additive", period=12,
+                                   extrapolate_trend="freq", two_sided=False)
+        _resid = _dec.resid[~np.isnan(_dec.resid)]
+    except Exception:
+        _resid = ec50_full.values - ec50_full.mean()
+
+    rng  = np.random.default_rng(42)
+    ramp = np.minimum(np.arange(1, n_months + 1) / 3.0, 1.0)
+
+    ec50_start = float(df_real["EC50"].dropna().iloc[-1]) if not df_real.empty else 20.0
+
+    bio_results = {}
+    for scenario, noise_scale, eq_key in [
+        ("bad",  1.5, "bad"),
+        ("mean", 1.0, "mean"),
+        ("good", 0.7, "good"),
+    ]:
+        eq = eq_vals[eq_key]
+        noise = rng.choice(_resid, size=n_months, replace=True) * noise_scale * ramp
+
+        fc_bio = np.zeros(n_months)
+        if scenario == "bad":
+            prev = ec50_start
+            for t in range(n_months):
+                lam = 0.005 + 0.023 * (1 - np.exp(-t / 28))
+                prev = eq + (prev - eq) * np.exp(-lam) + noise[t]
+                fc_bio[t] = prev
+        elif scenario == "mean":
+            plateau_mo = 24
+            v0 = ec50_start
+            for t in range(n_months):
+                if t < plateau_mo:
+                    fc_bio[t] = v0 + 0.15 * t + noise[t]
+                else:
+                    v0m = v0 + 0.15 * plateau_mo
+                    fc_bio[t] = eq + (v0m - eq) * np.exp(-0.010 * (t - plateau_mo)) + noise[t]
+        else:  # good
+            hormesis  = 8.0
+            rise_mo   = 18
+            peak_good = ec50_start + hormesis
+            for t in range(n_months):
+                if t < rise_mo:
+                    fc_bio[t] = ec50_start + hormesis * np.sin(np.pi / 2 * t / rise_mo) + noise[t]
+                else:
+                    fc_bio[t] = eq + (peak_good - eq) * np.exp(-0.005 * (t - rise_mo)) + noise[t]
+
+        fc_bio = np.clip(fc_bio, 3.0, 200.0)
+        bio_results[scenario] = pd.DataFrame({
+            "Datetime":      future_dates,
+            "EC50_forecast": fc_bio,
+            "CI_lower":      np.clip(fc_bio - 1.96 * float(np.std(_resid)) * noise_scale, 0, None),
+            "CI_upper":      fc_bio + 1.96 * float(np.std(_resid)) * noise_scale,
+            "scenario":      scenario,
+        })
+
+    results["meta"] = {
+        "optimal_lag": int(opt_lag),
+        "train_start": str(monthly_train.index[0].date()),
+        "train_end":   str(monthly_train.index[-1].date()),
+        "n_train":     len(monthly_train),
+        "last_date":   str(last_date.date()),
+        "forecast_end": str(future_dates[-1].date()),
+    }
+    results["bio_bad"]  = bio_results["bad"]
+    results["bio_mean"] = bio_results["mean"]
+    results["bio_good"] = bio_results["good"]
+    return results
 
 
 @st.cache_data
@@ -1486,12 +1766,21 @@ with tabs[7]:
         fig_fc.update_layout(title=title, xaxis_title="Year", yaxis_title="EC50 (mg/L)", height=500)
         st.plotly_chart(fig_fc, use_container_width=True)
 
+    _fc_results = compute_forecast(df, df_real, mhw_annual)
+    _fc_meta    = _fc_results["meta"]
+    st.info(
+        f"Trained on **{_fc_meta['train_start']} – {_fc_meta['train_end']}** "
+        f"({_fc_meta['n_train']} months) · "
+        f"Optimal MHW→EC50 lag: **{_fc_meta['optimal_lag']} months** · "
+        f"Forecast: **{_fc_meta['last_date']} → {_fc_meta['forecast_end']}**"
+    )
+
     fc_tab_sarimax, fc_tab_bio = st.tabs([
         "Approach A — Statistical (SARIMAX)",
         "Approach B — Mechanistic scenario model",
     ])
 
-    # ── Approach A: biological scenario model ────────────────────────────────
+    # ── Approach B: mechanistic scenario model ────────────────────────────────
     with fc_tab_bio:
         st.markdown(
             "**Mechanistic approach**: each scenario follows a trajectory shaped by a distinct biological response mechanism. "
@@ -1549,38 +1838,31 @@ with tabs[7]:
                 "**Variability**: resampled from seasonal-decomposition residuals of the observed EC₅₀, "
                 "scaled ×1.5 / ×1.0 / ×0.7 — stressed populations show more erratic responses."
             )
-        bio_bad  = load_csv("forecast_bio_bad.csv")
-        bio_mean = load_csv("forecast_bio_mean.csv")
-        bio_good = load_csv("forecast_bio_good.csv")
-
-        if not bio_bad.empty:
-            for _fc in [bio_bad, bio_mean, bio_good]:
-                if "Datetime" in _fc.columns:
-                    _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
-            year_range_bio = st.slider(
-                "Maximum year", key="yr_bio",
-                min_value=int(bio_mean["Datetime"].dt.year.min()),
-                max_value=int(bio_mean["Datetime"].dt.year.max()),
-                value=int(bio_mean["Datetime"].dt.year.max()),
-            )
-            _fc_plot(
-                [
-                    (bio_bad,  "#d62828", "Worst (threshold-crossing)"),
-                    (bio_mean, NEUTRAL,   "Mean (BAU: plateau → decline)"),
-                    (bio_good, COOL,      "Best (hormesis + stabilisation ~26)"),
-                ],
-                title="EC50 Forecast 2026–2040 — Approach B: mechanistic scenario model",
-                year_range=year_range_bio,
-                last_obs_date=df["Datetime"].max(),
-                key_suffix="bio",
-            )
-            col1, col2, col3 = st.columns(3)
-            for col_w, fc_df, label in [(col1, bio_bad, "bio_worst"), (col2, bio_mean, "bio_mean"), (col3, bio_good, "bio_best")]:
-                with col_w:
-                    st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
-                                       file_name=f"forecast_{label}.csv", mime="text/csv")
-        else:
-            st.warning("Eseguire la cella EC50 del notebook per generare forecast_bio_*.csv")
+        bio_bad  = _fc_results["bio_bad"]
+        bio_mean = _fc_results["bio_mean"]
+        bio_good = _fc_results["bio_good"]
+        year_range_bio = st.slider(
+            "Maximum year", key="yr_bio",
+            min_value=int(bio_mean["Datetime"].dt.year.min()),
+            max_value=int(bio_mean["Datetime"].dt.year.max()),
+            value=int(bio_mean["Datetime"].dt.year.max()),
+        )
+        _fc_plot(
+            [
+                (bio_bad,  "#d62828", "Worst (threshold-crossing)"),
+                (bio_mean, NEUTRAL,   "Mean (BAU: plateau → decline)"),
+                (bio_good, COOL,      "Best (hormesis + stabilisation)"),
+            ],
+            title="EC50 Forecast — Approach B: mechanistic scenario model",
+            year_range=year_range_bio,
+            last_obs_date=df["Datetime"].max(),
+            key_suffix="bio",
+        )
+        col1, col2, col3 = st.columns(3)
+        for col_w, fc_df, label in [(col1, bio_bad, "bio_worst"), (col2, bio_mean, "bio_mean"), (col3, bio_good, "bio_best")]:
+            with col_w:
+                st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
+                                   file_name=f"forecast_{label}.csv", mime="text/csv")
 
     # ── Approach B: SARIMAX statistical model ────────────────────────────────
     with fc_tab_sarimax:
@@ -1593,7 +1875,7 @@ with tabs[7]:
             "Trained on post-2016 data only (the current declining climate regime)."
         )
         with st.expander("Variables and equations"):
-            lag_k = meta.get("optimal_lag", "k") if meta else "k"
+            lag_k = _fc_meta.get("optimal_lag", "k")
             st.markdown(
                 f"**Input variables:**  \n"
                 f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
@@ -1637,40 +1919,31 @@ with tabs[7]:
                 "CI(t) = 1.96 · σ_resid · (1 + 0.03 · t) — "
                 "replacing the explosive posterior CI that SARIMAX produces over a 15-year horizon."
             )
-        if meta:
-            st.info(f"Optimal MHW→EC50 lag: **{meta.get('optimal_lag', '?')} months**")
-        fc_bad  = load_csv("forecast_bad.csv")
-        fc_mean = load_csv("forecast_mean.csv")
-        fc_good = load_csv("forecast_good.csv")
-
-        if not fc_bad.empty:
-            for _fc in [fc_bad, fc_mean, fc_good]:
-                if "Datetime" in _fc.columns:
-                    _fc["Datetime"] = pd.to_datetime(_fc["Datetime"])
-            year_range_sx = st.slider(
-                "Maximum year", key="yr_sarimax",
-                min_value=int(fc_mean["Datetime"].dt.year.min()),
-                max_value=int(fc_mean["Datetime"].dt.year.max()),
-                value=int(fc_mean["Datetime"].dt.year.max()),
-            )
-            _fc_plot(
-                [
-                    (fc_bad,  "#d62828", "Worst (high MHW, accelerated stress)"),
-                    (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
-                    (fc_good, COOL,      "Best (climate mitigation)"),
-                ],
-                title="EC50 Forecast 2026–2040 — Approach A: SARIMAX statistical model",
-                year_range=year_range_sx,
-                last_obs_date=df["Datetime"].max(),
-                key_suffix="sarimax",
-            )
-            col1, col2, col3 = st.columns(3)
-            for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
-                with col_w:
-                    st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
-                                       file_name=f"forecast_{label}.csv", mime="text/csv")
-        else:
-            st.warning("Run `python analysis/run_all.py` first")
+        fc_bad  = _fc_results["bad"]
+        fc_mean = _fc_results["mean"]
+        fc_good = _fc_results["good"]
+        year_range_sx = st.slider(
+            "Maximum year", key="yr_sarimax",
+            min_value=int(fc_mean["Datetime"].dt.year.min()),
+            max_value=int(fc_mean["Datetime"].dt.year.max()),
+            value=int(fc_mean["Datetime"].dt.year.max()),
+        )
+        _fc_plot(
+            [
+                (fc_bad,  "#d62828", "Worst (high MHW, accelerated stress)"),
+                (fc_mean, NEUTRAL,   "Mean (business-as-usual)"),
+                (fc_good, COOL,      "Best (climate mitigation)"),
+            ],
+            title="EC50 Forecast — Approach A: SARIMAX statistical model",
+            year_range=year_range_sx,
+            last_obs_date=df["Datetime"].max(),
+            key_suffix="sarimax",
+        )
+        col1, col2, col3 = st.columns(3)
+        for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
+            with col_w:
+                st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
+                                   file_name=f"forecast_{label}.csv", mime="text/csv")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
