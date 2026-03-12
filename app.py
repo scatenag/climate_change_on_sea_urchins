@@ -476,6 +476,55 @@ def add_mhw_shading(fig, events: pd.DataFrame, row=1, col=1):
         )
 
 
+# ── Load data ─────────────────────────────────────────────────────────────────
+
+df, ci_df, mhw_events, mhw_annual, _ec50_source = load_main()
+
+# ── Global date-range filter ───────────────────────────────────────────────────
+
+_data_min_yr = int(df["Datetime"].dt.year.min())
+_data_max_yr = int(df["Datetime"].dt.year.max())
+
+with st.container():
+    st.markdown("#### Date range")
+    _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
+    with _fcol1:
+        _yr_start = st.slider(
+            "From year", min_value=_data_min_yr, max_value=_data_max_yr,
+            value=_data_min_yr, step=1, key="yr_start",
+        )
+    with _fcol2:
+        _yr_end = st.slider(
+            "To year", min_value=_data_min_yr, max_value=_data_max_yr,
+            value=_data_max_yr, step=1, key="yr_end",
+        )
+    with _fcol3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _apply = st.button("Update", type="primary", use_container_width=True)
+
+# Clamp in case start > end
+if _yr_start > _yr_end:
+    _yr_start, _yr_end = _yr_end, _yr_start
+
+_t0 = pd.Timestamp(f"{_yr_start}-01-01")
+_t1 = pd.Timestamp(f"{_yr_end}-12-31")
+
+df          = df[(df["Datetime"] >= _t0) & (df["Datetime"] <= _t1)].copy()
+df_real     = df[df["EC50_imputed"] == False].copy()
+mhw_events  = mhw_events[
+    (mhw_events["start_date"] >= _t0) & (mhw_events["start_date"] <= _t1)
+].copy()
+mhw_annual  = mhw_annual[
+    (mhw_annual["year"] >= _yr_start) & (mhw_annual["year"] <= _yr_end)
+].copy()
+
+st.caption(
+    f"Showing **{_yr_start}–{_yr_end}** · {len(df)} months · "
+    f"{int((~df['EC50_imputed']).sum())} real EC50 measurements · "
+    f"{len(mhw_events)} MHW events"
+)
+st.divider()
+
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
 tabs = st.tabs([
@@ -489,9 +538,6 @@ tabs = st.tabs([
     "Forecast EC50",
     "About",
 ])
-
-df, ci_df, mhw_events, mhw_annual, _ec50_source = load_main()
-df_real = df[df["EC50_imputed"] == False].copy()
 
 # Show EC50 data freshness in the sidebar
 with st.sidebar:
