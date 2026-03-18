@@ -76,16 +76,20 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def fetch_ec50_live() -> tuple[pd.DataFrame, str]:
+def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
     Fetch EC50 from Google Sheets (TTL 1 h).
-    Returns (monthly_df, source) where source is 'live' or 'static'.
+    Returns (monthly_df, raw_df, source).
+    raw_df has one row per individual measurement with the actual measurement DATE.
     Falls back to data_ec50_ci.csv if the network request fails.
     """
     try:
         raw = pd.read_csv(EXPORT_URL, timeout=15)
+        raw.columns = raw.columns.str.strip()
+        raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
+        raw_clean = raw[["DATE", "EC50"]].dropna(subset=["EC50"]).rename(columns={"DATE": "Date"})
         monthly = _aggregate_ec50(raw)
-        return monthly, "live"
+        return monthly, raw_clean, "live"
     except Exception:
         # Fallback: use the static CSV committed to the repo
         ci_path = ROOT / "data_ec50_ci.csv"
@@ -96,7 +100,9 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, str]:
         real = real[[c for c in cols if c in real.columns]]
         if "EC50_n" not in real.columns:
             real["EC50_n"] = 1
-        return real.reset_index(drop=True), "static"
+        # Build a synthetic raw_df from monthly data (no individual dates available)
+        raw_fallback = real[["Datetime", "EC50"]].rename(columns={"Datetime": "Date"})
+        return real.reset_index(drop=True), raw_fallback, "static"
 
 
 @st.cache_data(ttl=3600)
@@ -109,7 +115,7 @@ def load_main():
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
 
     # EC50 data: live from Google Sheets (with static fallback)
-    ec50_live, ec50_source = fetch_ec50_live()
+    ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
 
     # Drop stale EC50 columns from the static dataset and replace with live data
     stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
@@ -142,7 +148,7 @@ def load_main():
         df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
         df.drop(columns=["Temperature_sst"], inplace=True)
 
-    return df, ec50_live, mhwe, mhwa, ec50_source
+    return df, ec50_live, mhwe, mhwa, ec50_raw, ec50_source
 
 
 @st.cache_data
@@ -758,7 +764,7 @@ def add_mhw_shading(fig, events: pd.DataFrame, row=1, col=1):
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 
-df, ci_df, mhw_events, mhw_annual, _ec50_source = load_main()
+df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 
 # ── Global date-range filter ───────────────────────────────────────────────────
 
@@ -783,8 +789,10 @@ with st.container():
         _apply = st.button("Update", type="primary", use_container_width=True)
     with _fcol4:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if st.button("↺ Refresh data", use_container_width=True,
-                     help="Force re-download of EC50 data from Google Sheets"):
+        if st.button("↺ Refresh EC50", use_container_width=True,
+                     help="Force re-download of EC50 data from Google Sheets. "
+                          "Environmental data (Copernicus) and MHW are updated automatically "
+                          "by the nightly GitHub Actions workflow."):
             st.cache_data.clear()
             st.rerun()
 
@@ -952,11 +960,22 @@ with tabs[1]:
                         fill="toself", fillcolor="rgba(0,119,182,0.12)",
                         line=dict(width=0), showlegend=False,
                     ), row=i, col=1)
-                # Real measurements
+                # Monthly aggregated real measurements (mean per month)
                 fig.add_trace(go.Scatter(
                     x=real["Datetime"], y=real["EC50"],
-                    mode="markers", name="EC50 (real)",
+                    mode="markers", name="EC50 (monthly mean)",
                     marker=dict(color=OCEAN, size=5),
+                    showlegend=(i == 1),
+                ), row=i, col=1)
+                # Individual raw measurements (actual date, may be >1 per month)
+                _raw_plot = ec50_raw[
+                    (ec50_raw["Date"] >= _t0) & (ec50_raw["Date"] <= _t1)
+                ]
+                fig.add_trace(go.Scatter(
+                    x=_raw_plot["Date"], y=_raw_plot["EC50"],
+                    mode="markers", name="EC50 (individual measurement)",
+                    marker=dict(color=OCEAN, size=7, symbol="x",
+                                line=dict(width=1.5, color=OCEAN)),
                     showlegend=(i == 1),
                 ), row=i, col=1)
             else:
