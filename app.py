@@ -75,8 +75,8 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
     return agg[cols].sort_values("Datetime").reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600)
-def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_ec50_live(_cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
     Fetch EC50 from Google Sheets (TTL 1 h).
     Returns (monthly_df, raw_df, source).
@@ -115,7 +115,8 @@ def load_main():
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
 
     # EC50 data: live from Google Sheets (with static fallback)
-    ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
+    _key = st.session_state.get("refresh_counter", 0)
+    ec50_live, ec50_raw, ec50_source = fetch_ec50_live(_key)
 
     # Drop stale EC50 columns from the static dataset and replace with live data
     stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
@@ -793,7 +794,9 @@ with st.container():
                      help="Force re-download of EC50 data from Google Sheets. "
                           "Environmental data (Copernicus) and MHW are updated automatically "
                           "by the nightly GitHub Actions workflow."):
-            st.cache_data.clear()
+            st.session_state["refresh_counter"] = (
+                st.session_state.get("refresh_counter", 0) + 1
+            )
             st.rerun()
 
 # Clamp in case start > end
@@ -944,21 +947,22 @@ with tabs[1]:
 
             if col == "EC50":
                 real = df[~df["EC50_imputed"]]
-                # Imputed series (faint)
+                # Imputed series (faint) — no hover
                 fig.add_trace(go.Scatter(
                     x=df["Datetime"], y=df["EC50"],
                     mode="lines", name="EC50 (imputed)",
                     line=dict(color="rgba(0,119,182,0.3)", width=1),
+                    hoverinfo="skip",
                     showlegend=(i == 1),
                 ), row=i, col=1)
-                # CI band
+                # CI band — no hover
                 ci_ok = ci_df.dropna(subset=["EC50_ci_upper","EC50_ci_lower"])
                 if not ci_ok.empty:
                     fig.add_trace(go.Scatter(
                         x=pd.concat([ci_ok["Datetime"], ci_ok["Datetime"][::-1]]),
                         y=pd.concat([ci_ok["EC50_ci_upper"], ci_ok["EC50_ci_lower"][::-1]]),
                         fill="toself", fillcolor="rgba(0,119,182,0.12)",
-                        line=dict(width=0), showlegend=False,
+                        line=dict(width=0), showlegend=False, hoverinfo="skip",
                     ), row=i, col=1)
                 # Monthly aggregated real measurements (mean per month)
                 _real_n = real["EC50_n"].values if "EC50_n" in real.columns else np.ones(len(real))
@@ -1011,6 +1015,7 @@ with tabs[1]:
                     x=trend_vals.index, y=trend_vals.values,
                     mode="lines", name=f"{col} trend",
                     line=dict(color=color, width=2.5, dash="dot"),
+                    hoverinfo="skip",
                     showlegend=(i == 1),
                 ), row=i, col=1)
 
