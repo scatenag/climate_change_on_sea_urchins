@@ -159,7 +159,7 @@ def load_main():
     ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
 
     df = df_env.merge(
-        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_imputed"]],
+        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]],
         on="Datetime", how="left"
     )
     df["EC50_imputed"] = df["EC50_imputed"].fillna(True)
