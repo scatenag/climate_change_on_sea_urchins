@@ -767,7 +767,7 @@ _data_max_yr = int(df["Datetime"].dt.year.max())
 
 with st.container():
     st.markdown("#### Date range")
-    _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
+    _fcol1, _fcol2, _fcol3, _fcol4 = st.columns([3, 3, 1, 1])
     with _fcol1:
         _yr_start = st.slider(
             "From year", min_value=_data_min_yr, max_value=_data_max_yr,
@@ -781,6 +781,12 @@ with st.container():
     with _fcol3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         _apply = st.button("Update", type="primary", use_container_width=True)
+    with _fcol4:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if st.button("↺ Refresh data", use_container_width=True,
+                     help="Force re-download of EC50 data from Google Sheets"):
+            st.cache_data.clear()
+            st.rerun()
 
 # Clamp in case start > end
 if _yr_start > _yr_end:
