@@ -75,8 +75,7 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
     return agg[cols].sort_values("Datetime").reset_index(drop=True)
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def fetch_ec50_live(cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
     Fetch EC50 from Google Sheets (TTL 1 h).
     Returns (monthly_df, raw_df, source).
@@ -105,38 +104,20 @@ def fetch_ec50_live(cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, str
         return real.reset_index(drop=True), raw_fallback, "static"
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def load_main(cache_key: int = 0):
-    # Environmental data: static CSVs (Copernicus — does not change)
+@st.cache_data(show_spinner=False)
+def load_env_data():
+    """Load static environmental data (Copernicus CSVs). Cached indefinitely — changes only
+    when the nightly GitHub Actions workflow pushes new data_extended.csv."""
     df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
     mhwm = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
     mhwe = pd.read_csv(ROOT / "mhw_events.csv",
                        parse_dates=["start_date","end_date","peak_date"])
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
-
-    # EC50 data: live from Google Sheets (with static fallback)
-    ec50_live, ec50_raw, ec50_source = fetch_ec50_live(cache_key)
-
-    # Drop stale EC50 columns from the static dataset and replace with live data
-    stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
-                  if c in df.columns]
-    df = df.drop(columns=stale_cols)
-    df = df.merge(
-        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_imputed"]],
-        on="Datetime", how="left"
-    )
-    df["EC50_imputed"] = df["EC50_imputed"].fillna(True)
-
-    # Rolling-mean imputation for months without a real EC50 measurement
-    df["EC50"] = df["EC50"].fillna(
-        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
-    )
-
-    # Merge MHW monthly metrics
-    df = df.merge(mhwm[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
-                  on="Datetime", how="left")
-
-    # Fill Temperature gaps (after Copernicus monthly ends) from daily SST
+    # Drop stale EC50 columns — will be replaced with live data
+    stale = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
+             if c in df.columns]
+    df = df.drop(columns=stale)
+    # Fill Temperature gaps from daily SST
     sst_path = ROOT / "data" / "sst_daily.csv"
     if sst_path.exists():
         sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
@@ -147,7 +128,25 @@ def load_main(cache_key: int = 0):
         mask = df["Temperature"].isna() & df["Temperature_sst"].notna()
         df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
         df.drop(columns=["Temperature_sst"], inplace=True)
+    # Merge MHW monthly metrics
+    df = df.merge(mhwm[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
+                  on="Datetime", how="left")
+    return df, mhwe, mhwa
 
+
+def load_main():
+    """Merge static env data (cached) with live EC50 from Google Sheets (never cached)."""
+    df_env, mhwe, mhwa = load_env_data()
+    ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
+
+    df = df_env.merge(
+        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_imputed"]],
+        on="Datetime", how="left"
+    )
+    df["EC50_imputed"] = df["EC50_imputed"].fillna(True)
+    df["EC50"] = df["EC50"].fillna(
+        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
+    )
     return df, ec50_live, mhwe, mhwa, ec50_raw, ec50_source
 
 
@@ -764,8 +763,7 @@ def add_mhw_shading(fig, events: pd.DataFrame, row=1, col=1):
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 
-_refresh_key = st.session_state.get("refresh_counter", 0)
-df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main(cache_key=_refresh_key)
+df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 
 # ── Global date-range filter ───────────────────────────────────────────────────
 
@@ -794,9 +792,6 @@ with st.container():
                      help="Force re-download of EC50 data from Google Sheets. "
                           "Environmental data (Copernicus) and MHW are updated automatically "
                           "by the nightly GitHub Actions workflow."):
-            st.session_state["refresh_counter"] = (
-                st.session_state.get("refresh_counter", 0) + 1
-            )
             st.rerun()
 
 # Clamp in case start > end
