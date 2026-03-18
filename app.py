@@ -961,10 +961,19 @@ with tabs[1]:
                         line=dict(width=0), showlegend=False,
                     ), row=i, col=1)
                 # Monthly aggregated real measurements (mean per month)
+                _real_n = real["EC50_n"].values if "EC50_n" in real.columns else np.ones(len(real))
                 fig.add_trace(go.Scatter(
                     x=real["Datetime"], y=real["EC50"],
                     mode="markers", name="EC50 (monthly mean)",
                     marker=dict(color=OCEAN, size=5),
+                    customdata=np.stack([_real_n], axis=1),
+                    hovertemplate=(
+                        "<b>EC50 monthly mean</b><br>"
+                        "Month: %{x|%b %Y}<br>"
+                        "EC50: %{y:.2f} mg/L<br>"
+                        "Measurements: %{customdata[0]:.0f}"
+                        "<extra></extra>"
+                    ),
                     showlegend=(i == 1),
                 ), row=i, col=1)
                 # Individual raw measurements (actual date, may be >1 per month)
@@ -976,6 +985,12 @@ with tabs[1]:
                     mode="markers", name="EC50 (individual measurement)",
                     marker=dict(color=OCEAN, size=7, symbol="x",
                                 line=dict(width=1.5, color=OCEAN)),
+                    hovertemplate=(
+                        "<b>EC50 measurement</b><br>"
+                        "Date: %{x|%d %b %Y}<br>"
+                        "EC50: %{y:.2f} mg/L"
+                        "<extra></extra>"
+                    ),
                     showlegend=(i == 1),
                 ), row=i, col=1)
             else:
