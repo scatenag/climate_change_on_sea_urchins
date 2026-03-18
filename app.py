@@ -104,7 +104,11 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         raw_clean = raw[["DATE", "EC50"]].dropna(subset=["EC50"]).rename(columns={"DATE": "Date"})
         monthly = _aggregate_ec50(raw)
         return monthly, raw_clean, "live"
-    except Exception:
+    except Exception as _exc:
+        # Log the error in the sidebar so we can diagnose live fetch failures
+        import traceback
+        with st.sidebar:
+            st.error(f"EC50 live fetch failed: {_exc}")
         # Fallback: use the static CSV committed to the repo
         ci_path = ROOT / "data_ec50_ci.csv"
         fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
