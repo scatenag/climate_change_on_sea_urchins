@@ -114,7 +114,7 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
         fallback["EC50_imputed"] = fallback["EC50_imputed"].astype(bool)
         real = fallback[~fallback["EC50_imputed"]].copy()
-        cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_imputed"]
+        cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n", "EC50_imputed"]
         real = real[[c for c in cols if c in real.columns]]
         if "EC50_n" not in real.columns:
             real["EC50_n"] = 1
