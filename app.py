@@ -981,16 +981,26 @@ with tabs[1]:
                     ), row=i, col=1)
                 # Monthly aggregated real measurements (mean per month)
                 _real_n = real["EC50_n"].values if "EC50_n" in real.columns else np.ones(len(real))
+                # Build per-month string of individual values for tooltip
+                _raw_filtered = ec50_raw[
+                    (ec50_raw["Date"] >= _t0) & (ec50_raw["Date"] <= _t1)
+                ].copy()
+                _raw_filtered["Month"] = pd.to_datetime(_raw_filtered["Date"]).dt.to_period("M").dt.to_timestamp()
+                _month_vals = _raw_filtered.groupby("Month")["EC50"].apply(
+                    lambda x: ", ".join(f"{v:.2f}" for v in sorted(x))
+                )
+                _vals_str = real["Datetime"].map(lambda d: _month_vals.get(d, "—")).values
                 fig.add_trace(go.Scatter(
                     x=real["Datetime"], y=real["EC50"],
                     mode="markers", name="EC50 (monthly mean)",
                     marker=dict(color=OCEAN, size=5),
-                    customdata=np.stack([_real_n], axis=1),
+                    customdata=np.stack([_real_n, _vals_str], axis=1),
                     hovertemplate=(
                         "<b>EC50 monthly mean</b><br>"
                         "Month: %{x|%b %Y}<br>"
                         "EC50: %{y:.2f} mg/L<br>"
-                        "Measurements: %{customdata[0]:.0f}"
+                        "Measurements: %{customdata[0]:.0f}<br>"
+                        "Values: %{customdata[1]}"
                         "<extra></extra>"
                     ),
                     showlegend=(i == 1),
