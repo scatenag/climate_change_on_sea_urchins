@@ -1,9 +1,11 @@
-name: Auto-update EC50 data
+name: Auto-update data
 
 on:
   schedule:
-    # Every day at 06:00 UTC
+    # Daily at 06:00 UTC — checks for new EC50 on Google Sheets
     - cron: "0 6 * * *"
+    # Monthly on the 5th at 07:00 UTC — updates Copernicus env data
+    - cron: "0 7 5 * *"
   workflow_dispatch:  # allow manual trigger from GitHub UI
 
 jobs:
@@ -26,11 +28,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # ── Step 1: EC50 from Google Sheets (daily) ──────────────────────────────
       - name: Fetch EC50 from Google Sheets
         run: python scripts/fetch_ec50.py
 
       - name: Check if EC50 data changed
-        id: check
+        id: check_ec50
         run: |
           if git diff --quiet data/ec50_sheets.csv; then
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -38,17 +41,56 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
+      # ── Step 2: Copernicus env data (monthly — 5th of each month) ────────────
+      - name: Check if today is the monthly Copernicus update day
+        id: check_monthly
+        run: |
+          DAY=$(date +%d)
+          if [ "$DAY" = "05" ]; then
+            echo "run_copernicus=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_copernicus=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Copernicus environmental data (incremental)
+        if: steps.check_monthly.outputs.run_copernicus == 'true'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/fetch_copernicus_update.py
+
+      - name: Check if Copernicus data changed
+        id: check_copernicus
+        run: |
+          if git diff --quiet data/env_copernicus.csv; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rerun MHW detection (if Copernicus updated)
+        if: steps.check_copernicus.outputs.changed == 'true'
+        run: python scripts/detect_mhw.py
+
+      # ── Step 3: Rebuild dataset + analysis (if anything changed) ─────────────
       - name: Rebuild dataset and re-run analysis
-        if: steps.check.outputs.changed == 'true'
+        if: >
+          steps.check_ec50.outputs.changed == 'true' ||
+          steps.check_copernicus.outputs.changed == 'true'
         run: |
           python scripts/build_dataset.py
           python analysis/run_all.py
 
+      # ── Step 4: Commit and push ───────────────────────────────────────────────
       - name: Commit and push updated results
-        if: steps.check.outputs.changed == 'true'
+        if: >
+          steps.check_ec50.outputs.changed == 'true' ||
+          steps.check_copernicus.outputs.changed == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/ec50_sheets.csv data_extended.csv data_ec50_ci.csv results/
-          git commit -m "Auto-update: new EC50 data from Google Sheets [skip ci]"
+          git add data/ec50_sheets.csv data_extended.csv data_ec50_ci.csv \
+                  data/env_copernicus.csv mhw_events.csv mhw_monthly.csv mhw_annual.csv \
+                  results/
+          git diff --cached --quiet || git commit -m "Auto-update: env+EC50 data [skip ci]"
           git push origin analysis-2025
