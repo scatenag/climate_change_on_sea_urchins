@@ -76,7 +76,7 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_ec50_live(_cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, str]:
+def fetch_ec50_live(cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
     Fetch EC50 from Google Sheets (TTL 1 h).
     Returns (monthly_df, raw_df, source).
@@ -106,7 +106,7 @@ def fetch_ec50_live(_cache_key: int = 0) -> tuple[pd.DataFrame, pd.DataFrame, st
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def load_main(_cache_key: int = 0):
+def load_main(cache_key: int = 0):
     # Environmental data: static CSVs (Copernicus — does not change)
     df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
     mhwm = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
@@ -115,7 +115,7 @@ def load_main(_cache_key: int = 0):
     mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
 
     # EC50 data: live from Google Sheets (with static fallback)
-    ec50_live, ec50_raw, ec50_source = fetch_ec50_live(_cache_key)
+    ec50_live, ec50_raw, ec50_source = fetch_ec50_live(cache_key)
 
     # Drop stale EC50 columns from the static dataset and replace with live data
     stale_cols = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
@@ -765,7 +765,7 @@ def add_mhw_shading(fig, events: pd.DataFrame, row=1, col=1):
 # ── Load data ─────────────────────────────────────────────────────────────────
 
 _refresh_key = st.session_state.get("refresh_counter", 0)
-df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main(_refresh_key)
+df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main(cache_key=_refresh_key)
 
 # ── Global date-range filter ───────────────────────────────────────────────────
 
