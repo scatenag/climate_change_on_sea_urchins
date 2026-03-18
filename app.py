@@ -3,7 +3,9 @@ Climate Change on Sea Urchins — Streamlit Dashboard
 EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
+import io
 import json
+import time
 import warnings
 from pathlib import Path
 from PIL import Image
@@ -43,6 +45,17 @@ SPLIT_YEAR = 2016
 SITE = dict(lat=43.4278, lon=10.3956, name="Livorno Sud")
 
 
+def _dl_btn(df: pd.DataFrame, filename: str, label: str = "Download CSV") -> None:
+    """Render a small CSV download button for a DataFrame."""
+    st.download_button(
+        label=label,
+        data=df.to_csv(index=False).encode(),
+        file_name=filename,
+        mime="text/csv",
+        use_container_width=False,
+    )
+
+
 # ── Cached loaders ────────────────────────────────────────────────────────────
 
 def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
@@ -77,13 +90,15 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
 
 def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
-    Fetch EC50 from Google Sheets (TTL 1 h).
+    Fetch EC50 from Google Sheets — never cached, always live.
     Returns (monthly_df, raw_df, source).
     raw_df has one row per individual measurement with the actual measurement DATE.
     Falls back to data_ec50_ci.csv if the network request fails.
     """
     try:
-        raw = pd.read_csv(EXPORT_URL, timeout=15)
+        # Cache-buster: prevents Google Sheets CDN from serving a stale export
+        bust = int(time.time())
+        raw = pd.read_csv(f"{EXPORT_URL}&t={bust}", timeout=15)
         raw.columns = raw.columns.str.strip()
         raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
         raw_clean = raw[["DATE", "EC50"]].dropna(subset=["EC50"]).rename(columns={"DATE": "Date"})
@@ -815,6 +830,7 @@ st.caption(
     f"{int((~df['EC50_imputed']).sum())} real EC50 measurements · "
     f"{len(mhw_events)} MHW events"
 )
+_dl_btn(df, f"data_{_yr_start}_{_yr_end}.csv", "⬇ Download filtered dataset (CSV)")
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
@@ -1048,6 +1064,8 @@ with tabs[1]:
             legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
         )
         st.plotly_chart(fig, use_container_width=True)
+        _dl_btn(df[["Datetime"] + selected].dropna(how="all"),
+                f"timeseries_{_yr_start}_{_yr_end}.csv")
 
     # ── Seasonal decomposition ────────────────────────────────────────────────
     if show_decomp and selected:
@@ -1155,6 +1173,8 @@ with tabs[2]:
                               "intensity_cumulative","category"] if c in mhw_events.columns]
     st.dataframe(mhw_events[disp_cols].sort_values("start_date", ascending=False),
                  use_container_width=True)
+    _dl_btn(mhw_events[disp_cols].sort_values("start_date", ascending=False),
+            f"mhw_events_{_yr_start}_{_yr_end}.csv")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1728,7 +1748,7 @@ with tabs[5]:
     )
     fig_corr.update_layout(height=550)
     st.plotly_chart(fig_corr, use_container_width=True)
-
+    _dl_btn(r_df.reset_index(), f"correlations_{period_tab}_{_yr_start}_{_yr_end}.csv")
     st.caption("\\* p≥0.05 (not statistically significant). All other values: p<0.05.")
 
 
@@ -1763,6 +1783,7 @@ with tabs[6]:
 
         styled = stat_table.style.applymap(color_conclusion, subset=["Conclusion"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
+        _dl_btn(stat_table, f"stationarity_{_yr_start}_{_yr_end}.csv")
     else:
         st.warning("Run `python analysis/run_all.py` first")
 
