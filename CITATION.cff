@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Climate Change on Sea Urchins: an open-science dashboard for monitoring Marine Heatwave impacts on Paracentrotus lividus gamete toxicity"
+version: "1.0.0"
+date-released: "2026-03-31"
+license: MIT
+repository-code: "https://github.com/scatenag/climate_change_on_sea_urchins/tree/analysis-2025"
+url: "https://climate-change-on-sea-urchins.streamlit.app"
+abstract: >
+  An open-source, reproducible framework integrating real-time Copernicus Marine
+  oceanographic data (2003–present) with biological response indicators (EC50 of
+  Paracentrotus lividus gametes) to monitor climate change and Marine Heatwave
+  impacts on marine ecotoxicology in the Ligurian Sea, Mediterranean. Includes
+  time-series decomposition, Spearman cross-correlations, Granger causality,
+  ARDL modelling, and SARIMAX multi-scenario forecasting through 2040.
+  Deployed as an interactive Streamlit dashboard with fully open data and code.
+authors:
+  - family-names: Scatena
+    given-names: Guido
+    affiliation: "ISPRA – Italian Institute for Environmental Protection and Research"
+    orcid: ""  # add if available: https://orcid.org/0000-0000-0000-0000
+  - family-names: Gaion
+    given-names: Andrea
+    affiliation: ""  # TODO: add affiliation
+    orcid: ""
+  - family-names: Sartori
+    given-names: Andrea David
+    affiliation: ""  # TODO: add affiliation
+    orcid: ""
+keywords:
+  - marine heatwaves
+  - climate change
+  - sea urchins
+  - Paracentrotus lividus
+  - ecotoxicology
+  - EC50
+  - ocean acidification
+  - Mediterranean Sea
+  - Ligurian Sea
+  - open science
+  - reproducible research
+  - Streamlit
+  - Copernicus Marine

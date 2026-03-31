@@ -14,3 +14,12 @@ venv/
 
 # OS
 .DS_Store
+
+# Exploratory/intermediate outputs (not part of reproducible pipeline)
+*.pdf
+*.png
+data_LSTMS_*.csv
+trend_*.csv
+
+# Claude Code IDE config
+.claude/

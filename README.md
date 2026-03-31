@@ -7,7 +7,7 @@ Study on the impact of climate change and **Marine Heatwaves** on gamete sensiti
 
 This repository is the supplementary material for:
 > *"Increased sensitivity of marine invertebrates to metal toxicity in the past two decades linked to Climate Change and Ocean Acidification: revelations from a natural population of sea urchins in the Mediterranean Sea."*
-> Davide Sartori, Guido Scatena, Cristina Vrinceanu, Andrea Gaion — ISPRA
+> Guido Scatena, Andrea Gaion, Andrea David Sartori — ISPRA
 
 ## Contents
 

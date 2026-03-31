@@ -1114,6 +1114,13 @@ with tabs[1]:
                                      name="Residual"), row=3, col=1)
             sub.update_layout(height=450, title_text=f"Decomposition: {col}", showlegend=False)
             st.plotly_chart(sub, use_container_width=True)
+            dec_df = pd.DataFrame({
+                "Datetime": dec.trend.index,
+                "trend": dec.trend.values,
+                "seasonal": dec.seasonal.values,
+                "residual": dec.resid.values,
+            })
+            _dl_btn(dec_df, f"decomp_{col}_{_yr_start}_{_yr_end}.csv", f"⬇ {col} decomposition (CSV)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1139,6 +1146,7 @@ with tabs[2]:
     fig3.update_layout(title="SST Temperature with MHW shading", height=300,
                        yaxis_title="°C")
     st.plotly_chart(fig3, use_container_width=True)
+    _dl_btn(df[["Datetime","Temperature"]].dropna(), f"sst_{_yr_start}_{_yr_end}.csv")
 
     # Annual bars with trend lines
     if not mhw_annual.empty:
@@ -1165,6 +1173,7 @@ with tabs[2]:
                                   xaxis_title="Year", yaxis_title="Count",
                                   legend=dict(orientation="h", y=1.12))
             st.plotly_chart(fig_cnt, use_container_width=True)
+            _dl_btn(mhw_annual[["year","event_count"]], f"mhw_event_count_{_yr_start}_{_yr_end}.csv")
         with col2:
             fig_int = go.Figure()
             fig_int.add_trace(go.Bar(
@@ -1180,6 +1189,7 @@ with tabs[2]:
                                   xaxis_title="Year", yaxis_title="°C",
                                   legend=dict(orientation="h", y=1.12))
             st.plotly_chart(fig_int, use_container_width=True)
+            _dl_btn(mhw_annual[["year","max_intensity"]], f"mhw_intensity_{_yr_start}_{_yr_end}.csv")
 
     # Event catalog
     st.subheader("Event catalog")
@@ -1235,6 +1245,7 @@ with tabs[3]:
                 height=420,
             )
             st.plotly_chart(fig_ccf, use_container_width=True)
+            _dl_btn(sub_ccf, f"ccf_{var_sel}_{_yr_start}_{_yr_end}.csv", "⬇ CCF data (CSV)")
 
             sig = sub_ccf[sub_ccf["p_value"] < 0.05]
             if not sig.empty:
@@ -1270,6 +1281,7 @@ with tabs[3]:
             )
             fig_hm.update_layout(height=340)
             st.plotly_chart(fig_hm, use_container_width=True)
+            _dl_btn(ccf_df, f"ccf_heatmap_{_yr_start}_{_yr_end}.csv", "⬇ Lag heatmap data (CSV)")
             st.caption("All values shown; use CCF panel above for significance filtering.")
 
     # ── 2. Dose-response ──────────────────────────────────────────────────────
@@ -1296,6 +1308,7 @@ with tabs[3]:
                 height=400, showlegend=False,
             )
             st.plotly_chart(fig_dr, use_container_width=True)
+            _dl_btn(grp, f"dose_response_{_yr_start}_{_yr_end}.csv", "⬇ Dose-response data (CSV)")
 
             c1, c2, c3 = st.columns(3)
             no_mhw_mean = float(grp[~grp["had_mhw"]]["mean"].values[0])
@@ -1325,6 +1338,7 @@ with tabs[3]:
                 yaxis_title="EC50 (mg/L)", height=380, showlegend=False,
             )
             st.plotly_chart(fig_tert, use_container_width=True)
+            _dl_btn(tert, f"dose_response_tertile_{_yr_start}_{_yr_end}.csv", "⬇ Tertile data (CSV)")
             st.caption(
                 "Low / Medium / High = tertiles of MHW peak intensity in months with an active MHW. "
                 "The monotonic dose-response excludes a spurious-correlation explanation."
@@ -1361,6 +1375,7 @@ with tabs[3]:
                 height=420,
             )
             st.plotly_chart(fig_cum, use_container_width=True)
+            _dl_btn(cum_df, f"cumulative_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Cumulative MHW data (CSV)")
 
             best_cum = cum_df.loc[cum_df["r"].abs().idxmax()]
             st.success(
@@ -1386,6 +1401,7 @@ with tabs[3]:
         )
         fig_sc.update_layout(height=380)
         st.plotly_chart(fig_sc, use_container_width=True)
+        _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
         st.caption(
             "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
             "Above this threshold, each additional unit of cumulative stress depresses EC50 further."
@@ -1419,6 +1435,7 @@ with tabs[3]:
                 yaxis_title="Spearman r", height=420, showlegend=False,
             )
             st.plotly_chart(fig_sea2, use_container_width=True)
+            _dl_btn(sea_data, f"seasonal_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Seasonal data (CSV)")
             st.markdown(
                 "**Interpretation**: The strongest signal appears in **Autumn** (Sep–Nov) "
                 "and **Spring** (Mar–May), the two main spawning periods of *P. lividus*. "
@@ -1443,6 +1460,7 @@ with tabs[3]:
             fig_sa.update_traces(textposition="top center", selector=dict(mode="markers+text"))
             fig_sa.update_layout(height=400)
             st.plotly_chart(fig_sa, use_container_width=True)
+            _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
             st.caption(
                 "Years with intense summer MHWs (e.g. 2022–2025) show systematically lower "
                 "autumn EC50, consistent with gonadal damage accumulating during the "
@@ -1481,6 +1499,7 @@ with tabs[3]:
                 )
             fig_ann.update_layout(height=480, showlegend=False)
             st.plotly_chart(fig_ann, use_container_width=True)
+            _dl_btn(ann_df, f"annual_mhw_ec50_{_yr_start}_{_yr_end}.csv", "⬇ Annual data (CSV)")
 
             c1, c2 = st.columns(2)
             c1.metric("Same-year r (MHW→EC50)",
@@ -1528,6 +1547,7 @@ with tabs[3]:
                 legend=dict(orientation="h", yanchor="bottom", y=1.01),
             )
             st.plotly_chart(fig_trend, use_container_width=True)
+            _dl_btn(real_ec50[["Datetime", "EC50"]], f"ec50_trend_{_yr_start}_{_yr_end}.csv", "⬇ EC50 trend data (CSV)")
 
             col1, col2, col3 = st.columns(3)
             col1.metric("Pre-2016 rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
@@ -1565,6 +1585,7 @@ with tabs[3]:
                 height=420, showlegend=False,
             )
             st.plotly_chart(fig_vp, use_container_width=True)
+            _dl_btn(vp_df, f"variance_partitioning_{_yr_start}_{_yr_end}.csv", "⬇ Variance data (CSV)")
 
             # Table
             st.dataframe(
@@ -1604,6 +1625,7 @@ with tabs[3]:
                     labels=dict(color="log₁₀(p)"),
                 )
                 st.plotly_chart(fig_gr, use_container_width=True)
+                _dl_btn(gdf, f"granger_causality_{_yr_start}_{_yr_end}.csv", "⬇ Granger data (CSV)")
                 st.caption(
                     "Green = significant (p<0.05 → log₁₀ < −1.30). "
                     "EC50 shows non-significant Granger p-values because EC50 operates "
@@ -1641,6 +1663,7 @@ with tabs[3]:
                 xaxis_title="Lag (months)", yaxis_title="Mean EC50 (mg/L)", height=400,
             )
             st.plotly_chart(fig_sea, use_container_width=True)
+            _dl_btn(sea_df, "sea_results.csv", "⬇ SEA data (CSV)")
 
         if not dlnm_lag.empty:
             st.subheader("DLNM — Cumulative lag-response profile")
@@ -1663,6 +1686,7 @@ with tabs[3]:
                 xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (mg/L)", height=400,
             )
             st.plotly_chart(fig_dlnm, use_container_width=True)
+            _dl_btn(dlnm_lag, "dlnm_lag_profile.csv", "⬇ DLNM lag profile (CSV)")
 
         me_df = load_csv("../mixed_effects_predictions.csv")
         if not me_df.empty:
@@ -1679,6 +1703,7 @@ with tabs[3]:
             )
             fig_me.update_layout(height=400)
             st.plotly_chart(fig_me, use_container_width=True)
+            _dl_btn(me_df, "mixed_effects_predictions.csv", "⬇ Mixed effects data (CSV)")
 
         if sea_df.empty and dlnm_df.empty:
             st.info("Run `Rscript scripts/mhw_lag_analysis.R` to generate R results.")
@@ -1704,6 +1729,7 @@ with tabs[4]:
                              points="all")
             fig_box.update_layout(height=450, showlegend=False)
             st.plotly_chart(fig_box, use_container_width=True)
+            _dl_btn(dist_df, f"dist_{col_sel}_{_yr_start}_{_yr_end}.csv", "⬇ Distribution data (CSV)")
 
         res = kruskal.get(col_sel, {})
         if res:
@@ -1726,6 +1752,7 @@ with tabs[4]:
         fig_chg.add_hline(y=0, line_color="black")
         fig_chg.update_layout(height=400)
         st.plotly_chart(fig_chg, use_container_width=True)
+        _dl_btn(pm, f"period_means_{_yr_start}_{_yr_end}.csv", "⬇ Period means (CSV)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
