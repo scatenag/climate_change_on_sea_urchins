@@ -4,6 +4,10 @@ title: "Climate Change on Sea Urchins: an open-science dashboard for monitoring 
 version: "1.0.0"
 date-released: "2026-03-31"
 license: MIT
+doi: "10.5281/zenodo.19352309"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.19352309"
 repository-code: "https://github.com/scatenag/climate_change_on_sea_urchins/tree/analysis-2025"
 url: "https://climate-change-on-sea-urchins.streamlit.app"
 abstract: >

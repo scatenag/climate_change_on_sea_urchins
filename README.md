@@ -2,6 +2,7 @@
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/analysis-2025?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19352309.svg)](https://doi.org/10.5281/zenodo.19352309)
 
 Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (Gulf of La Spezia, 44.1°N 9.8°E).
 
