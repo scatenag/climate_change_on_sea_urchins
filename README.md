@@ -11,16 +11,28 @@ This repository is the supplementary material for:
 
 ## Contents
 
+### Code
 | File / Folder | Description |
 |---|---|
-| [`analysis.ipynb`](analysis.ipynb) | Main statistical analysis notebook |
-| [`data_extended.csv`](data_extended.csv) | Monthly environmental + EC50 data, 2003–2025 |
-| [`mhw_events.csv`](mhw_events.csv) | Marine Heatwave event catalogue |
-| [`mhw_monthly.csv`](mhw_monthly.csv) | Monthly MHW metrics |
-| [`results/`](results/) | Pre-computed outputs (correlations, forecasts, stationarity…) |
-| [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs) |
-| [`analysis/`](analysis/) | Modular Python analysis scripts |
-| [`scripts/`](scripts/) | Data download scripts (Copernicus, EC50) |
+| [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs, no live analysis) |
+| [`analysis/`](analysis/) | Modular Python analysis scripts (`run_all.py` executes the full pipeline) |
+| [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) |
+| [`marineHeatWaves.py`](marineHeatWaves.py) | Vendored MHW detection library (Hobday et al. 2016) |
+| [`analysis.ipynb`](analysis.ipynb) | Exploratory notebook — launch via Binder badge above |
+
+### Data
+| File | Description |
+|---|---|
+| [`data_extended.csv`](data_extended.csv) | Main dataset: monthly environmental + EC50 data, 2003–2025 (276 months) |
+| [`data_ec50_ci.csv`](data_ec50_ci.csv) | EC50 values with 95% CI bounds and imputation flag |
+| [`mhw_events.csv`](mhw_events.csv) | Marine Heatwave event catalogue (129 events, Hobday 2016 classification) |
+| [`mhw_monthly.csv`](mhw_monthly.csv) | Monthly aggregated MHW metrics |
+| [`mhw_annual.csv`](mhw_annual.csv) | Annual aggregated MHW metrics |
+| [`sea_results.csv`](sea_results.csv) | Superposed Epoch Analysis output (R) |
+| [`dlnm_results.csv`](dlnm_results.csv) | Distributed Lag Non-linear Model predictions + CI (R) |
+| [`dlnm_lag_profile.csv`](dlnm_lag_profile.csv) | DLNM cumulative response profile over lags (R) |
+| [`mixed_effects_predictions.csv`](mixed_effects_predictions.csv) | Mixed-effects model predictions (R) |
+| [`results/`](results/) | Pre-computed outputs: correlations, stationarity tests, forecasts |
 
 ## Running the notebook
 
