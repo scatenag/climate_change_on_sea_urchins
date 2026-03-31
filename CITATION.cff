@@ -18,15 +18,15 @@ authors:
   - family-names: Scatena
     given-names: Guido
     affiliation: "ISPRA – Italian Institute for Environmental Protection and Research"
-    orcid: ""  # add if available: https://orcid.org/0000-0000-0000-0000
+    orcid: "https://orcid.org/0000-0002-1641-5433"
   - family-names: Gaion
     given-names: Andrea
-    affiliation: ""  # TODO: add affiliation
-    orcid: ""
+    affiliation: "ISPRA – Italian Institute for Environmental Protection and Research"
+    orcid: "https://orcid.org/0000-0002-5694-4049"
   - family-names: Sartori
-    given-names: Andrea David
-    affiliation: ""  # TODO: add affiliation
-    orcid: ""
+    given-names: Davide
+    affiliation: "ISPRA – Italian Institute for Environmental Protection and Research"
+    orcid: "https://orcid.org/0000-0001-9197-3083"
 keywords:
   - marine heatwaves
   - climate change
