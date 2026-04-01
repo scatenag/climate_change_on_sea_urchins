@@ -15,6 +15,9 @@ Pillow>=10.0
 # If not vendored, uncomment:
 # git+https://github.com/ecjoliver/marineHeatWaves.git
 
+# Testing
+pytest>=7.0
+
 # NOTE: copernicusmarine, xarray, netcdf4 are NOT listed here.
 # They are only needed locally to run the data download scripts.
 # The Streamlit app reads only precomputed CSVs.
