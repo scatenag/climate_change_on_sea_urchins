@@ -4,7 +4,7 @@
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19352309.svg)](https://doi.org/10.5281/zenodo.19352309)
 
-Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (Gulf of La Spezia, 44.1°N 9.8°E).
+Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (off Livorno, 43.43°N 10.40°E).
 
 This repository is the supplementary material for:
 > *"Increased sensitivity of marine invertebrates to metal toxicity in the past two decades linked to Climate Change and Ocean Acidification: revelations from a natural population of sea urchins in the Mediterranean Sea."*

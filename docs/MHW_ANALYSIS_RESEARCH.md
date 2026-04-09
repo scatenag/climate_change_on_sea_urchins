@@ -1,7 +1,7 @@
 # Marine Heatwaves and Sea Urchin Reproductive Toxicity: Research Analysis
 ## *Paracentrotus lividus* EC50 as a 23-year sentinel of ecosystem thermal stress in the Mediterranean
 
-**Dataset**: 2003–2025, Ligurian Sea (Gulf of La Spezia, 44.1°N 9.8°E)
+**Dataset**: 2003–2025, Ligurian Sea (off Livorno, 43.43°N 10.40°E)
 **n**: 158 real EC50 measurements, 129 MHW events, 276 monthly environmental records
 **MHW definition**: Hobday et al. (2016) — SST > 90th percentile climatological threshold for ≥5 consecutive days
 
