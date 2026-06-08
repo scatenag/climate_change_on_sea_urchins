@@ -162,7 +162,7 @@ def load_main():
         ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]],
         on="Datetime", how="left"
     )
-    df["EC50_imputed"] = df["EC50_imputed"].fillna(True)
+    df["EC50_imputed"] = df["EC50_imputed"].fillna(True).astype(bool)
     df["EC50"] = df["EC50"].fillna(
         df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
     )
