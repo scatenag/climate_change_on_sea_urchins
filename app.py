@@ -98,7 +98,9 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     try:
         # Cache-buster: prevents Google Sheets CDN from serving a stale export
         bust = int(time.time())
-        raw = pd.read_csv(f"{EXPORT_URL}&t={bust}", timeout=15)
+        import io, urllib.request
+        req = urllib.request.urlopen(f"{EXPORT_URL}&t={bust}", timeout=15)
+        raw = pd.read_csv(io.BytesIO(req.read()))
         raw.columns = raw.columns.str.strip()
         raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
         raw_clean = raw[["DATE", "EC50"]].dropna(subset=["EC50"]).rename(columns={"DATE": "Date"})
@@ -1822,7 +1824,7 @@ with tabs[6]:
             if val == "non-stationary": return "background-color: #f8d7da"
             return "background-color: #fff3cd"
 
-        styled = stat_table.style.applymap(color_conclusion, subset=["Conclusion"])
+        styled = stat_table.style.map(color_conclusion, subset=["Conclusion"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
         _dl_btn(stat_table, f"stationarity_{_yr_start}_{_yr_end}.csv")
     else:
