@@ -40,7 +40,9 @@ python analysis/run_all.py
 
 - Python 3.10+, standard library + packages in `requirements.txt`
 - Analysis modules in `analysis/` must write their outputs to `results/` and be runnable independently
-- `app.py` must read only pre-computed CSVs — no live analysis in the dashboard
+- `app.py` must read only pre-computed CSVs — no live analysis in the dashboard, with one
+  exception: the Pre/Post split tab recomputes Kruskal-Wallis/Mann-Whitney live, since
+  non-parametric tests on a few hundred points are cheap enough to run at request time
 
 ## Licence
 

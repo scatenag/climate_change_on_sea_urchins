@@ -3,7 +3,7 @@ Download daily SST from Copernicus Marine for Marine Heatwave detection.
 
 marineHeatWaves.detect() requires daily data — monthly data is NOT sufficient.
 
-Site: Golfo di La Spezia / Mar Ligure (43.4278°N, 10.3956°E), surface layer
+Site: off Livorno / Ligurian Sea (43.4278°N, 10.3956°E), surface layer
 Period: 2003-01-01 → 2024-04-30
 
 Output: data/sst_daily.csv
