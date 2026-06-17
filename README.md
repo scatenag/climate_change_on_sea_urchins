@@ -1,21 +1,25 @@
 # Climate Change on Sea Urchins 🦔
 
+[![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=analysis-2025)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/analysis-2025?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19352309.svg)](https://doi.org/10.5281/zenodo.19352309)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (off Livorno, 43.43°N 10.40°E).
 
 This repository is the supplementary material for:
 > *"Increased sensitivity of marine invertebrates to metal toxicity in the past two decades linked to Climate Change and Ocean Acidification: revelations from a natural population of sea urchins in the Mediterranean Sea."*
-> Guido Scatena, Andrea Gaion, Andrea David Sartori — ISPRA
+> Guido Scatena, Andrea Gaion, Davide Sartori — ISPRA
+
+See [`CITATION.cff`](CITATION.cff) for citation metadata, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute.
 
 ## Contents
 
 ### Code
 | File / Folder | Description |
 |---|---|
-| [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs, no live analysis) |
+| [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs; one exception: the Pre/Post split tab recomputes Kruskal-Wallis/Mann-Whitney live for any user-chosen split year) |
 | [`analysis/`](analysis/) | Modular Python analysis scripts (`run_all.py` executes the full pipeline) |
 | [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) |
 | [`marineHeatWaves.py`](marineHeatWaves.py) | Vendored MHW detection library (Hobday et al. 2016) |
@@ -34,6 +38,7 @@ This repository is the supplementary material for:
 | [`dlnm_lag_profile.csv`](dlnm_lag_profile.csv) | DLNM cumulative response profile over lags (R) |
 | [`mixed_effects_predictions.csv`](mixed_effects_predictions.csv) | Mixed-effects model predictions (R) |
 | [`results/`](results/) | Pre-computed outputs: correlations, stationarity tests, forecasts |
+| [`data/`](data/) | Raw caches fetched by `scripts/`: `env_copernicus.csv` (monthly env. variables), `sst_daily.csv` (daily SST for MHW detection), `ec50_sheets.csv` (raw EC50 export) |
 
 ## Running the notebook
 

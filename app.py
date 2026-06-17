@@ -846,7 +846,7 @@ tabs = st.tabs([
     "Time Series",
     "Marine Heatwaves",
     "MHW → Gametes (lag)",
-    "Pre / Post 2016",
+    "Pre / Post split",
     "Correlations",
     "Stationarity",
     "Forecast EC50",
@@ -1712,53 +1712,79 @@ with tabs[3]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — Pre / Post 2016
+# TAB 5 — Pre / Post split (interactive)
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[4]:
-    st.header("Pre / Post 2016")
+    st.header("Pre / Post split")
+    st.caption(
+        "The default split year, **2016**, is the discriminant identified in "
+        "Sartori et al. (2023). Move the slider to recompute the Kruskal–Wallis "
+        "and Mann–Whitney comparison live for any alternative split point."
+    )
 
-    kruskal = load_json("kruskal_stats.json")
-    period_means = load_csv("period_means.csv")
+    _PERIOD_COLS = ["EC50", "O2", "CO2", "Temperature", "Salinity", "pH"]
 
-    if kruskal:
-        col_sel = st.selectbox("Variable", list(kruskal.keys()))
-        dist_df = load_csv(f"dist_{col_sel}.csv")
-        if not dist_df.empty:
-            fig_box = px.box(dist_df, x="period", y=col_sel, color="period",
-                             color_discrete_map={dist_df["period"].iloc[0]: COOL,
-                                                 dist_df["period"].iloc[-1]: WARM},
-                             title=f"{col_sel} — distribution pre/post 2016",
-                             points="all")
-            fig_box.update_layout(height=450, showlegend=False)
-            st.plotly_chart(fig_box, use_container_width=True)
-            _dl_btn(dist_df, f"dist_{col_sel}_{_yr_start}_{_yr_end}.csv", "⬇ Distribution data (CSV)")
+    split_year_sel = st.slider(
+        "Split year", min_value=_yr_start + 2, max_value=_yr_end - 1,
+        value=min(max(2016, _yr_start + 2), _yr_end - 1), step=1, key="split_year_sel",
+    )
+    col_sel = st.selectbox("Variable", _PERIOD_COLS, key="period_var_sel")
 
-        res = kruskal.get(col_sel, {})
-        if res:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("n pre",  res.get("n_pre", "—"))
-            c2.metric("n post", res.get("n_post", "—"))
-            c3.metric("KW p-value", f"{res.get('kruskal_p', 0):.2e}")
-            c4.metric("MW p-value", f"{res.get('mannwhitney_p', 0):.2e}")
+    split_date = pd.Timestamp(f"{split_year_sel}-01-01")
+    src = (df_real if col_sel == "EC50" else df)[["Datetime", col_sel]].dropna()
+    a = src.loc[src["Datetime"] <  split_date, col_sel]
+    b = src.loc[src["Datetime"] >= split_date, col_sel]
 
-    if not period_means.empty:
-        st.subheader("Mean changes pre→post 2016")
-        pm = period_means.copy()
-        pm["change_pct"] = pm["change_pct"].round(1)
-        fig_chg = px.bar(pm, x="variable", y="change_pct",
-                         color="change_pct",
-                         color_continuous_scale=["#2a9d8f", "white", "#e76f51"],
-                         color_continuous_midpoint=0,
-                         title="Mean % change post-2016 vs pre-2016",
-                         labels={"change_pct": "Δ %"})
-        fig_chg.add_hline(y=0, line_color="black")
-        fig_chg.update_layout(height=400)
-        st.plotly_chart(fig_chg, use_container_width=True)
-        _dl_btn(pm, f"period_means_{_yr_start}_{_yr_end}.csv", "⬇ Period means (CSV)")
+    if len(a) > 4 and len(b) > 4:
+        kw  = stats.kruskal(a, b)
+        mwu = stats.mannwhitneyu(a, b, alternative="two-sided")
+
+        dist_df = src.copy()
+        dist_df["period"] = np.where(
+            dist_df["Datetime"] < split_date,
+            f"{_yr_start}–{split_year_sel - 1}", f"{split_year_sel}–{_yr_end}")
+
+        fig_box = px.box(dist_df, x="period", y=col_sel, color="period",
+                         color_discrete_map={dist_df["period"].iloc[0]: COOL,
+                                             dist_df["period"].iloc[-1]: WARM},
+                         title=f"{col_sel} — distribution before/after {split_year_sel}",
+                         points="all")
+        fig_box.update_layout(height=450, showlegend=False)
+        st.plotly_chart(fig_box, use_container_width=True)
+        _dl_btn(dist_df, f"dist_{col_sel}_split{split_year_sel}.csv", "⬇ Distribution data (CSV)")
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("n pre",  len(a))
+        c2.metric("n post", len(b))
+        c3.metric("KW p-value", f"{kw.pvalue:.2e}")
+        c4.metric("MW p-value", f"{mwu.pvalue:.2e}")
+    else:
+        st.warning("Not enough data on one side of this split to run the test.")
+
+    st.subheader(f"Mean % change, before → after {split_year_sel}")
+    rows = []
+    for c in _PERIOD_COLS:
+        s = (df_real if c == "EC50" else df)[["Datetime", c]].dropna()
+        pre_val  = s.loc[s["Datetime"] <  split_date, c].mean()
+        post_val = s.loc[s["Datetime"] >= split_date, c].mean()
+        rows.append({"variable": c, "mean_pre": pre_val, "mean_post": post_val,
+                     "change_pct": 100 * (post_val - pre_val) / abs(pre_val) if pre_val else np.nan})
+    pm = pd.DataFrame(rows)
+    pm["change_pct"] = pm["change_pct"].round(1)
+    fig_chg = px.bar(pm, x="variable", y="change_pct",
+                     color="change_pct",
+                     color_continuous_scale=["#2a9d8f", "white", "#e76f51"],
+                     color_continuous_midpoint=0,
+                     title=f"Mean % change after vs before {split_year_sel}",
+                     labels={"change_pct": "Δ %"})
+    fig_chg.add_hline(y=0, line_color="black")
+    fig_chg.update_layout(height=400)
+    st.plotly_chart(fig_chg, use_container_width=True)
+    _dl_btn(pm, f"period_means_split{split_year_sel}.csv", "⬇ Period means (CSV)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 6 — Correlazioni
+# TAB 6 — Correlations
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[5]:
     st.header("Spearman Correlation Matrices")
@@ -1796,7 +1822,7 @@ with tabs[5]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TAB 7 — Stazionarietà
+# TAB 7 — Stationarity
 # ═══════════════════════════════════════════════════════════════════════════════
 with tabs[6]:
     st.header("Stationarity Tests (ADF + KPSS)")
