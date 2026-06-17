@@ -14,6 +14,7 @@ Authentication via env vars:
 """
 
 import io
+import sys
 import tempfile
 from pathlib import Path
 from datetime import date
@@ -23,10 +24,10 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 
-# ── Site config (must match fetch_copernicus.py) ──────────────────────────────
-SITE_LAT   = 43.4278
-SITE_LON   = 10.3956
-BBOX_DELTA = 0.1
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import SITE_LAT, SITE_LON, BBOX_DELTA
+
+# ── Acquisition window (site itself is configured in config.py) ───────────────
 DEPTH_MIN  = 0.0
 DEPTH_MAX  = 10.0
 

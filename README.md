@@ -12,13 +12,14 @@ This repository is the supplementary material for:
 > *"Increased sensitivity of marine invertebrates to metal toxicity in the past two decades linked to Climate Change and Ocean Acidification: revelations from a natural population of sea urchins in the Mediterranean Sea."*
 > Guido Scatena, Andrea Gaion, Davide Sartori — ISPRA
 
-See [`CITATION.cff`](CITATION.cff) for citation metadata, and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute.
+See [`CITATION.cff`](CITATION.cff) for citation metadata, [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute, and [`docs/ADAPTING.md`](docs/ADAPTING.md) for how to point this framework at a different site, species, or biological indicator.
 
 ## Contents
 
 ### Code
 | File / Folder | Description |
 |---|---|
+| [`config.py`](config.py) | Single source of truth for site coordinates and the EC50 data-source URL — edit this to adapt the framework (see [`docs/ADAPTING.md`](docs/ADAPTING.md)) |
 | [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs; one exception: the Pre/Post split tab recomputes Kruskal-Wallis/Mann-Whitney live for any user-chosen split year) |
 | [`analysis/`](analysis/) | Modular Python analysis scripts (`run_all.py` executes the full pipeline) |
 | [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) |

@@ -8,12 +8,13 @@ Output: data/ec50_sheets.csv
         Columns: Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n
 """
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-SHEET_ID = "1e0-16D84ehRyotSC2BH9e9YqAnZksbv4gZDFgyPki8g"
-EXPORT_URL = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import EC50_EXPORT_URL as EXPORT_URL
 
 OUT_PATH = Path(__file__).parent.parent / "data" / "ec50_sheets.csv"
 

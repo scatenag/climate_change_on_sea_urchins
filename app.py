@@ -20,6 +20,8 @@ from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 
+from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Sea Urchins & Climate Change",
@@ -31,10 +33,7 @@ st.set_page_config(
 ROOT    = Path(__file__).parent
 RESULTS = ROOT / "results"
 
-SHEET_ID   = "1e0-16D84ehRyotSC2BH9e9YqAnZksbv4gZDFgyPki8g"
-EXPORT_URL = (
-    f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv"
-)
+EXPORT_URL = EC50_EXPORT_URL
 
 OCEAN   = "#0077b6"
 WARM    = "#e76f51"
@@ -42,7 +41,7 @@ COOL    = "#2a9d8f"
 NEUTRAL = "#457b9d"
 
 SPLIT_YEAR = 2016
-SITE = dict(lat=43.4278, lon=10.3956, name="Livorno Sud")
+SITE = dict(lat=SITE_LAT, lon=SITE_LON, name=SITE_NAME)
 
 
 def _dl_btn(df: pd.DataFrame, filename: str, label: str = "Download CSV") -> None:

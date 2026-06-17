@@ -13,15 +13,16 @@ Dataset: cmems_mod_med_phy-temp_my_4.2km_P1D-m (daily temperature)
 Fallback: cmems_mod_med_phy-temp_anfc_4.2km_P1D-m
 """
 
+import sys
 import copernicusmarine
 import xarray as xr
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-SITE_LAT = 43.4278
-SITE_LON = 10.3956
-BBOX_DELTA = 0.1
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import SITE_LAT, SITE_LON, BBOX_DELTA
+
 DEPTH_MIN = 0.0
 DEPTH_MAX = 5.0    # surface only for SST
 START = "2003-01-01"

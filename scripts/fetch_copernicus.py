@@ -36,16 +36,17 @@ NOTE on CO2 units:
     before using this column. See build_dataset.py for the check.
 """
 
+import sys
 import copernicusmarine
 import xarray as xr
 import pandas as pd
 import numpy as np
 from pathlib import Path
 
-# ── Site configuration ────────────────────────────────────────────────────────
-SITE_LAT = 43.4278
-SITE_LON = 10.3956
-BBOX_DELTA = 0.1          # ±0.1° bounding box around the site
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import SITE_LAT, SITE_LON, BBOX_DELTA
+
+# ── Acquisition window (site itself is configured in config.py) ───────────────
 DEPTH_MIN = 0.0
 DEPTH_MAX = 10.0
 START = "2003-01-01"
