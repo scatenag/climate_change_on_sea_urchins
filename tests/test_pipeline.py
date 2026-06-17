@@ -187,9 +187,13 @@ def test_config_ec50_url_well_formed():
     "fetch_copernicus_daily.py",
 ])
 def test_copernicus_scripts_use_config_site(script):
-    mod = _load_module(ROOT / "scripts" / script)
-    assert mod.SITE_LAT == SITE_LAT
-    assert mod.SITE_LON == SITE_LON
+    # Checked statically (not imported): these scripts import copernicusmarine
+    # and xarray, which are intentionally excluded from requirements.txt/CI
+    # (see the note in requirements.txt) since they're only needed to run the
+    # download scripts locally, not to test or run the dashboard.
+    src = (ROOT / "scripts" / script).read_text()
+    assert "from config import SITE_LAT, SITE_LON" in src
+    assert f"SITE_LAT={SITE_LAT}" not in src.replace(" ", "")
 
 
 def test_fetch_ec50_uses_config_url():
