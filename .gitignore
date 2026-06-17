@@ -18,6 +18,7 @@ venv/
 # Exploratory/intermediate outputs (not part of reproducible pipeline)
 *.pdf
 *.png
+!figures/*.png
 data_LSTMS_*.csv
 trend_*.csv
 
