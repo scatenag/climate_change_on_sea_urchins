@@ -3,7 +3,7 @@
 [![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=analysis-2025)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/analysis-2025?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20734884.svg)](https://doi.org/10.5281/zenodo.20734884)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20745476.svg)](https://doi.org/10.5281/zenodo.20745476)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (off Livorno, 43.43°N 10.40°E).
