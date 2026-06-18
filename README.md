@@ -9,8 +9,8 @@
 Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (off Livorno, 43.43°N 10.40°E).
 
 This repository is the supplementary material for:
-> *"Increased sensitivity of marine invertebrates to metal toxicity in the past two decades linked to Climate Change and Ocean Acidification: revelations from a natural population of sea urchins in the Mediterranean Sea."*
-> Guido Scatena, Andrea Gaion, Davide Sartori — ISPRA
+> *"Increased sensitivity of sea urchin larvae to metal toxicity as a consequence of the past two decades of Climate Change and Ocean Acidification in the Mediterranean Sea."*
+> Davide Sartori, Guido Scatena, Cristina Andra Vrinceanu, Andrea Gaion — *Marine Pollution Bulletin* 194 (2023), 115274. https://doi.org/10.1016/j.marpolbul.2023.115274
 
 See [`CITATION.cff`](CITATION.cff) for citation metadata, [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute, and [`docs/ADAPTING.md`](docs/ADAPTING.md) for how to point this framework at a different site, species, or biological indicator.
 
