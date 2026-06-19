@@ -12,7 +12,14 @@ This repository is the supplementary material for:
 > *"Increased sensitivity of sea urchin larvae to metal toxicity as a consequence of the past two decades of Climate Change and Ocean Acidification in the Mediterranean Sea."*
 > Davide Sartori, Guido Scatena, Cristina Andra Vrinceanu, Andrea Gaion — *Marine Pollution Bulletin* 194 (2023), 115274. https://doi.org/10.1016/j.marpolbul.2023.115274
 
-See [`CITATION.cff`](CITATION.cff) for citation metadata, [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute, and [`docs/ADAPTING.md`](docs/ADAPTING.md) for how to point this framework at a different site, species, or biological indicator.
+Beyond this specific case study, the pipeline architecture (config-driven site selection,
+Copernicus ingestion, event detection, lagged causal analysis, scenario forecasting) is built
+to be retargeted — e.g. to another sentinel species or bioassay endpoint, another stressor
+already tracked as a candidate predictor (ocean acidification, via the pH/CO₂ series), or any
+other site within Copernicus Marine's global coverage. See [`docs/ADAPTING.md`](docs/ADAPTING.md)
+for what that actually requires.
+
+See [`CITATION.cff`](CITATION.cff) for citation metadata and [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute.
 
 ## Installation
 

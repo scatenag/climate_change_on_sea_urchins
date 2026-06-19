@@ -60,10 +60,13 @@ while exposing every intermediate step for independent verification.
 is an open, auditable, and directly citable template for integrating heterogeneous environmental
 data streams according to FAIR principles. Site and data-source identifiers are isolated in a
 single configuration module, and a dedicated guide documents what is required to point the
-pipeline at a different site, species, or biological indicator. The target audience includes
-marine ecotoxicologists, environmental monitoring agencies, and any research group connecting
-Earth observation data with biological sentinel measurements. The approach has already
-supported a peer-reviewed longitudinal study on metal sensitivity trends in *P. lividus*
+pipeline at a different site, species, or biological indicator — for example, another
+sentinel species or toxicological endpoint, another stressor beyond MHWs that the pipeline
+already tracks as a candidate predictor (ocean acidification, via the pH/CO$_2$ series), or
+any other site within Copernicus Marine's global coverage. The target audience includes marine
+ecotoxicologists, environmental monitoring agencies, and any research group connecting Earth
+observation data with biological sentinel measurements. The approach has already supported a
+peer-reviewed longitudinal study on metal sensitivity trends in *P. lividus*
 [@sartori_2023], empirically validating its scientific utility.
 
 # Functionality
