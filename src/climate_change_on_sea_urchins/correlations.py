@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
-from common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
 
 
 def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.DataFrame:

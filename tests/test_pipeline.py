@@ -20,9 +20,11 @@ import pandas as pd
 import pytest
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not in the installed package
 
-from analysis.common import load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_YEAR, TAU_MAX
+from climate_change_on_sea_urchins.common import (
+    load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_YEAR, TAU_MAX,
+)
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 
 
@@ -202,11 +204,19 @@ def test_fetch_ec50_uses_config_url():
 
 
 def test_app_imports_site_from_config():
-    # app.py is a Streamlit script (executes dashboard logic and live network
-    # calls at import time) — checked statically rather than imported.
-    src = (ROOT / "app.py").read_text()
+    # dashboard.py is a Streamlit script (executes dashboard logic and live
+    # network calls at import time) — checked statically rather than imported.
+    src = (ROOT / "src" / "climate_change_on_sea_urchins" / "dashboard.py").read_text()
     assert "from config import" in src
     assert "SITE_LAT" in src and "EC50_EXPORT_URL" in src
+
+
+def test_app_py_is_thin_shim_into_package():
+    # app.py at repo root must stay a thin import so `streamlit run app.py`
+    # and the Streamlit Community Cloud deployment (pointed at this exact
+    # path) keep working without reconfiguration.
+    src = (ROOT / "app.py").read_text()
+    assert "import climate_change_on_sea_urchins.dashboard" in src
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +232,7 @@ def test_app_imports_site_from_config():
 # ---------------------------------------------------------------------------
 
 def test_load_data_on_synthetic_different_site_dataset(tmp_path, monkeypatch):
-    import analysis.common as common
+    import climate_change_on_sea_urchins.common as common
 
     n = 48
     dates = pd.date_range("2010-01-01", periods=n, freq="MS")

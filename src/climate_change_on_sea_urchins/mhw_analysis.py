@@ -16,7 +16,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.tsa.stattools import ccf as sm_ccf, grangercausalitytests
 from statsmodels.tsa.ardl import ARDL
-from common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
 
 
 # ── 1. CCF ────────────────────────────────────────────────────────────────────

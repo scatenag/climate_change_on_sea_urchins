@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import pairwise_distances
-from common import load_data, RESULTS, ALL_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, SPLIT_YEAR
 
 def decompose_series(df, col):
     s = df.set_index("Datetime")[col].dropna()

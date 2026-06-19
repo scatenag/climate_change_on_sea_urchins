@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-ROOT    = Path(__file__).parent.parent
+ROOT    = Path(__file__).resolve().parent.parent.parent
 RESULTS = ROOT / "results"
 RESULTS.mkdir(exist_ok=True)
 

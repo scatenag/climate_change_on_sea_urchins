@@ -14,17 +14,43 @@ This repository is the supplementary material for:
 
 See [`CITATION.cff`](CITATION.cff) for citation metadata, [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to run tests and contribute, and [`docs/ADAPTING.md`](docs/ADAPTING.md) for how to point this framework at a different site, species, or biological indicator.
 
+## Installation
+
+This repository is a proper, installable Python package (`pyproject.toml`, `src/` layout):
+
+```bash
+git clone https://github.com/scatenag/climate_change_on_sea_urchins.git
+cd climate_change_on_sea_urchins
+pip install -e .
+```
+
+This installs the `climate_change_on_sea_urchins` package (analysis pipeline + dashboard)
+and two console scripts:
+
+```bash
+ccsu-run-pipeline   # re-run the full statistical pipeline, populating results/
+ccsu-dashboard      # launch the Streamlit dashboard (equivalent to streamlit run app.py)
+```
+
+Or use it as a library:
+
+```python
+from climate_change_on_sea_urchins import load_data
+df_full, df_real, events, monthly = load_data()
+```
+
 ## Contents
 
 ### Code
 | File / Folder | Description |
 |---|---|
+| [`pyproject.toml`](pyproject.toml) | Package metadata, dependencies, console-script entry points |
+| [`src/climate_change_on_sea_urchins/`](src/climate_change_on_sea_urchins/) | The installable package: 6 analysis modules + `common.py` (shared data loading) + `pipeline.py` (orchestrates all 6) + `dashboard.py` (the Streamlit app) |
 | [`config.py`](config.py) | Single source of truth for site coordinates and the EC50 data-source URL — edit this to adapt the framework (see [`docs/ADAPTING.md`](docs/ADAPTING.md)) |
-| [`app.py`](app.py) | Streamlit dashboard (reads pre-computed CSVs; one exception: the Pre/Post split tab recomputes Kruskal-Wallis/Mann-Whitney live for any user-chosen split year) |
-| [`analysis/`](analysis/) | Modular Python analysis scripts (`run_all.py` executes the full pipeline) |
-| [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) |
+| [`app.py`](app.py) | Thin entry point (`import climate_change_on_sea_urchins.dashboard`) — kept so `streamlit run app.py` and the existing Streamlit Community Cloud deployment work unchanged |
+| [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) — standalone, not part of the installable package since they require Copernicus credentials |
 | [`marineHeatWaves.py`](marineHeatWaves.py) | Vendored MHW detection library (Hobday et al. 2016) |
-| [`analysis.ipynb`](analysis.ipynb) | Exploratory notebook — launch via Binder badge above |
+| [`analysis.ipynb`](analysis.ipynb) | Exploratory notebook (illustration only — the tested, reusable code is the package above) — launch via Binder badge above |
 
 ### Data
 | File | Description |
@@ -41,25 +67,25 @@ See [`CITATION.cff`](CITATION.cff) for citation metadata, [`CONTRIBUTING.md`](CO
 | [`results/`](results/) | Pre-computed outputs: correlations, stationarity tests, forecasts |
 | [`data/`](data/) | Raw caches fetched by `scripts/`: `env_copernicus.csv` (monthly env. variables), `sst_daily.csv` (daily SST for MHW detection), `ec50_sheets.csv` (raw EC50 export) |
 
+## Streamlit dashboard
+
+The interactive dashboard is deployed at the link above (Streamlit badge).
+To run locally, after [installing the package](#installation):
+
+```bash
+ccsu-dashboard
+# equivalently: streamlit run app.py
+```
+
 ## Running the notebook
 
 Click the **Binder** badge above to run the notebook interactively in the browser — no installation required.
 
-To run locally:
+To run locally (the notebook additionally needs `jupyter` and `pmdarima`):
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[notebook]"
 jupyter notebook analysis.ipynb
-```
-
-## Streamlit dashboard
-
-The interactive dashboard is deployed at the link above (Streamlit badge).
-To run locally:
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
 ```
 
 ## Data sources

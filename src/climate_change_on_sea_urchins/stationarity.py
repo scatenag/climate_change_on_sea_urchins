@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller, kpss
-from common import load_data, RESULTS, ALL_COLS, MHW_COLS
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS
 
 
 def test_series(series: pd.Series, name: str) -> dict:

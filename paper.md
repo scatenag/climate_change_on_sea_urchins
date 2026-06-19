@@ -76,9 +76,9 @@ and inspect its CSV output without touching the rest of the pipeline.
 
 ![Four-stage reproducible pipeline. Three inputs feed `scripts/`: Copernicus Marine (monthly
 means and daily SST), ISPRA Bioassays (monthly EC$_{50}$), and `marineHeatWaves.py`
-[@hobday_2016] (vendored MHW detection algorithm). `analysis/` runs the statistical pipeline
-and writes artefacts to `results/`, consumed independently by the dashboard (`app.py`) and the
-permanent archive (Zenodo, GitHub).](figures/fig0_pipeline.png)
+[@hobday_2016] (vendored MHW detection algorithm). The `climate_change_on_sea_urchins` Python
+package runs the statistical pipeline and writes artefacts to `results/`, consumed
+independently by the dashboard and the permanent archive (Zenodo, GitHub).](figures/fig0_pipeline.png)
 
 ## Data Pipeline
 
@@ -106,35 +106,41 @@ period-comparison analyses.](figures/fig1_timeseries.png)
 
 ## Analysis Modules
 
-Six modular Python scripts in `analysis/` (orchestrated by `analysis/run_all.py`) implement the
-full statistical pipeline and write structured outputs to `results/` as CSV and JSON; every
-intermediate result is independently inspectable and reusable:
+`climate_change_on_sea_urchins` is installed with `pip install -e .` (a standard
+`src`-layout package, `pyproject.toml`-configured) and exposes a console entry point,
+`ccsu-run-pipeline`, that orchestrates six modules implementing the full statistical
+pipeline and writing structured outputs to `results/` as CSV and JSON; every intermediate
+result, and every module, is independently importable, inspectable, and reusable
+(`from climate_change_on_sea_urchins import load_data`, etc.):
 
-- **`01_timeseries.py`**: STL seasonal decomposition; PCA anomaly detection.
-- **`02_period_split.py`**: Kruskal--Wallis and Mann--Whitney *U* tests pre/post a split year
+- **`timeseries`**: STL seasonal decomposition; PCA anomaly detection.
+- **`period_split`**: Kruskal--Wallis and Mann--Whitney *U* tests pre/post a split year
   (2016 by default, per @sartori_2023); rank-biserial effect sizes.
-- **`03_correlations.py`**: Spearman correlation matrices (full period, pre-2016, post-2016),
+- **`correlations`**: Spearman correlation matrices (full period, pre-2016, post-2016),
   including MHW metrics.
-- **`04_stationarity.py`**: ADF and KPSS tests; automatic first-differencing for
+- **`stationarity`**: ADF and KPSS tests; automatic first-differencing for
   non-stationary variables.
-- **`05_mhw_analysis.py`**: Spearman cross-correlation function (CCF) at lags 0--12 months
+- **`mhw_analysis`**: Spearman cross-correlation function (CCF) at lags 0--12 months
   (peak at lag 2: r = -0.373, p = 1.4 × 10^{-6}, consistent with the gametogenesis cycle of
   *P. lividus*); Granger causality F-tests; ARDL(3,12) cumulative response model.
-- **`06_forecast.py`**: SARIMAX(1,0,1)(1,0,1,12) three-scenario forecast to 2040.
+- **`forecast`**: SARIMAX(1,0,1)(1,0,1,12) three-scenario forecast to 2040.
 
 A complementary R script (`scripts/mhw_lag_analysis.R`) adds superposed epoch analysis, DLNM
 [@gasparrini_2010], and mixed-effects models, with outputs saved as CSV for dashboard consumption.
 
 ## Dashboard and Reproducibility
 
-`app.py` exposes all pre-computed results through a nine-tab Streamlit dashboard at
+The package's dashboard module exposes all pre-computed results through a nine-tab Streamlit
+interface, launched via the `ccsu-dashboard` console entry point (equivalently,
+`streamlit run app.py` from a repository checkout) and deployed at
 <https://climate-change-on-sea-urchins.streamlit.app> (Figure 3): time-series visualisation
 with CI bands and MHW overlays; event catalogue and annual trends; lag and causal analysis
 (CCF, ARDL, Granger heatmap); pre/post comparisons with an adjustable split year; correlation
 heatmaps per sub-period; stationarity summaries; three-scenario forecast; and a methods/about
 panel. The interface fetches EC$_{50}$ data live from the ISPRA source each session (with
-static fallback) and provides a CSV download on every chart for downstream reuse. With one exception, no analysis runs at dashboard runtime: computation (`analysis/`) and
-presentation (`app.py`) are separated to guarantee reproducibility for the expensive models
+static fallback) and provides a CSV download on every chart for downstream reuse. With one
+exception, no analysis runs at dashboard runtime: computation and presentation are separate
+modules of the same package, separated to guarantee reproducibility for the expensive models
 (SARIMAX, ARDL, DLNM). The exception is the pre/post comparison, recomputed live because
 non-parametric tests on a few hundred points are cheap, letting users test alternative split
 years beyond the published 2016 discriminant without leaving the browser.

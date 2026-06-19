@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from scipy import stats
-from common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
 
 def run():
     df, df_real, events, _ = load_data()

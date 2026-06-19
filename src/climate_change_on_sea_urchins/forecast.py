@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from scipy import stats
-from common import load_data, RESULTS, TAU_MAX
+from .common import load_data, RESULTS, TAU_MAX
 
 
 FORECAST_YEARS = 15
