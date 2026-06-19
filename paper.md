@@ -150,7 +150,7 @@ years beyond the published 2016 discriminant without leaving the browser.
 
 The full stack embodies FAIR principles: all code and data are distributed under an MIT licence
 and archived with a persistent DOI on Zenodo
-(DOI: [10.5281/zenodo.20745476](https://doi.org/10.5281/zenodo.20745476)) [@scatena_2026];
+(DOI: [10.5281/zenodo.20766250](https://doi.org/10.5281/zenodo.20766250)) [@scatena_2026];
 a `CITATION.cff` with author ORCIDs enables standard attribution; a Binder environment allows
 browser-based execution without local setup; and a pytest suite (38 tests, including a
 synthetic-data check that the analysis layer works on a structurally different dataset) with
