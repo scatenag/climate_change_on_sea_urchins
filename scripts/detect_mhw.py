@@ -4,10 +4,10 @@ Marine Heatwave Detection — Hobday et al. (2016) method.
 No external MHW library required — manual implementation adapted from
 the climate-change-ecotoxicology sister project.
 
-Input:  data/sst_daily.csv  (Datetime, Temperature)
-Output: mhw_events.csv      — event catalog
-        mhw_monthly.csv     — monthly aggregated metrics (for analysis.ipynb)
-        mhw_annual.csv      — annual block statistics
+Input:  data/sst_daily.csv          (Datetime, Temperature)
+Output: data/mhw_events.csv        — event catalog
+        data/mhw_monthly.csv       — monthly aggregated metrics (for analysis.ipynb)
+        data/mhw_annual.csv        — annual block statistics
 
 Hobday criteria:
   - Threshold:     90th percentile of daily climatology (11-day moving window)
@@ -23,9 +23,9 @@ from pathlib import Path
 
 ROOT         = Path(__file__).parent.parent
 SST_PATH     = ROOT / "data" / "sst_daily.csv"
-OUT_EVENTS   = ROOT / "mhw_events.csv"
-OUT_MONTHLY  = ROOT / "mhw_monthly.csv"
-OUT_ANNUAL   = ROOT / "mhw_annual.csv"
+OUT_EVENTS   = ROOT / "data" / "mhw_events.csv"
+OUT_MONTHLY  = ROOT / "data" / "mhw_monthly.csv"
+OUT_ANNUAL   = ROOT / "data" / "mhw_annual.csv"
 
 CLIM_START = 2003   # climatology baseline period
 CLIM_END   = 2012

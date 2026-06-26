@@ -6,8 +6,8 @@ Inputs:
     data/ec50_sheets.csv      → Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n
 
 Outputs:
-    data_extended.csv         → same schema as original data.csv (for analysis.ipynb)
-    data_ec50_ci.csv          → EC50 CI bounds for all months (incl. imputed months)
+    data/data_extended.csv    → same schema as original data.csv (for analysis.ipynb)
+    data/data_ec50_ci.csv     → EC50 CI bounds for all months (incl. imputed months)
 
 Run AFTER:
     python scripts/fetch_ec50.py
@@ -23,8 +23,8 @@ ENV_PATH  = ROOT / "data" / "env_copernicus.csv"
 EC50_PATH = ROOT / "data" / "ec50_sheets.csv"
 ORIG_PATH = ROOT / "data.csv"   # original — kept as validation reference only
 
-OUT_DATA = ROOT / "data_extended.csv"
-OUT_CI   = ROOT / "data_ec50_ci.csv"
+OUT_DATA = ROOT / "data" / "data_extended.csv"
+OUT_CI   = ROOT / "data" / "data_ec50_ci.csv"
 
 
 def load_inputs():

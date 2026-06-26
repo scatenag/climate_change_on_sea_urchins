@@ -46,7 +46,7 @@ test = ["pytest>=7.0"]
 [project.urls]
 Homepage = "https://github.com/scatenag/climate_change_on_sea_urchins"
 Repository = "https://github.com/scatenag/climate_change_on_sea_urchins"
-Documentation = "https://github.com/scatenag/climate_change_on_sea_urchins/blob/analysis-2025/docs/ADAPTING.md"
+Documentation = "https://github.com/scatenag/climate_change_on_sea_urchins/blob/main/docs/ADAPTING.md"
 
 [project.scripts]
 ccsu-run-pipeline = "climate_change_on_sea_urchins.pipeline:main"

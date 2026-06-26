@@ -8,7 +8,7 @@ doi: "10.5281/zenodo.20766250"
 identifiers:
   - type: doi
     value: "10.5281/zenodo.20766250"
-repository-code: "https://github.com/scatenag/climate_change_on_sea_urchins/tree/analysis-2025"
+repository-code: "https://github.com/scatenag/climate_change_on_sea_urchins"
 url: "https://climate-change-on-sea-urchins.streamlit.app"
 abstract: >
   An open-source, reproducible framework integrating real-time Copernicus Marine

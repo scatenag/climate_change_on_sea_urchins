@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout analysis-2025
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: analysis-2025
+          ref: main
           fetch-depth: 1
 
       - name: Set up Python
@@ -79,7 +79,7 @@ jobs:
           steps.check_copernicus.outputs.changed == 'true'
         run: |
           python scripts/build_dataset.py
-          python analysis/run_all.py
+          python -m climate_change_on_sea_urchins.pipeline
 
       # ── Step 4: Commit and push ───────────────────────────────────────────────
       - name: Commit and push updated results
@@ -89,8 +89,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/ec50_sheets.csv data_extended.csv data_ec50_ci.csv \
-                  data/env_copernicus.csv mhw_events.csv mhw_monthly.csv mhw_annual.csv \
+          git add data/ec50_sheets.csv data/data_extended.csv data/data_ec50_ci.csv \
+                  data/env_copernicus.csv data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
                   results/
           git diff --cached --quiet || git commit -m "Auto-update: env+EC50 data [skip ci]"
-          git push origin analysis-2025
+          git push origin main

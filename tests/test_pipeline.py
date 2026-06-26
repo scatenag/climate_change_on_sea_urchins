@@ -60,30 +60,30 @@ def test_tau_max():
     "mhw_annual.csv",
 ])
 def test_input_files_exist(fname):
-    assert (ROOT / fname).exists(), f"Missing input file: {fname}"
+    assert (ROOT / "data" / fname).exists(), f"Missing input file: data/{fname}"
 
 
 def test_data_extended_columns():
-    df = pd.read_csv(ROOT / "data_extended.csv")
+    df = pd.read_csv(ROOT / "data" / "data_extended.csv")
     required = ["Datetime", "EC50"] + ENV_COLS
     for col in required:
         assert col in df.columns, f"Missing column '{col}' in data_extended.csv"
 
 
 def test_data_extended_length():
-    df = pd.read_csv(ROOT / "data_extended.csv")
+    df = pd.read_csv(ROOT / "data" / "data_extended.csv")
     assert len(df) >= 276, "data_extended.csv should have at least 276 monthly rows"
 
 
 def test_mhw_events_columns():
-    df = pd.read_csv(ROOT / "mhw_events.csv")
+    df = pd.read_csv(ROOT / "data" / "mhw_events.csv")
     for col in ["start_date", "end_date", "peak_date", "duration_days",
                 "intensity_max", "category"]:
         assert col in df.columns, f"Missing column '{col}' in mhw_events.csv"
 
 
 def test_mhw_events_count():
-    df = pd.read_csv(ROOT / "mhw_events.csv")
+    df = pd.read_csv(ROOT / "data" / "mhw_events.csv")
     assert len(df) >= 100, "Expected at least 100 MHW events"
 
 
@@ -269,10 +269,12 @@ def test_load_data_on_synthetic_different_site_dataset(tmp_path, monkeypatch):
         "category": ["Moderate"] * 5,
     })
 
-    extended.to_csv(tmp_path / "data_extended.csv", index=False)
-    ci.to_csv(tmp_path / "data_ec50_ci.csv", index=False)
-    monthly.to_csv(tmp_path / "mhw_monthly.csv", index=False)
-    events.to_csv(tmp_path / "mhw_events.csv", index=False)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    extended.to_csv(data_dir / "data_extended.csv", index=False)
+    ci.to_csv(data_dir / "data_ec50_ci.csv", index=False)
+    monthly.to_csv(data_dir / "mhw_monthly.csv", index=False)
+    events.to_csv(data_dir / "mhw_events.csv", index=False)
 
     monkeypatch.setattr(common, "ROOT", tmp_path)
 

@@ -14,15 +14,15 @@
 #   C. Mixed effects model — EC50 post-event ~ lag + intensity + season
 #
 # Inputs:
-#   data_extended.csv     — monthly environmental + EC50 data
-#   mhw_events.csv        — MHW event catalog
-#   mhw_monthly.csv       — monthly MHW metrics
+#   data/data_extended.csv    — monthly environmental + EC50 data
+#   data/mhw_events.csv       — MHW event catalog
+#   data/mhw_monthly.csv      — monthly MHW metrics
 #
-# Outputs (CSV, read by analysis.ipynb and app.py):
-#   sea_results.csv       — SEA composite with bootstrap CI
-#   dlnm_results.csv      — DLNM predicted surface (intensity × lag grid)
-#   dlnm_lag_profile.csv  — Cumulative lag response at mean MHW intensity
-#   dlnm_slice_lag.csv    — EC50 response over lags at fixed intensities
+# Outputs (CSV, read by the dashboard):
+#   results/sea_results.csv       — SEA composite with bootstrap CI
+#   results/dlnm_results.csv      — DLNM predicted surface (intensity × lag grid)
+#   results/dlnm_lag_profile.csv  — Cumulative lag response at mean MHW intensity
+#   results/dlnm_slice_lag.csv    — EC50 response over lags at fixed intensities
 #
 # Install packages (once):
 #   install.packages(c("dlnm", "mgcv", "lme4", "dplyr", "readr", "ggplot2"))
@@ -52,9 +52,9 @@ if (length(script_flag) > 0) {
 }
 cat("ROOT:", ROOT, "\n")
 
-DATA     <- read_csv(file.path(ROOT, "data_extended.csv"),    show_col_types=FALSE)
-EVENTS   <- read_csv(file.path(ROOT, "mhw_events.csv"),       show_col_types=FALSE)
-MONTHLY  <- read_csv(file.path(ROOT, "mhw_monthly.csv"),      show_col_types=FALSE)
+DATA     <- read_csv(file.path(ROOT, "data", "data_extended.csv"),    show_col_types=FALSE)
+EVENTS   <- read_csv(file.path(ROOT, "data", "mhw_events.csv"),       show_col_types=FALSE)
+MONTHLY  <- read_csv(file.path(ROOT, "data", "mhw_monthly.csv"),      show_col_types=FALSE)
 
 cat("Loaded:", nrow(DATA), "monthly rows,", nrow(EVENTS), "MHW events\n")
 
@@ -147,7 +147,7 @@ sea_composite$boot_p025  <- apply(boot_means, 2, quantile, 0.025, na.rm=TRUE)
 sea_composite$boot_p975  <- apply(boot_means, 2, quantile, 0.975, na.rm=TRUE)
 sea_composite$significant <- sea_composite$boot_p < 0.05
 
-write_csv(sea_composite, file.path(ROOT, "sea_results.csv"))
+write_csv(sea_composite, file.path(ROOT, "results", "sea_results.csv"))
 cat("Saved sea_results.csv\n")
 cat("Significant lags:", paste(sea_composite$lag[sea_composite$significant], collapse=", "), "\n")
 
@@ -191,7 +191,7 @@ surface_df <- expand.grid(intensity=intensity_vals, lag=0:MAX_LAG)
 surface_df$fit  <- as.vector(pred$matfit)
 surface_df$low  <- as.vector(pred$matlow)
 surface_df$high <- as.vector(pred$mathigh)
-write_csv(surface_df, file.path(ROOT, "dlnm_results.csv"))
+write_csv(surface_df, file.path(ROOT, "results", "dlnm_results.csv"))
 cat("Saved dlnm_results.csv\n")
 
 # Cumulative lag response at mean non-zero MHW intensity
@@ -205,7 +205,7 @@ lag_profile <- data.frame(
   ci_upper      = as.numeric(pred$cumhigh[nearest_idx, ]),
   intensity_ref = mean_int
 )
-write_csv(lag_profile, file.path(ROOT, "dlnm_lag_profile.csv"))
+write_csv(lag_profile, file.path(ROOT, "results", "dlnm_lag_profile.csv"))
 cat("Saved dlnm_lag_profile.csv — mean MHW intensity:", round(mean_int, 3), "°C\n")
 
 # Slice at fixed lags: dose-response at lag 0, 3, 6, 9, 12
@@ -222,7 +222,7 @@ slice_df <- do.call(rbind, lapply(slice_lags, function(l) {
     high      = pred$mathigh[, lag_idx]
   )
 }))
-write_csv(slice_df, file.path(ROOT, "dlnm_slice_lag.csv"))
+write_csv(slice_df, file.path(ROOT, "results", "dlnm_slice_lag.csv"))
 cat("Saved dlnm_slice_lag.csv\n")
 
 # =============================================================================
@@ -276,9 +276,9 @@ newdata <- expand.grid(
   year          = 2015
 )
 newdata$EC50_pred <- predict(fit_me, newdata=newdata, re.form=NA)
-write_csv(newdata, file.path(ROOT, "mixed_effects_predictions.csv"))
+write_csv(newdata, file.path(ROOT, "results", "mixed_effects_predictions.csv"))
 cat("Saved mixed_effects_predictions.csv\n")
 
 cat("\n✅ All lag analyses complete.\n")
-cat("Outputs: sea_results.csv, dlnm_results.csv, dlnm_lag_profile.csv,\n")
-cat("         dlnm_slice_lag.csv, mixed_effects_predictions.csv\n")
+cat("Outputs in results/: sea_results.csv, dlnm_results.csv, dlnm_lag_profile.csv,\n")
+cat("                     dlnm_slice_lag.csv, mixed_effects_predictions.csv\n")

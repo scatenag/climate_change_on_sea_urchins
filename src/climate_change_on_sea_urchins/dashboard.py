@@ -115,7 +115,7 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         with st.sidebar:
             st.error(f"EC50 live fetch failed: {_exc}")
         # Fallback: use the static CSV committed to the repo
-        ci_path = ROOT / "data_ec50_ci.csv"
+        ci_path = ROOT / "data" / "data_ec50_ci.csv"
         fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
         fallback["EC50_imputed"] = fallback["EC50_imputed"].astype(bool)
         real = fallback[~fallback["EC50_imputed"]].copy()
@@ -132,11 +132,11 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
 def load_env_data():
     """Load static environmental data (Copernicus CSVs). Cached indefinitely — changes only
     when the nightly GitHub Actions workflow pushes new data_extended.csv."""
-    df   = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
-    mhwm = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
-    mhwe = pd.read_csv(ROOT / "mhw_events.csv",
+    df   = pd.read_csv(ROOT / "data" / "data_extended.csv",  parse_dates=["Datetime"])
+    mhwm = pd.read_csv(ROOT / "data" / "mhw_monthly.csv",    parse_dates=["Datetime"])
+    mhwe = pd.read_csv(ROOT / "data" / "mhw_events.csv",
                        parse_dates=["start_date","end_date","peak_date"])
-    mhwa = pd.read_csv(ROOT / "mhw_annual.csv")
+    mhwa = pd.read_csv(ROOT / "data" / "mhw_annual.csv")
     # Drop stale EC50 columns — will be replaced with live data
     stale = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
              if c in df.columns]
@@ -208,9 +208,9 @@ def load_csv(name):
 
 @st.cache_data
 def load_r_results():
-    sea  = load_csv("../sea_results.csv")
-    dlnm = load_csv("../dlnm_results.csv")
-    dlnm_lag = load_csv("../dlnm_lag_profile.csv")
+    sea  = load_csv("sea_results.csv")
+    dlnm = load_csv("dlnm_results.csv")
+    dlnm_lag = load_csv("dlnm_lag_profile.csv")
     return sea, dlnm, dlnm_lag
 
 
@@ -1693,7 +1693,7 @@ with tabs[3]:
             st.plotly_chart(fig_dlnm, use_container_width=True)
             _dl_btn(dlnm_lag, "dlnm_lag_profile.csv", "⬇ DLNM lag profile (CSV)")
 
-        me_df = load_csv("../mixed_effects_predictions.csv")
+        me_df = load_csv("mixed_effects_predictions.csv")
         if not me_df.empty:
             st.subheader("Mixed effects model: predicted EC50 by MHW intensity")
             me_df = me_df.copy()

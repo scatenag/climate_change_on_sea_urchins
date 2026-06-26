@@ -1,14 +1,22 @@
 # Climate Change on Sea Urchins 🦔
 
-[![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=analysis-2025)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/analysis-2025?labpath=analysis.ipynb)
+[![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/main?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20766250.svg)](https://doi.org/10.5281/zenodo.20766250)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Study on the impact of climate change and **Marine Heatwaves** on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea (off Livorno, 43.43°N 10.40°E).
+> **Coming from Sartori et al. (2023)?** The original supplementary material is preserved in the
+> [`sartori-2023-supplement`](https://github.com/scatenag/climate_change_on_sea_urchins/tree/sartori-2023-supplement)
+> branch and archived at tag
+> [`v0.1.0-sartori-2023`](https://github.com/scatenag/climate_change_on_sea_urchins/releases/tag/v0.1.0-sartori-2023).
 
-This repository is the supplementary material for:
+Open-source framework for FAIR climate-ecotoxicology research: integrating Copernicus Marine
+data with biological sentinel monitoring in the Mediterranean Sea.
+
+Applied to a 23-year study on the impact of **Marine Heatwaves** on gamete sensitivity of
+*Paracentrotus lividus* (Ligurian Sea, off Livorno, 43.43°N 10.40°E); originally developed as
+supplementary material for:
 > *"Increased sensitivity of sea urchin larvae to metal toxicity as a consequence of the past two decades of Climate Change and Ocean Acidification in the Mediterranean Sea."*
 > Davide Sartori, Guido Scatena, Cristina Andra Vrinceanu, Andrea Gaion — *Marine Pollution Bulletin* 194 (2023), 115274. https://doi.org/10.1016/j.marpolbul.2023.115274
 
@@ -62,17 +70,15 @@ df_full, df_real, events, monthly = load_data()
 ### Data
 | File | Description |
 |---|---|
-| [`data_extended.csv`](data_extended.csv) | Main dataset: monthly environmental + EC50 data, 2003–2025 (276 months) |
-| [`data_ec50_ci.csv`](data_ec50_ci.csv) | EC50 values with 95% CI bounds and imputation flag |
-| [`mhw_events.csv`](mhw_events.csv) | Marine Heatwave event catalogue (129 events, Hobday 2016 classification) |
-| [`mhw_monthly.csv`](mhw_monthly.csv) | Monthly aggregated MHW metrics |
-| [`mhw_annual.csv`](mhw_annual.csv) | Annual aggregated MHW metrics |
-| [`sea_results.csv`](sea_results.csv) | Superposed Epoch Analysis output (R) |
-| [`dlnm_results.csv`](dlnm_results.csv) | Distributed Lag Non-linear Model predictions + CI (R) |
-| [`dlnm_lag_profile.csv`](dlnm_lag_profile.csv) | DLNM cumulative response profile over lags (R) |
-| [`mixed_effects_predictions.csv`](mixed_effects_predictions.csv) | Mixed-effects model predictions (R) |
-| [`results/`](results/) | Pre-computed outputs: correlations, stationarity tests, forecasts |
-| [`data/`](data/) | Raw caches fetched by `scripts/`: `env_copernicus.csv` (monthly env. variables), `sst_daily.csv` (daily SST for MHW detection), `ec50_sheets.csv` (raw EC50 export) |
+| [`data/data_extended.csv`](data/data_extended.csv) | Main dataset: monthly environmental + EC50 data, 2003–2025 (276 months) |
+| [`data/data_ec50_ci.csv`](data/data_ec50_ci.csv) | EC50 values with 95% CI bounds and imputation flag |
+| [`data/mhw_events.csv`](data/mhw_events.csv) | Marine Heatwave event catalogue (129 events, Hobday 2016 classification) |
+| [`data/mhw_monthly.csv`](data/mhw_monthly.csv) | Monthly aggregated MHW metrics |
+| [`data/mhw_annual.csv`](data/mhw_annual.csv) | Annual aggregated MHW metrics |
+| [`data/env_copernicus.csv`](data/env_copernicus.csv) | Raw monthly env. variables fetched from Copernicus Marine |
+| [`data/sst_daily.csv`](data/sst_daily.csv) | Raw daily SST fetched from Copernicus Marine (for MHW detection) |
+| [`data/ec50_sheets.csv`](data/ec50_sheets.csv) | Raw EC50 export from Google Sheets |
+| [`results/`](results/) | Pre-computed analysis outputs: correlations, stationarity tests, forecasts, R model outputs |
 
 ## Streamlit dashboard
 
@@ -101,4 +107,4 @@ jupyter notebook analysis.ipynb
 |---|---|
 | Monthly SST, Salinity, O₂, pH, CO₂ | Copernicus Marine Service — MEDSEA_MULTIYEAR |
 | Daily SST (for MHW detection) | Copernicus Marine Service — MEDSEA_MULTIYEAR daily |
-| Monthly EC50 bioassay | ISPRA — Istituto Superiore per la Protezione e la Ricerca Ambientale |
+| Monthly EC50 bioassay | ISPRA — Italian National Institute for Environmental Protection and Research |

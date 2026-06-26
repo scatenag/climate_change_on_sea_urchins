@@ -18,10 +18,10 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
         mhw_events
         mhw_monthly
     """
-    data    = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
-    ci_df   = pd.read_csv(ROOT / "data_ec50_ci.csv",   parse_dates=["Datetime"])
-    monthly = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
-    events  = pd.read_csv(ROOT / "mhw_events.csv",
+    data    = pd.read_csv(ROOT / "data" / "data_extended.csv",  parse_dates=["Datetime"])
+    ci_df   = pd.read_csv(ROOT / "data" / "data_ec50_ci.csv",   parse_dates=["Datetime"])
+    monthly = pd.read_csv(ROOT / "data" / "mhw_monthly.csv",    parse_dates=["Datetime"])
+    events  = pd.read_csv(ROOT / "data" / "mhw_events.csv",
                           parse_dates=["start_date","end_date","peak_date"])
 
     # Merge MHW monthly metrics
