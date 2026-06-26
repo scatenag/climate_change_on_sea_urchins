@@ -23,7 +23,7 @@ equivalently, after installing the package, from the command line::
 """
 from .common import load_data, SPLIT_YEAR, TAU_MAX, ENV_COLS, ALL_COLS, MHW_COLS
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     "load_data",
