@@ -22,7 +22,7 @@ authors:
 affiliations:
   - name: ISPRA – Italian Institute for Environmental Protection and Research
     index: 1
-date: 2026-03-31
+date: 2026-06-26
 bibliography: paper.bib
 ---
 
@@ -164,7 +164,7 @@ The full stack embodies FAIR principles: all code and data are distributed under
 and archived with a persistent DOI on Zenodo
 (DOI: [10.5281/zenodo.20766250](https://doi.org/10.5281/zenodo.20766250)) [@scatena_2026];
 a `CITATION.cff` with author ORCIDs enables standard attribution; a Binder environment allows
-browser-based execution without local setup; and a pytest suite (38 tests, including a
+browser-based execution without local setup; and a pytest suite (39 tests, including a
 synthetic-data check that the analysis layer works on a structurally different dataset) with
 GitHub Actions
 CI verifies pipeline integrity on every commit. The framework is designed to be adapted: any
