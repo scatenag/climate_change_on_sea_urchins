@@ -3,7 +3,7 @@
 [![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/main?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20766250.svg)](https://doi.org/10.5281/zenodo.20766250)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20924982.svg)](https://doi.org/10.5281/zenodo.20924982)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Coming from Sartori et al. (2023)?** The original supplementary material is preserved in the
