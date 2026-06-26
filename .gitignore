@@ -1,0 +1,32 @@
+# Raw NetCDF downloads (large, reproducible via scripts)
+data/raw/
+*.nc
+
+# Copernicus credentials
+.copernicusmarine/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# OS
+.DS_Store
+
+# Exploratory/intermediate outputs (not part of reproducible pipeline)
+*.pdf
+*.png
+!figures/*.png
+data_LSTMS_*.csv
+trend_*.csv
+
+# Claude Code IDE config
+.claude/
+
+# Local drafts (papers, notes) — not for public repo
+drafts/

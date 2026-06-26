@@ -1,0 +1,25 @@
+{
+  "optimal_lag": 2,
+  "exog_vars": [
+    "pH",
+    "Temperature",
+    "mhw_lagged"
+  ],
+  "scenarios": {
+    "bad": {
+      "final_mean": 12.09688647252241,
+      "final_ci_lower": 1.2190113677510777,
+      "final_ci_upper": 22.97476157729374
+    },
+    "mean": {
+      "final_mean": 21.155119986467163,
+      "final_ci_lower": 10.27724488169583,
+      "final_ci_upper": 32.0329950912385
+    },
+    "good": {
+      "final_mean": 25.686135586415478,
+      "final_ci_lower": 14.808260481644146,
+      "final_ci_upper": 36.56401069118681
+    }
+  }
+}
