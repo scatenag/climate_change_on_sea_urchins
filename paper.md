@@ -36,7 +36,7 @@ local biological monitoring, building a fully transparent and reproducible analy
 over heterogeneous sources.
 
 As a proof of concept, the framework is applied to a 23-year dataset (2003--2025) on the gamete
-toxicity of *Paracentrotus lividus* (Mediterranean purple sea urchin) in the Ligurian Sea (off
+toxicity of *Paracentrotus lividus* (Mediterranean purple sea urchin) in the North Tyrrhenian Sea (off
 Livorno, 43.43°N 10.40°E), combining five Copernicus Marine environmental variables with 158
 months of real copper embryotoxicity bioassay data (EC$_{50}$). All data, source code, and
 pre-computed results are public, permanently archived on Zenodo [@scatena_2026], and deployed on

@@ -14,7 +14,7 @@ abstract: >
   An open-source, reproducible framework integrating real-time Copernicus Marine
   oceanographic data (2003–present) with biological response indicators (EC50 of
   Paracentrotus lividus gametes) to monitor climate change and Marine Heatwave
-  impacts on marine ecotoxicology in the Ligurian Sea, Mediterranean. Includes
+  impacts on marine ecotoxicology in the North Tyrrhenian Sea, Mediterranean. Includes
   time-series decomposition, Spearman cross-correlations, Granger causality,
   ARDL modelling, and SARIMAX multi-scenario forecasting through 2040.
   Deployed as an interactive Streamlit dashboard with fully open data and code.
@@ -40,7 +40,7 @@ keywords:
   - EC50
   - ocean acidification
   - Mediterranean Sea
-  - Ligurian Sea
+  - North Tyrrhenian Sea
   - open science
   - reproducible research
   - Streamlit

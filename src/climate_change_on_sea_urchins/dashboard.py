@@ -883,7 +883,7 @@ with tabs[0]:
         st.image(str(ROOT_ASSETS / "sea_urchin_transparent.png"), width=80)
     st.markdown(
         "Study on the impact of climate change and **Marine Heatwaves** "
-        "on gamete sensitivity of *Paracentrotus lividus* in the Ligurian Sea."
+        "on gamete sensitivity of *Paracentrotus lividus* in the North Tyrrhenian Sea."
     )
 
     c1, c2, c3, c4, c5 = st.columns(5)

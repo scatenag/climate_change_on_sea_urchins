@@ -15,7 +15,7 @@ Open-source framework for FAIR climate-ecotoxicology research: integrating Coper
 data with biological sentinel monitoring in the Mediterranean Sea.
 
 Applied to a 23-year study on the impact of **Marine Heatwaves** on gamete sensitivity of
-*Paracentrotus lividus* (Ligurian Sea, off Livorno, 43.43°N 10.40°E); originally developed as
+*Paracentrotus lividus* (North Tyrrhenian Sea, off Livorno, 43.43°N 10.40°E); originally developed as
 supplementary material for:
 > *"Increased sensitivity of sea urchin larvae to metal toxicity as a consequence of the past two decades of Climate Change and Ocean Acidification in the Mediterranean Sea."*
 > Davide Sartori, Guido Scatena, Cristina Andra Vrinceanu, Andrea Gaion — *Marine Pollution Bulletin* 194 (2023), 115274. https://doi.org/10.1016/j.marpolbul.2023.115274

@@ -1,7 +1,7 @@
 """
 Download monthly environmental variables from Copernicus Marine Service.
 
-Site: off Livorno / Ligurian Sea (43.4278°N, 10.3956°E), depth 0–10m
+Site: off Livorno / North Tyrrhenian Sea (43.4278°N, 10.3956°E), depth 0–10m
       Bounding box ±0.1° averaged over marine grid cells only (4.2km model).
 Period: 2003-01-01 → present (full period, not just update)
 

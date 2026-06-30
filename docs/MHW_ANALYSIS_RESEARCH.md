@@ -1,7 +1,7 @@
 # Marine Heatwaves and Sea Urchin Reproductive Toxicity: Research Analysis
 ## *Paracentrotus lividus* EC50 as a 23-year sentinel of ecosystem thermal stress in the Mediterranean
 
-**Dataset**: 2003–2025, Ligurian Sea (off Livorno, 43.43°N 10.40°E)
+**Dataset**: 2003–2025, North Tyrrhenian Sea (off Livorno, 43.43°N 10.40°E)
 **n**: 158 real EC50 measurements, 129 MHW events, 276 monthly environmental records
 **MHW definition**: Hobday et al. (2016) — SST > 90th percentile climatological threshold for ≥5 consecutive days
 
@@ -84,7 +84,7 @@ The inflection at 2016 coincides with the onset of recurrent high-intensity MHW 
 
 ### 2.1 Gametogenesis Window
 
-*Paracentrotus lividus* in the Ligurian Sea has a complex gametogenic cycle:
+*Paracentrotus lividus* in the North Tyrrhenian Sea has a complex gametogenic cycle:
 - **Spring spawning (Apr–Jun)**: main reproductive peak; gonads develop through winter
 - **Autumn spawning (Sep–Nov)**: secondary peak; gonads develop through summer
 - Gametogenesis is energetically costly and thermally sensitive, particularly during vitellogenesis

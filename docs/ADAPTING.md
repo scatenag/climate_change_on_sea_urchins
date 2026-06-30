@@ -1,7 +1,7 @@
 # Adapting this framework to a new site, species, or indicator
 
 This pipeline was built around one case study — *Paracentrotus lividus* gamete EC50 in the
-Ligurian Sea — but the architecture separates "what site/data" from "how to process it", so
+North Tyrrhenian Sea — but the architecture separates "what site/data" from "how to process it", so
 most of the case-study-specific detail lives in a small number of well-defined places. This
 guide is organised by how much work each kind of change actually requires.
 
