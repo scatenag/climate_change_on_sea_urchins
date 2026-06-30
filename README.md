@@ -78,6 +78,7 @@ df_full, df_real, events, monthly = load_data()
 | [`data/env_copernicus.csv`](data/env_copernicus.csv) | Raw monthly env. variables fetched from Copernicus Marine |
 | [`data/sst_daily.csv`](data/sst_daily.csv) | Raw daily SST fetched from Copernicus Marine (for MHW detection) |
 | [`data/ec50_sheets.csv`](data/ec50_sheets.csv) | Raw EC50 export from Google Sheets |
+| [`data/data.csv`](data/data.csv) | Original 2003–2022 dataset from the Sartori et al. (2023) supplement — kept as a validation reference for `scripts/build_dataset.py` |
 | [`results/`](results/) | Pre-computed analysis outputs: correlations, stationarity tests, forecasts, R model outputs |
 
 ## Streamlit dashboard
