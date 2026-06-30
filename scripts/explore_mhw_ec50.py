@@ -24,10 +24,10 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 
 # ── Load data ─────────────────────────────────────────────────────────────────
-data    = pd.read_csv(ROOT / "data_extended.csv",  parse_dates=["Datetime"])
-monthly = pd.read_csv(ROOT / "mhw_monthly.csv",    parse_dates=["Datetime"])
-ci_df   = pd.read_csv(ROOT / "data_ec50_ci.csv",   parse_dates=["Datetime"])
-events  = pd.read_csv(ROOT / "mhw_events.csv",     parse_dates=["start_date","end_date","peak_date"])
+data    = pd.read_csv(ROOT / "data" / "data_extended.csv",  parse_dates=["Datetime"])
+monthly = pd.read_csv(ROOT / "data" / "mhw_monthly.csv",    parse_dates=["Datetime"])
+ci_df   = pd.read_csv(ROOT / "data" / "data_ec50_ci.csv",   parse_dates=["Datetime"])
+events  = pd.read_csv(ROOT / "data" / "mhw_events.csv",     parse_dates=["start_date","end_date","peak_date"])
 
 # Merge MHW metrics into main dataframe
 df = data.merge(monthly[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],

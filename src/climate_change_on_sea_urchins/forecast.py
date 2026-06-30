@@ -152,7 +152,7 @@ def project_mhw(mhw_annual: pd.DataFrame, n_months: int,
 def run():
     df, df_real, _, _ = load_data()
 
-    mhw_annual_path = RESULTS.parent / "mhw_annual.csv"
+    mhw_annual_path = RESULTS.parent / "data" / "mhw_annual.csv"
     mhw_annual = pd.read_csv(mhw_annual_path) if mhw_annual_path.exists() else pd.DataFrame()
 
     opt_lag = find_optimal_lag(df_real, df)
