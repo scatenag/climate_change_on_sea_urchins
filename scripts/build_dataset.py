@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 ENV_PATH  = ROOT / "data" / "env_copernicus.csv"
 EC50_PATH = ROOT / "data" / "ec50_sheets.csv"
-ORIG_PATH = ROOT / "data.csv"   # original — kept as validation reference only
+ORIG_PATH = ROOT / "data" / "data.csv"   # original — kept as validation reference only
 
 OUT_DATA = ROOT / "data" / "data_extended.csv"
 OUT_CI   = ROOT / "data" / "data_ec50_ci.csv"
