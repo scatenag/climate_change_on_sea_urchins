@@ -60,14 +60,14 @@
     "median_post": 8.083784999999999
   },
   "EC50": {
-    "kruskal_stat": 94.20570203936231,
-    "kruskal_p": 2.843802936788516e-22,
-    "mannwhitney_stat": 5937.0,
-    "mannwhitney_p": 2.8924614502822255e-22,
+    "kruskal_stat": 95.9647000516206,
+    "kruskal_p": 1.1695024747574422e-22,
+    "mannwhitney_stat": 6107.0,
+    "mannwhitney_p": 1.1892954618468992e-22,
     "n_pre": 87,
-    "n_post": 72,
+    "n_post": 74,
     "mean_pre": 46.982703065134096,
-    "mean_post": 27.710671296296297,
+    "mean_post": 27.751531531531537,
     "median_pre": 46.81,
     "median_post": 27.3325
   }
