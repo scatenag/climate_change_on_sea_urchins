@@ -54,6 +54,10 @@ jobs:
             echo "run_copernicus=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Install Copernicus Marine dependencies
+        if: steps.check_monthly.outputs.run_copernicus == 'true'
+        run: pip install copernicusmarine xarray netcdf4 h5netcdf
+
       - name: Update Copernicus environmental data (incremental)
         if: steps.check_monthly.outputs.run_copernicus == 'true'
         env:
