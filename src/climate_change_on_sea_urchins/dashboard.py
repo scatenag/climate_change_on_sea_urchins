@@ -26,6 +26,11 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
+from .mhw_analysis import (
+    compute_ccf as _ccf_core,
+    difference_series,
+    compute_ccf_prewhitened as _ccf_prewhitened_core,
+)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -570,41 +575,38 @@ def compute_correlations(df: pd.DataFrame) -> dict:
     return results
 
 
+ENV_CCF_COLS = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
+
+
 @st.cache_data
-def compute_ccf(df: pd.DataFrame) -> pd.DataFrame:
+def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd.DataFrame:
     """
-    Compute Spearman cross-correlations between mhw_peak_intensity(t-k) and
-    each variable(t) at lags 0–12, using only real EC50 measurements.
-    Mirrors analysis/05_mhw_analysis.py — avoids stale ccf_results.csv.
+    Spearman CCF on first-differenced series (robust primary method — see
+    mhw_analysis.difference_series). Raw-level CCF is not shown in the
+    dashboard: MHW peak intensity, EC50, and most chronic variables are
+    non-stationary or borderline (Stationarity tab), so the raw correlation
+    comes out significant at nearly every lag with no peak — the signature
+    of confounding by shared trend, not a localized biological effect.
     """
-    TAU_MAX  = 12
-    env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
-    targets  = [c for c in env_cols if c in df.columns]
-    driver   = "mhw_peak_intensity"
+    targets = [c for c in ENV_CCF_COLS if c in df.columns]
     if driver not in df.columns:
         return pd.DataFrame()
+    df_diff = difference_series(df, [driver] + targets)
+    df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
+    return _ccf_core(df_diff, driver, targets)
 
-    df_ccf = df.copy()
-    df_ccf.loc[df_ccf["EC50_imputed"] == True, "EC50"] = np.nan
 
-    rows = []
-    mhw  = df_ccf[driver].values
-    for target in targets:
-        src = df_ccf[target].values
-        for lag in range(0, TAU_MAX + 1):
-            if lag == 0:
-                x, y = mhw, src
-            else:
-                x, y = mhw[:-lag], src[lag:]
-            mask = ~(np.isnan(x) | np.isnan(y))
-            xa, ya = x[mask], y[mask]
-            if len(xa) >= 10:
-                r, p = stats.spearmanr(xa, ya)
-            else:
-                r, p = np.nan, np.nan
-            rows.append(dict(variable=target, lag=lag,
-                             spearman_r=r, p_value=p, n=int(mask.sum())))
-    return pd.DataFrame(rows)
+@st.cache_data
+def compute_ccf_prewhitened(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> tuple[pd.DataFrame, dict]:
+    """
+    Spearman CCF on ARIMA pre-whitened residuals (Box-Jenkins cross-check —
+    see mhw_analysis.compute_ccf_prewhitened). Independent confirmation of
+    the differenced-series result via a different detrending mechanism.
+    """
+    targets = [c for c in ENV_CCF_COLS if c in df.columns]
+    if driver not in df.columns:
+        return pd.DataFrame(), {}
+    return _ccf_prewhitened_core(df, driver, targets)
 
 
 @st.cache_data
@@ -701,28 +703,57 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
     out["summer_autumn"] = {"df": summer_vs_autumn, "r": r_sa, "p": p_sa}
 
     # ── Annual cumulative MHW vs EC50 ─────────────────────────────────────────
+    # Only full (12-month) years: the current calendar year is still in progress,
+    # and its partial-year MHW sum is not comparable to a full annual total.
     df2["Year"] = df2["Datetime"].dt.year
-    ann_mhw = df2.groupby("Year").agg(
+    month_counts = df2.groupby("Year").size()
+    full_years = month_counts[month_counts == 12].index
+
+    ann_mhw = df2[df2["Year"].isin(full_years)].groupby("Year").agg(
         MHW_cum=("mhw_peak_intensity", "sum"),
         MHW_days=("mhw_days", "sum"),
         MHW_max=("mhw_peak_intensity", "max"),
     ).reset_index()
     ec50_ann = df_real.copy()
     ec50_ann["Year"] = ec50_ann["Datetime"].dt.year
-    ec50_ann = ec50_ann.groupby("Year")["EC50"].mean().reset_index()
+    ec50_ann = ec50_ann[ec50_ann["Year"].isin(full_years)].groupby("Year")["EC50"].mean().reset_index()
     ec50_ann.columns = ["Year", "EC50_mean"]
 
-    # Same year
-    ann_same = ann_mhw.merge(ec50_ann, on="Year", how="inner").dropna()
-    r_same, p_same = stats.spearmanr(ann_same["MHW_cum"], ann_same["EC50_mean"])
-    # Lagged (Y → Y+1)
+    def _spearman_safe(a, b):
+        return stats.spearmanr(a, b) if len(a) >= 5 else (np.nan, np.nan)
+
+    # Same year and lagged (Y → Y+1), raw annual levels — kept only as a reference
+    # point to show how much the shared trend inflates the raw correlation; not
+    # shown as the headline result (see caption in the UI below).
+    ann_same = ann_mhw.merge(ec50_ann, on="Year", how="inner").dropna().sort_values("Year").reset_index(drop=True)
+    r_same_raw, p_same_raw = _spearman_safe(ann_same["MHW_cum"], ann_same["EC50_mean"])
     ann_lag = ann_mhw.merge(
         ec50_ann.assign(Year=ec50_ann["Year"] - 1), on="Year", how="inner"
-    ).dropna()
-    r_lag, p_lag = stats.spearmanr(ann_lag["MHW_cum"], ann_lag["EC50_mean"])
+    ).dropna().sort_values("Year").reset_index(drop=True)
+    r_lag_raw, p_lag_raw = _spearman_safe(ann_lag["MHW_cum"], ann_lag["EC50_mean"])
+
+    # Year-over-year differences — robust primary result. Both cumulative MHW
+    # exposure and mean EC50 trend monotonically over the 23-year record (MHW up,
+    # EC50 down), so the raw annual correlation above is confounded by that shared
+    # trend rather than evidence of a year-to-year relationship (same principle as
+    # the CCF robustness review; MHW cumulative intensity was already the weakest
+    # of the three MHW drivers there).
+    ann_same_d = ann_same.assign(
+        MHW_cum_diff=ann_same["MHW_cum"].diff(), EC50_diff=ann_same["EC50_mean"].diff()
+    ).dropna(subset=["MHW_cum_diff", "EC50_diff"])
+    r_same, p_same = _spearman_safe(ann_same_d["MHW_cum_diff"], ann_same_d["EC50_diff"])
+
+    ann_lag_d = ann_lag.assign(
+        MHW_cum_diff=ann_lag["MHW_cum"].diff(), EC50_diff=ann_lag["EC50_mean"].diff()
+    ).dropna(subset=["MHW_cum_diff", "EC50_diff"])
+    r_lag, p_lag = _spearman_safe(ann_lag_d["MHW_cum_diff"], ann_lag_d["EC50_diff"])
+
     out["annual"] = {
         "df": ann_same, "r_same": r_same, "p_same": p_same,
-        "r_lag": r_lag, "p_lag": p_lag, "n_lag": len(ann_lag),
+        "r_lag": r_lag, "p_lag": p_lag, "n_lag": len(ann_lag_d),
+        "n_same": len(ann_same_d),
+        "r_same_raw": r_same_raw, "p_same_raw": p_same_raw,
+        "r_lag_raw": r_lag_raw, "p_lag_raw": p_lag_raw,
     }
 
     # ── EC50 decline rate pre/post 2016 ───────────────────────────────────────
@@ -1227,7 +1258,33 @@ with tabs[3]:
 
     # ── 1. CCF ────────────────────────────────────────────────────────────────
     with sub[0]:
-        ccf_df = compute_ccf(df)
+        st.caption(
+            "Raw-level correlation is not shown here: MHW peak intensity, EC50, and "
+            "most chronic variables are non-stationary or borderline per the ADF+KPSS "
+            "tests (see the Stationarity tab), so a naive correlation comes out "
+            "significant at nearly every lag with no peak — the signature of "
+            "confounding by shared trend, not a localized biological effect. Both "
+            "methods below detrend the series before correlating."
+        )
+        method = st.radio(
+            "Detrending method",
+            ["First differences", "ARIMA pre-whitening"],
+            horizontal=True, key="ccf_method_sel",
+        )
+
+        diag = {}
+        if method == "First differences":
+            ccf_df = compute_ccf_diff(df)
+        else:
+            ccf_df, diag = compute_ccf_prewhitened(df)
+            if diag:
+                lb_ok = diag["white_noise"]
+                st.caption(
+                    f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
+                    f"Ljung-Box on driver residuals (lags 6/12/24): "
+                    f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}"
+                )
+
         if not ccf_df.empty:
             var_sel = st.selectbox(
                 "Variable", ccf_df["variable"].unique(),
@@ -1243,14 +1300,15 @@ with tabs[3]:
             ))
             fig_ccf.add_hline(y=0, line_color="black", line_width=0.8)
             fig_ccf.update_layout(
-                title=f"Spearman r: MHW peak intensity(t−k) → {var_sel}(t)<br>"
+                title=f"Spearman r ({method}): MHW peak intensity(t−k) → {var_sel}(t)<br>"
                       f"<sub>Red = p&lt;0.05 | real EC50 measurements only</sub>",
                 xaxis_title="Lag k (months)",
                 yaxis_title="Spearman r",
                 height=420,
             )
             st.plotly_chart(fig_ccf, use_container_width=True)
-            _dl_btn(sub_ccf, f"ccf_{var_sel}_{_yr_start}_{_yr_end}.csv", "⬇ CCF data (CSV)")
+            _dl_btn(sub_ccf, f"ccf_{method.replace(' ', '_')}_{var_sel}_{_yr_start}_{_yr_end}.csv",
+                    "⬇ CCF data (CSV)")
 
             sig = sub_ccf[sub_ccf["p_value"] < 0.05]
             if not sig.empty:
@@ -1260,11 +1318,11 @@ with tabs[3]:
                     f"Significant lags (p<0.05): {sig['lag'].tolist()}  |  "
                     f"Peak lag: **{peak_lag} months** (r = {peak_r:+.3f})"
                 )
-                if var_sel == "EC50":
+                if len(sig) <= 2:
                     st.info(
-                        "All 13 lags (0–12) are negative and significant: the MHW signal "
-                        "persists across the full gametogenic cycle, consistent with both "
-                        "acute gamete damage (lag=2) and chronic physiological debt (lags 6–12)."
+                        f"Signal isolated to lag {peak_lag} once the shared non-stationary "
+                        "trend is removed — consistent with a specific, localized effect "
+                        "rather than a broad, confounded pattern."
                     )
             else:
                 st.info("No significant lag at p<0.05")
@@ -1279,14 +1337,15 @@ with tabs[3]:
                 pivot,
                 color_continuous_scale="RdBu_r",
                 zmin=-0.5, zmax=0.5,
-                title="Spearman r MHW_intensity(t−k) → variable(t)  (hatched = n.s.)",
+                title=f"Spearman r ({method}) MHW_intensity(t−k) → variable(t)  (hatched = n.s.)",
                 labels=dict(x="Lag (months)", y="Variable", color="r"),
                 text_auto=".2f",
                 aspect="auto",
             )
             fig_hm.update_layout(height=340)
             st.plotly_chart(fig_hm, use_container_width=True)
-            _dl_btn(ccf_df, f"ccf_heatmap_{_yr_start}_{_yr_end}.csv", "⬇ Lag heatmap data (CSV)")
+            _dl_btn(ccf_df, f"ccf_heatmap_{method.replace(' ', '_')}_{_yr_start}_{_yr_end}.csv",
+                    "⬇ Lag heatmap data (CSV)")
             st.caption("All values shown; use CCF panel above for significance filtering.")
 
     # ── 2. Dose-response ──────────────────────────────────────────────────────
@@ -1507,18 +1566,36 @@ with tabs[3]:
             _dl_btn(ann_df, f"annual_mhw_ec50_{_yr_start}_{_yr_end}.csv", "⬇ Annual data (CSV)")
 
             c1, c2 = st.columns(2)
-            c1.metric("Same-year r (MHW→EC50)",
+            c1.metric("Same-year r (year-over-year Δ)",
                       f"{ann_data['r_same']:+.3f}",
-                      delta=f"p = {ann_data['p_same']:.4f}")
-            c2.metric("Year-lagged r (MHW_Y → EC50_Y+1)",
+                      delta=f"p = {ann_data['p_same']:.4f}  n={ann_data['n_same']}")
+            c2.metric("Year-lagged r (ΔMHW_Y → ΔEC50_Y+1)",
                       f"{ann_data['r_lag']:+.3f}",
                       delta=f"p = {ann_data['p_lag']:.4f}  n={ann_data['n_lag']}")
-            st.info(
-                f"The strongest predictor in the dataset: cumulative MHW intensity "
-                f"in year Y explains EC50 in year Y+1 with r = {ann_data['r_lag']:+.3f} "
-                f"(p = {ann_data['p_lag']:.4f}). This cross-year signal indicates "
-                "physiological debt that persists across the full gametogenic cycle."
+            st.caption(
+                "Metrics use year-over-year differences, not raw annual levels: "
+                "cumulative MHW exposure trends up and mean EC50 trends down "
+                "monotonically over the 23-year record, so the raw annual correlation "
+                f"(same-year r = {ann_data['r_same_raw']:+.2f}, p = {ann_data['p_same_raw']:.4f}; "
+                f"year-lagged r = {ann_data['r_lag_raw']:+.2f}, p = {ann_data['p_lag_raw']:.4f}) "
+                "is confounded by that shared trend, not evidence of a year-to-year "
+                "relationship. Only years with a full 12 months of data are included."
             )
+            if min(ann_data["p_same"], ann_data["p_lag"]) < 0.05:
+                st.success(
+                    f"Signal survives detrending: the "
+                    f"{'same-year' if ann_data['p_same'] < ann_data['p_lag'] else 'year-lagged'} "
+                    "relationship remains significant after removing the shared trend."
+                )
+            else:
+                st.info(
+                    "Neither the same-year nor the year-lagged relationship is "
+                    "significant once the shared trend is removed: year-to-year changes "
+                    "in cumulative MHW exposure do not predict year-to-year changes in "
+                    "EC50 beyond what the common multi-decadal trend already explains — "
+                    "consistent with cumulative MHW intensity being the weakest of the "
+                    "three MHW drivers on the CCF tab."
+                )
 
         # EC50 decline rate
         st.subheader("EC50 decline rate: acceleration since 2016")

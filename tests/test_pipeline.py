@@ -137,6 +137,9 @@ def test_monthly_dataframe_has_mhw_cols():
 
 @pytest.mark.parametrize("fname", [
     "ccf_results.csv",
+    "ccf_results_diff.csv",
+    "ccf_results_prewhitened.csv",
+    "prewhitening_diagnostics.json",
     "corr_all.csv",
     "corr_pre.csv",
     "corr_post.csv",

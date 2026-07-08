@@ -1,11 +1,15 @@
 """
 MHW causal analysis:
-  - CCF (mhw_peak_intensity → each variable), lags 0–12
+  - CCF (mhw_peak_intensity → each variable), lags 0–12, raw + two
+    stationarity-robust variants (see CCF robustness review)
   - Granger causality (mhw_peak_intensity → each variable)
   - ARDL cumulative response EC50 ~ MHW(t-k)
 
 Outputs:
-    results/ccf_results.csv
+    results/ccf_results.csv                 (raw levels — Method A, kept for comparison)
+    results/ccf_results_diff.csv            (first differences — Method C, primary robust result)
+    results/ccf_results_prewhitened.csv     (ARIMA pre-whitening — Method E, cross-check)
+    results/prewhitening_diagnostics.json   (ARIMA order/AIC + Ljung-Box per driver)
     results/granger_results.json
     results/ardl_response.csv
 """
@@ -16,6 +20,8 @@ import pandas as pd
 from scipy import stats
 from statsmodels.tsa.stattools import ccf as sm_ccf, grangercausalitytests
 from statsmodels.tsa.ardl import ARDL
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.stats.diagnostic import acorr_ljungbox
 from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
 
 
@@ -47,6 +53,110 @@ def compute_ccf(df: pd.DataFrame, driver: str, targets: list[str]) -> pd.DataFra
             rows.append(dict(variable=target, lag=lag, spearman_r=r, p_value=p, n=int(mask.sum())))
 
     return pd.DataFrame(rows)
+
+
+def difference_series(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """
+    First-difference each column (month-over-month change), removing a
+    linear/stochastic trend before correlating. Mirrors the practice used in
+    the 2023 Sartori et al. supplement (analysis.ipynb: differencing EC50 and
+    Salinity after the KPSS test flagged them non-stationary, before the
+    causal-discovery step) and the differencing already applied to both
+    series in compute_granger() below.
+    """
+    out = df.copy()
+    for col in cols:
+        out[col] = out[col].diff()
+    return out
+
+
+def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
+    """Grid-search ARIMA(p,0,q) by AIC. d=0: MHW driver series are at worst
+    borderline-stationary (ADF rejects a unit root; KPSS is ambiguous), so no
+    further differencing is imposed — matches the orders used in the CCF
+    robustness review (e.g. peak intensity: ARIMA(2,0,1))."""
+    best_aic, best_order, best_fit = np.inf, None, None
+    for p in range(max_p + 1):
+        for q in range(max_q + 1):
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    fit = ARIMA(series, order=(p, 0, q)).fit()
+                if fit.aic < best_aic:
+                    best_aic, best_order, best_fit = fit.aic, (p, 0, q), fit
+            except Exception:
+                continue
+    return best_order, best_fit
+
+
+def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
+                             tau_max: int = TAU_MAX) -> tuple[pd.DataFrame, dict]:
+    """
+    Box-Jenkins pre-whitening CCF (Method E in the CCF robustness review):
+    fit the best ARIMA(p,0,q) (by AIC) to the driver, apply that SAME fitted
+    filter to each target series (ARIMA(...).filter(), not a fresh fit per
+    target), and cross-correlate the two residual series. Ljung-Box on the
+    driver's own residuals (lags 6/12/24) checks the filter actually left
+    white noise before the CCF is trusted.
+
+    `df` must be the full continuous (imputed) frame — EC50 residuals are
+    restricted to real (non-imputed) months only *after* filtering, so the
+    filter itself always sees an unbroken monthly series.
+    """
+    driver_full = df[driver].ffill().bfill().values
+    order, driver_fit = _best_arima_order(driver_full)
+    if driver_fit is None:
+        return pd.DataFrame(), {}
+
+    driver_resid = driver_fit.resid
+    lb = acorr_ljungbox(driver_resid, lags=[6, 12, 24], return_df=True)
+    diagnostics = {
+        "driver": driver,
+        "order": list(order),
+        "aic": float(driver_fit.aic),
+        "ljung_box_p": {int(lag): float(p) for lag, p in zip(lb.index, lb["lb_pvalue"])},
+        "white_noise": bool((lb["lb_pvalue"] > 0.05).all()),
+    }
+
+    rows = []
+    for target in targets:
+        target_full = df[target].ffill().bfill().values
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                target_filtered = ARIMA(target_full, order=order).filter(driver_fit.params)
+        except Exception:
+            continue
+        target_resid = target_filtered.resid
+
+        if target == "EC50" and "EC50_imputed" in df.columns:
+            target_resid = np.where(df["EC50_imputed"].values, np.nan, target_resid)
+
+        for lag in range(0, tau_max + 1):
+            if lag == 0:
+                xa, ya = driver_resid, target_resid
+            else:
+                xa, ya = driver_resid[:-lag], target_resid[lag:]
+            mask = ~(np.isnan(xa) | np.isnan(ya))
+            if mask.sum() >= 10:
+                r, p = stats.spearmanr(xa[mask], ya[mask])
+            else:
+                r, p = np.nan, np.nan
+            rows.append(dict(driver=driver, variable=target, lag=lag,
+                              spearman_r=r, p_value=p, n=int(mask.sum())))
+
+    return pd.DataFrame(rows), diagnostics
+
+
+def _print_best_lags(ccf_df: pd.DataFrame, label: str) -> None:
+    best = (ccf_df.dropna(subset=["spearman_r"])
+            .sort_values("p_value")
+            .groupby("variable")
+            .first()
+            .reset_index()[["variable", "lag", "spearman_r", "p_value"]])
+    print(f"✓ CCF ({label}) — best lag per variable:")
+    for _, row in best.iterrows():
+        print(f"  {row['variable']:25s}  lag={int(row['lag']):2d}  r={row['spearman_r']:+.3f}  p={row['p_value']:.4f}")
 
 
 # ── 2. Granger causality ──────────────────────────────────────────────────────
@@ -151,19 +261,49 @@ def run():
     driver  = "mhw_peak_intensity"
     targets = [c for c in ALL_COLS if c in df_ccf.columns]
 
-    # 1. CCF
+    # 1a. CCF — raw levels (Method A: current draft method). Flagged in the CCF
+    #     robustness review as confounded by shared non-stationary trend (all 13
+    #     lags come out significant with no peak — the signature of spurious
+    #     correlation, not a localized biological effect). Kept only for comparison.
     ccf_df = compute_ccf(df_ccf, driver, targets)
     ccf_df.to_csv(RESULTS / "ccf_results.csv", index=False)
+    _print_best_lags(ccf_df, "raw levels")
 
-    # Summary: best lag per variable
-    best = (ccf_df.dropna(subset=["spearman_r"])
-            .sort_values("p_value")
-            .groupby("variable")
-            .first()
-            .reset_index()[["variable", "lag", "spearman_r", "p_value"]])
-    print("✓ CCF — best lag per variable:")
-    for _, row in best.iterrows():
-        print(f"  {row['variable']:25s}  lag={int(row['lag']):2d}  r={row['spearman_r']:+.3f}  p={row['p_value']:.4f}")
+    # 1b. CCF — first differences (Method C: primary robust result). Differencing
+    #     is applied to the full continuous series first (so month-over-month
+    #     deltas are never taken across a real-data gap), and the real-EC50-only
+    #     mask is re-applied afterwards, matching method A's restriction.
+    df_diff = difference_series(df, [driver] + targets)
+    df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
+    ccf_diff_df = compute_ccf(df_diff, driver, targets)
+    ccf_diff_df.to_csv(RESULTS / "ccf_results_diff.csv", index=False)
+    _print_best_lags(ccf_diff_df, "first differences")
+
+    # 1c. CCF — ARIMA pre-whitening (Method E), cross-checked against the two
+    #     other MHW driver metrics (all vs EC50 only, to keep runtime reasonable).
+    prewhiten_parts, diagnostics_all = [], {}
+    for alt_driver in ["mhw_peak_intensity", "mhw_days", "mhw_cum_intensity"]:
+        if alt_driver not in df.columns:
+            continue
+        pw_targets = targets if alt_driver == driver else ["EC50"]
+        pw_df, diag = compute_ccf_prewhitened(df, alt_driver, pw_targets)
+        if not pw_df.empty:
+            prewhiten_parts.append(pw_df)
+            diagnostics_all[alt_driver] = diag
+
+    if prewhiten_parts:
+        pw_all = pd.concat(prewhiten_parts, ignore_index=True)
+        pw_all.to_csv(RESULTS / "ccf_results_prewhitened.csv", index=False)
+        (RESULTS / "prewhitening_diagnostics.json").write_text(json.dumps(diagnostics_all, indent=2))
+        print("\n✓ CCF (ARIMA pre-whitening) — best lag, driver → EC50:")
+        for alt_driver, diag in diagnostics_all.items():
+            sub = pw_all[(pw_all["driver"] == alt_driver) & (pw_all["variable"] == "EC50")]
+            sub = sub.dropna(subset=["spearman_r"]).sort_values("p_value")
+            if not sub.empty:
+                b = sub.iloc[0]
+                lb_ok = "residuals white noise" if diag["white_noise"] else "residual autocorrelation remains"
+                print(f"  {alt_driver:22s} ARIMA{tuple(diag['order'])}  lag={int(b['lag']):2d}  "
+                      f"r={b['spearman_r']:+.3f}  p={b['p_value']:.4f}  ({lb_ok})")
 
     # 2. Granger
     granger = compute_granger(df, driver, targets)
