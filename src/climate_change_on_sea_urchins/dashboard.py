@@ -96,9 +96,17 @@ def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
     return agg[cols].sort_values("Datetime").reset_index(drop=True)
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     """
-    Fetch EC50 from Google Sheets — never cached, always live.
+    Fetch EC50 from Google Sheets, cached for 10 minutes (EC50 is entered
+    manually at most a few times a month, so this loses no real freshness
+    while avoiding a live network round-trip on every single rerun/click —
+    the previous "always live" version hit Google Sheets on every widget
+    interaction from every visitor, which both loaded Sheets unnecessarily
+    and, under sustained use, was a plausible contributor to the app
+    becoming slow/unresponsive over time). The "Refresh EC50" button clears
+    this cache explicitly to force a real re-fetch on demand.
     Returns (monthly_df, raw_df, source).
     raw_df has one row per individual measurement with the actual measurement DATE.
     Falls back to data_ec50_ci.csv if the network request fails.
@@ -164,7 +172,7 @@ def load_env_data():
 
 
 def load_main():
-    """Merge static env data (cached) with live EC50 from Google Sheets (never cached)."""
+    """Merge static env data with live EC50 from Google Sheets (cached 10 min, see fetch_ec50_live)."""
     df_env, mhwe, mhwa = load_env_data()
     ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
 
@@ -292,7 +300,7 @@ def _fc_project_mhw(mhw_annual: pd.DataFrame, n: int, scenario: str, last_year: 
     return pd.Series(trend * seasonal * scale, index=future_dates)
 
 
-@st.cache_data(show_spinner="Computing SARIMAX forecast…")
+@st.cache_data(show_spinner="Computing SARIMAX forecast…", ttl=3600, max_entries=10)
 def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
                      mhw_annual: pd.DataFrame) -> dict:
     """
@@ -497,7 +505,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     return results
 
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=10)
 def compute_correlations(df: pd.DataFrame) -> dict:
     """
     Compute Spearman correlation matrices (all/pre/post) directly from the
@@ -578,7 +586,7 @@ def compute_correlations(df: pd.DataFrame) -> dict:
 ENV_CCF_COLS = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
 
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=10)
 def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd.DataFrame:
     """
     Spearman CCF on first-differenced series (robust primary method — see
@@ -596,7 +604,7 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
     return _ccf_core(df_diff, driver, targets)
 
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=10)
 def compute_ccf_prewhitened(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> tuple[pd.DataFrame, dict]:
     """
     Spearman CCF on ARIMA pre-whitened residuals (Box-Jenkins cross-check —
@@ -609,7 +617,7 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str = "mhw_peak_intensity"
     return _ccf_prewhitened_core(df, driver, targets)
 
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=10)
 def compute_mhw_deep(df: pd.DataFrame) -> dict:
     """
     Extended MHW→EC50 analyses:
@@ -847,6 +855,7 @@ with st.container():
                      help="Force re-download of EC50 data from Google Sheets. "
                           "Environmental data (Copernicus) and MHW are updated automatically "
                           "by the nightly GitHub Actions workflow."):
+            fetch_ec50_live.clear()
             st.rerun()
 
 # Clamp in case start > end
