@@ -29,7 +29,6 @@ from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
-    compute_ccf_prewhitened as _ccf_prewhitened_core,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -605,19 +604,6 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
 
 
 @st.cache_data(ttl=3600, max_entries=10)
-def compute_ccf_prewhitened(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> tuple[pd.DataFrame, dict]:
-    """
-    Spearman CCF on ARIMA pre-whitened residuals (Box-Jenkins cross-check —
-    see mhw_analysis.compute_ccf_prewhitened). Independent confirmation of
-    the differenced-series result via a different detrending mechanism.
-    """
-    targets = [c for c in ENV_CCF_COLS if c in df.columns]
-    if driver not in df.columns:
-        return pd.DataFrame(), {}
-    return _ccf_prewhitened_core(df, driver, targets)
-
-
-@st.cache_data(ttl=3600, max_entries=10)
 def compute_mhw_deep(df: pd.DataFrame) -> dict:
     """
     Extended MHW→EC50 analyses:
@@ -903,7 +889,7 @@ with st.sidebar:
         st.caption(
             f"EC50 data: **{len(ci_df)} measurements** through "
             f"**{_last_ec50.strftime('%b %Y')}**  \n"
-            "Live from Google Sheets · refreshed every hour"
+            "Live from Google Sheets · refreshed every 10 min"
         )
     else:
         st.warning(
@@ -1285,13 +1271,26 @@ with tabs[3]:
         if method == "First differences":
             ccf_df = compute_ccf_diff(df)
         else:
-            ccf_df, diag = compute_ccf_prewhitened(df)
+            # Fitting an ARIMA order-search + Ljung-Box live on every interaction was
+            # too CPU-heavy for Streamlit Cloud's resources and was hanging/crashing
+            # the app. Read the precomputed result from the reproducible pipeline
+            # instead (results/ccf_results_prewhitened.csv, refreshed by
+            # `ccsu-run-pipeline`) — it reflects the full dataset, not the date range
+            # selected above.
+            pw_all = load_csv("ccf_results_prewhitened.csv")
+            diagnostics_all = load_json("prewhitening_diagnostics.json")
+            ccf_df = (pw_all[pw_all["driver"] == "mhw_peak_intensity"].drop(columns=["driver"])
+                      if not pw_all.empty else pd.DataFrame())
+            diag = diagnostics_all.get("mhw_peak_intensity", {}) if diagnostics_all else {}
             if diag:
                 lb_ok = diag["white_noise"]
                 st.caption(
                     f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
                     f"Ljung-Box on driver residuals (lags 6/12/24): "
-                    f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}"
+                    f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
+                    "Computed once by the reproducible pipeline on the full dataset "
+                    "(too CPU-heavy to refit live) — does not change with the date "
+                    "filter above."
                 )
 
         if not ccf_df.empty:
