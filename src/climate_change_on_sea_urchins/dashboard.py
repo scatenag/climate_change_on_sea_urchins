@@ -1242,6 +1242,7 @@ with tabs[3]:
 
     sub = st.tabs([
         "Spearman CCF",
+        "ARIMA pre-whitening",
         "Dose-response",
         "Cumulative stress",
         "Seasonal pattern",
@@ -1252,112 +1253,113 @@ with tabs[3]:
     ])
 
     # ── 1. CCF ────────────────────────────────────────────────────────────────
+    def _render_ccf_panel(ccf_df: pd.DataFrame, method_label: str, key_suffix: str) -> None:
+        """Shared chart+heatmap renderer for the CCF sub-tabs. Each caller uses its
+        own widget key suffix and its own tab, rather than one shared widget whose
+        underlying data got swapped via a radio button — the previous radio-toggle
+        design was implicated in the app going blank/unresponsive on Streamlit Cloud."""
+        if ccf_df.empty:
+            return
+        var_sel = st.selectbox(
+            "Variable", ccf_df["variable"].unique(),
+            index=list(ccf_df["variable"].unique()).index("EC50")
+            if "EC50" in ccf_df["variable"].unique() else 0,
+            key=f"ccf_var_sel_{key_suffix}",
+        )
+        sub_ccf = ccf_df[ccf_df["variable"] == var_sel]
+        colors  = [WARM if p < 0.05 else OCEAN for p in sub_ccf["p_value"]]
+        fig_ccf = go.Figure(go.Bar(
+            x=sub_ccf["lag"], y=sub_ccf["spearman_r"],
+            marker_color=colors,
+        ))
+        fig_ccf.add_hline(y=0, line_color="black", line_width=0.8)
+        fig_ccf.update_layout(
+            title=f"Spearman r ({method_label}): MHW peak intensity(t−k) → {var_sel}(t)<br>"
+                  f"<sub>Red = p&lt;0.05 | real EC50 measurements only</sub>",
+            xaxis_title="Lag k (months)",
+            yaxis_title="Spearman r",
+            height=420,
+        )
+        st.plotly_chart(fig_ccf, use_container_width=True)
+        _dl_btn(sub_ccf, f"ccf_{key_suffix}_{var_sel}_{_yr_start}_{_yr_end}.csv", "⬇ CCF data (CSV)")
+
+        sig = sub_ccf[sub_ccf["p_value"] < 0.05]
+        if not sig.empty:
+            peak_lag = int(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "lag"])
+            peak_r   = float(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "spearman_r"])
+            st.success(
+                f"Significant lags (p<0.05): {sig['lag'].tolist()}  |  "
+                f"Peak lag: **{peak_lag} months** (r = {peak_r:+.3f})"
+            )
+            if len(sig) <= 2:
+                st.info(
+                    f"Signal isolated to lag {peak_lag} once the shared non-stationary "
+                    "trend is removed — consistent with a specific, localized effect "
+                    "rather than a broad, confounded pattern."
+                )
+        else:
+            st.info("No significant lag at p<0.05")
+
+        st.subheader("Lag heatmap — all variables")
+        pivot = ccf_df.pivot(index="variable", columns="lag", values="spearman_r")
+        p_piv  = ccf_df.pivot(index="variable", columns="lag", values="p_value")
+        masked = pivot.where(p_piv < 0.05)   # NaN where not significant
+        fig_hm = px.imshow(
+            pivot,
+            color_continuous_scale="RdBu_r",
+            zmin=-0.5, zmax=0.5,
+            title=f"Spearman r ({method_label}) MHW_intensity(t−k) → variable(t)  (hatched = n.s.)",
+            labels=dict(x="Lag (months)", y="Variable", color="r"),
+            text_auto=".2f",
+            aspect="auto",
+        )
+        fig_hm.update_layout(height=340)
+        st.plotly_chart(fig_hm, use_container_width=True)
+        _dl_btn(ccf_df, f"ccf_heatmap_{key_suffix}_{_yr_start}_{_yr_end}.csv", "⬇ Lag heatmap data (CSV)")
+        st.caption("All values shown; use CCF panel above for significance filtering.")
+
     with sub[0]:
         st.caption(
             "Raw-level correlation is not shown here: MHW peak intensity, EC50, and "
             "most chronic variables are non-stationary or borderline per the ADF+KPSS "
             "tests (see the Stationarity tab), so a naive correlation comes out "
             "significant at nearly every lag with no peak — the signature of "
-            "confounding by shared trend, not a localized biological effect. Both "
-            "methods below detrend the series before correlating."
+            "confounding by shared trend, not a localized biological effect. This "
+            "panel detrends by first-differencing (month-over-month change) before "
+            "correlating; see the \"ARIMA pre-whitening\" tab for an independent "
+            "cross-check with a different detrending method."
         )
-        method = st.radio(
-            "Detrending method",
-            ["First differences", "ARIMA pre-whitening"],
-            horizontal=True, key="ccf_method_sel",
+        _render_ccf_panel(compute_ccf_diff(df), "First differences", "diff")
+
+    # ── 1b. CCF — ARIMA pre-whitening (separate tab: a shared radio toggle that
+    #        swapped this data in-place was implicated in the app hanging/going
+    #        blank on Streamlit Cloud) ────────────────────────────────────────
+    with sub[1]:
+        st.caption(
+            "Box-Jenkins pre-whitening: fits an ARIMA model to the MHW driver, "
+            "applies that same fitted filter to each variable, and cross-correlates "
+            "the residuals — an independent check of the first-differences result "
+            "via a different detrending mechanism."
         )
-
-        diag = {}
-        if method == "First differences":
-            ccf_df = compute_ccf_diff(df)
-        else:
-            # Fitting an ARIMA order-search + Ljung-Box live on every interaction was
-            # too CPU-heavy for Streamlit Cloud's resources and was hanging/crashing
-            # the app. Read the precomputed result from the reproducible pipeline
-            # instead (results/ccf_results_prewhitened.csv, refreshed by
-            # `ccsu-run-pipeline`) — it reflects the full dataset, not the date range
-            # selected above.
-            pw_all = load_csv("ccf_results_prewhitened.csv")
-            diagnostics_all = load_json("prewhitening_diagnostics.json")
-            ccf_df = (pw_all[pw_all["driver"] == "mhw_peak_intensity"].drop(columns=["driver"])
-                      if not pw_all.empty else pd.DataFrame())
-            diag = diagnostics_all.get("mhw_peak_intensity", {}) if diagnostics_all else {}
-            if diag:
-                lb_ok = diag["white_noise"]
-                st.caption(
-                    f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
-                    f"Ljung-Box on driver residuals (lags 6/12/24): "
-                    f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
-                    "Computed once by the reproducible pipeline on the full dataset "
-                    "(too CPU-heavy to refit live) — does not change with the date "
-                    "filter above."
-                )
-
-        if not ccf_df.empty:
-            var_sel = st.selectbox(
-                "Variable", ccf_df["variable"].unique(),
-                index=list(ccf_df["variable"].unique()).index("EC50")
-                if "EC50" in ccf_df["variable"].unique() else 0,
-                key="ccf_var_sel",
+        pw_all = load_csv("ccf_results_prewhitened.csv")
+        diagnostics_all = load_json("prewhitening_diagnostics.json")
+        ccf_df_arima = (pw_all[pw_all["driver"] == "mhw_peak_intensity"].drop(columns=["driver"])
+                        if not pw_all.empty else pd.DataFrame())
+        diag = diagnostics_all.get("mhw_peak_intensity", {}) if diagnostics_all else {}
+        if diag:
+            lb_ok = diag["white_noise"]
+            st.caption(
+                f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
+                f"Ljung-Box on driver residuals (lags 6/12/24): "
+                f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
+                "Computed once by the reproducible pipeline on the full dataset "
+                "(too CPU-heavy to refit live) — does not change with the date "
+                "filter above."
             )
-            sub_ccf = ccf_df[ccf_df["variable"] == var_sel]
-            colors  = [WARM if p < 0.05 else OCEAN for p in sub_ccf["p_value"]]
-            fig_ccf = go.Figure(go.Bar(
-                x=sub_ccf["lag"], y=sub_ccf["spearman_r"],
-                marker_color=colors,
-            ))
-            fig_ccf.add_hline(y=0, line_color="black", line_width=0.8)
-            fig_ccf.update_layout(
-                title=f"Spearman r ({method}): MHW peak intensity(t−k) → {var_sel}(t)<br>"
-                      f"<sub>Red = p&lt;0.05 | real EC50 measurements only</sub>",
-                xaxis_title="Lag k (months)",
-                yaxis_title="Spearman r",
-                height=420,
-            )
-            st.plotly_chart(fig_ccf, use_container_width=True)
-            _dl_btn(sub_ccf, f"ccf_{method.replace(' ', '_')}_{var_sel}_{_yr_start}_{_yr_end}.csv",
-                    "⬇ CCF data (CSV)")
-
-            sig = sub_ccf[sub_ccf["p_value"] < 0.05]
-            if not sig.empty:
-                peak_lag = int(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "lag"])
-                peak_r   = float(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "spearman_r"])
-                st.success(
-                    f"Significant lags (p<0.05): {sig['lag'].tolist()}  |  "
-                    f"Peak lag: **{peak_lag} months** (r = {peak_r:+.3f})"
-                )
-                if len(sig) <= 2:
-                    st.info(
-                        f"Signal isolated to lag {peak_lag} once the shared non-stationary "
-                        "trend is removed — consistent with a specific, localized effect "
-                        "rather than a broad, confounded pattern."
-                    )
-            else:
-                st.info("No significant lag at p<0.05")
-
-        # Heatmap: all variables × all lags
-        if not ccf_df.empty:
-            st.subheader("Lag heatmap — all variables")
-            pivot = ccf_df.pivot(index="variable", columns="lag", values="spearman_r")
-            p_piv  = ccf_df.pivot(index="variable", columns="lag", values="p_value")
-            masked = pivot.where(p_piv < 0.05)   # NaN where not significant
-            fig_hm = px.imshow(
-                pivot,
-                color_continuous_scale="RdBu_r",
-                zmin=-0.5, zmax=0.5,
-                title=f"Spearman r ({method}) MHW_intensity(t−k) → variable(t)  (hatched = n.s.)",
-                labels=dict(x="Lag (months)", y="Variable", color="r"),
-                text_auto=".2f",
-                aspect="auto",
-            )
-            fig_hm.update_layout(height=340)
-            st.plotly_chart(fig_hm, use_container_width=True)
-            _dl_btn(ccf_df, f"ccf_heatmap_{method.replace(' ', '_')}_{_yr_start}_{_yr_end}.csv",
-                    "⬇ Lag heatmap data (CSV)")
-            st.caption("All values shown; use CCF panel above for significance filtering.")
+        _render_ccf_panel(ccf_df_arima, "ARIMA pre-whitening", "arima")
 
     # ── 2. Dose-response ──────────────────────────────────────────────────────
-    with sub[1]:
+    with sub[2]:
         st.subheader("EC50 by MHW presence at lag = 2 months")
         dr = deep.get("dose_response", {})
         if dr:
@@ -1417,7 +1419,7 @@ with tabs[3]:
             )
 
     # ── 3. Cumulative stress ──────────────────────────────────────────────────
-    with sub[2]:
+    with sub[3]:
         st.subheader("12-month cumulative MHW exposure → EC50")
         st.markdown(
             "Hypothesis: each MHW depletes physiological reserves. The 12-month "
@@ -1480,7 +1482,7 @@ with tabs[3]:
         )
 
     # ── 4. Seasonal pattern ───────────────────────────────────────────────────
-    with sub[3]:
+    with sub[4]:
         st.subheader("Season-specific MHW→EC50 correlation (lag=2)")
         sea_data = deep.get("seasonal", pd.DataFrame())
         if not sea_data.empty:
@@ -1540,7 +1542,7 @@ with tabs[3]:
             )
 
     # ── 5. Annual trends ──────────────────────────────────────────────────────
-    with sub[4]:
+    with sub[5]:
         ann_data = deep.get("annual", {})
         ann_df   = ann_data.get("df", pd.DataFrame())
 
@@ -1648,7 +1650,7 @@ with tabs[3]:
             col3.metric("Acceleration factor", f"{accel:.1f}×")
 
     # ── 6. Variance partitioning ──────────────────────────────────────────────
-    with sub[5]:
+    with sub[6]:
         st.subheader("Variance partitioning: unique EC50 variance explained by each driver")
         st.markdown(
             "Semi-partial R² — how much EC50 variance does each driver explain "
@@ -1695,7 +1697,7 @@ with tabs[3]:
             )
 
     # ── 7. Granger causality ──────────────────────────────────────────────────
-    with sub[6]:
+    with sub[7]:
         granger = load_json("granger_results.json")
         if granger:
             rows = []
@@ -1727,7 +1729,7 @@ with tabs[3]:
             st.warning("Run `python analysis/run_all.py` first")
 
     # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
-    with sub[7]:
+    with sub[8]:
         sea_df, dlnm_df, dlnm_lag = load_r_results()
 
         if not sea_df.empty:
