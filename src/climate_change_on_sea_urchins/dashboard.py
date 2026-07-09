@@ -831,12 +831,12 @@ with st.container():
     st.markdown("#### Date range")
     _fcol1, _fcol2, _fcol3, _fcol4 = st.columns([3, 3, 1, 1])
     with _fcol1:
-        _yr_start = st.slider(
+        _sel_start = st.slider(
             "From year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_min_yr, step=1, key="yr_start",
         )
     with _fcol2:
-        _yr_end = st.slider(
+        _sel_end = st.slider(
             "To year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_max_yr, step=1, key="yr_end",
         )
@@ -851,6 +851,22 @@ with st.container():
                           "by the nightly GitHub Actions workflow."):
             fetch_ec50_live.clear()
             st.rerun()
+
+# The date filter only takes effect when "Update" is clicked — moving the
+# sliders alone used to apply immediately on every drag (Streamlit reruns the
+# whole script on any widget change), forcing every analysis in the app to
+# recompute uncached on every touch. That was a repeated trigger for the app
+# hanging/going blank on Streamlit Cloud, on top of the download-button and
+# ARIMA-radio triggers fixed earlier — same underlying cause, different door.
+if "applied_yr_start" not in st.session_state:
+    st.session_state["applied_yr_start"] = _data_min_yr
+    st.session_state["applied_yr_end"]   = _data_max_yr
+if _apply:
+    st.session_state["applied_yr_start"] = _sel_start
+    st.session_state["applied_yr_end"]   = _sel_end
+
+_yr_start = st.session_state["applied_yr_start"]
+_yr_end   = st.session_state["applied_yr_end"]
 
 # Clamp in case start > end
 if _yr_start > _yr_end:
