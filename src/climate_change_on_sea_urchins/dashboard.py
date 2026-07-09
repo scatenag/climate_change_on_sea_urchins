@@ -338,6 +338,12 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
         start=last_date + pd.DateOffset(months=1), periods=n_months, freq="MS"
     )
 
+    # Fit SARIMAX ONCE and reuse across all 3 scenarios: ec50_series/exog_hist
+    # (the training data) are identical for bad/mean/good — only the future
+    # exog projection differs per scenario, which get_forecast() takes
+    # per-call. Refitting 3 identical models (the previous code did, plus a
+    # 4th "pilot" fit just for resid_std) was pure duplicated work and a
+    # major contributor to this being slow enough to hang the app.
     series_std = float(ec50_series.std())
     resid_std  = series_std
     fit_obj    = None
@@ -373,13 +379,11 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
         )
 
         try:
+            if fit_obj is None:
+                raise RuntimeError("pilot SARIMAX fit failed")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                model = SARIMAX(ec50_series, exog=exog_hist,
-                                order=(1, 0, 1), seasonal_order=(1, 0, 1, 12),
-                                trend="c", enforce_stationarity=False, enforce_invertibility=False)
-                fit   = model.fit(disp=False)
-                fc    = fit.get_forecast(steps=n_months, exog=exog_fut)
+                fc = fit_obj.get_forecast(steps=n_months, exog=exog_fut)
             fc_mean = np.asarray(fc.predicted_mean)
         except Exception:
             t_all   = np.arange(len(ec50_series))
