@@ -7,6 +7,7 @@ import io
 import json
 import sys
 import time
+import warnings
 from pathlib import Path
 from PIL import Image
 
@@ -18,12 +19,17 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 ROOT        = Path(__file__).resolve().parent.parent.parent
 ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
+from .mhw_analysis import (
+    compute_ccf as _ccf_core,
+    difference_series,
+)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -230,8 +236,32 @@ def load_r_results():
 
 # ── Forecast constants ────────────────────────────────────────────────────────
 _FC_YEARS      = 15
+_CI_GROWTH     = 0.03
 _ENV_SCALE     = {"bad": 1.5, "mean": 1.0, "good": 0.5}
+_MHW_SCALE     = {"bad": 2.0, "mean": 1.0, "good": 0.5}
+_TAU_MAX       = 12
 _TRAIN_START   = "2016-01-01"   # post-2016 training window
+
+
+def _fc_find_lag(df_real: pd.DataFrame, df_full: pd.DataFrame) -> int:
+    best_lag, best_r = 2, 0.0
+    for lag in range(0, _TAU_MAX + 1):
+        mhw_vals, ec50_vals = [], []
+        for _, row in df_real.iterrows():
+            target = row["Datetime"] - pd.DateOffset(months=lag)
+            diffs  = (df_full["Datetime"] - target).abs()
+            idx    = diffs.idxmin()
+            if diffs[idx] <= pd.Timedelta("20 days"):
+                mhw_vals.append(df_full.loc[idx, "mhw_peak_intensity"])
+                ec50_vals.append(row["EC50"])
+        xa, ya = np.array(mhw_vals), np.array(ec50_vals)
+        mask = ~(np.isnan(xa) | np.isnan(ya))
+        if mask.sum() < 10:
+            continue
+        r, _ = stats.spearmanr(xa[mask], ya[mask])
+        if abs(r) > best_r:
+            best_r, best_lag = abs(r), lag
+    return best_lag
 
 
 def _fc_build_monthly(df_real: pd.DataFrame, df_full: pd.DataFrame, lag: int) -> pd.DataFrame:
@@ -263,51 +293,43 @@ def _fc_project_env(series: pd.Series, n: int, last_year: int, mult: float) -> p
     return pd.Series(projected + seasonal, index=future_dates, name=series.name)
 
 
-@st.cache_data(show_spinner=False, ttl=600, max_entries=5)
-def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame) -> dict:
+def _fc_project_mhw(mhw_annual: pd.DataFrame, n: int, scenario: str, last_year: int) -> pd.Series:
+    scale  = _MHW_SCALE[scenario]
+    years  = mhw_annual["year"].values
+    intens = mhw_annual["max_intensity"].values
+    m, b, *_ = stats.linregress(years, intens)
+    future_dates = pd.date_range(
+        start=pd.Timestamp(f"{last_year + 1}-01-01"), periods=n, freq="MS"
+    )
+    yr_frac  = future_dates.year.values + future_dates.month.values / 12.0
+    trend    = np.clip(m * yr_frac + b, 0, None)
+    seasonal = 1.0 + 0.5 * np.sin(2 * np.pi * (future_dates.month.values - 8) / 12)
+    return pd.Series(trend * seasonal * scale, index=future_dates)
+
+
+@st.cache_data(show_spinner="Computing SARIMAX forecast…", ttl=900, max_entries=3)
+def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
+                     mhw_annual: pd.DataFrame) -> dict:
     """
-    Approach A (SARIMAX bad/mean/good scenarios) is read from
-    results/forecast_{scenario}.csv + forecast_meta.json — produced by
-    forecast.py as part of `python -m climate_change_on_sea_urchins.pipeline`,
-    which the GitHub Actions data-update workflow re-runs and commits
-    automatically whenever new EC50/Copernicus data lands (never more than
-    a day stale, per the daily schedule in .github/workflows/update_ec50.yml).
-    Refitting 4 seasonal SARIMAX models (one pilot + one per scenario) live
-    on every rerun was, by a wide margin, the single heaviest thing this app
-    did, and the prime suspect for it hanging/crashing on Streamlit Cloud's
-    resources. Does not respect the date-range filter above — always the
-    full-dataset forecast, matching the committed results/ files.
-
-    Approach B (mechanistic "bio" scenarios) has no pipeline/CSV equivalent
-    yet and stays live here — comparatively cheap (one OLS fit, one seasonal
-    decomposition, a short per-month loop, no iterative MLE), and it
-    respects the date-range filter since it's anchored to
-    results["mean"]["EC50_forecast"] plus df/df_real directly.
+    Run SARIMAX forecast live on the (possibly filtered) dataset.
+    Returns dict with keys 'bad'/'mean'/'good' → DataFrames, plus 'meta'.
+    Also computes the mechanistic (bio) scenarios (Approach B).
     """
-    meta_path = RESULTS / "forecast_meta.json"
-    if not meta_path.exists():
-        return {}
-    meta_precomputed = json.loads(meta_path.read_text())
-    opt_lag = meta_precomputed["optimal_lag"]
-
-    results = {}
-    for scenario in ["bad", "mean", "good"]:
-        fpath = RESULTS / f"forecast_{scenario}.csv"
-        results[scenario] = (pd.read_csv(fpath, parse_dates=["Datetime"])
-                              if fpath.exists() else pd.DataFrame())
-
+    opt_lag = _fc_find_lag(df_real, df)
     monthly = _fc_build_monthly(df_real, df, opt_lag)
     monthly = monthly.set_index("Datetime").asfreq("MS")
 
-    # Training window: post-_TRAIN_START only (metadata display purposes only —
-    # no model is fit here, just recording what range the precomputed forecast
-    # would have trained on for this filtered date range).
+    # Training window: post-_TRAIN_START only
     train_start = pd.Timestamp(_TRAIN_START)
+    # If the filtered data doesn't reach _TRAIN_START, fall back to last half
     if monthly.index[-1] <= train_start:
         mid = monthly.index[len(monthly) // 2]
         monthly_train = monthly[monthly.index >= mid]
     else:
         monthly_train = monthly[monthly.index >= train_start]
+
+    ec50_series = monthly_train["EC50"]
+    exog_hist   = monthly_train[["pH", "Temperature", "mhw_lagged"]]
 
     last_date  = df["Datetime"].max()
     last_year  = last_date.year
@@ -316,13 +338,81 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame) -> dict:
         start=last_date + pd.DateOffset(months=1), periods=n_months, freq="MS"
     )
 
+    series_std = float(ec50_series.std())
+    resid_std  = series_std
+    fit_obj    = None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _m = SARIMAX(ec50_series, exog=exog_hist,
+                         order=(1, 0, 1), seasonal_order=(1, 0, 1, 12),
+                         trend="c", enforce_stationarity=False, enforce_invertibility=False)
+            fit_obj   = _m.fit(disp=False)
+        resid_std = min(float(np.std(fit_obj.resid)), series_std)
+    except Exception:
+        pass
+
+    # Post-training slope for calibrated scenario adjustment
+    t_post = np.arange(len(ec50_series))
+    post_slope_mo, *_ = stats.linregress(t_post, ec50_series.values)
+    post_slope_yr     = post_slope_mo * 12
+
+    results = {}
+    years_ahead = np.arange(1, n_months + 1) / 12.0
+
+    for scenario in ["bad", "mean", "good"]:
+        sc_mult = _ENV_SCALE[scenario]
+        pH_fut   = _fc_project_env(monthly["pH"],          n_months, last_year, sc_mult)
+        Tmp_fut  = _fc_project_env(monthly["Temperature"], n_months, last_year, sc_mult)
+        mhw_fut  = (_fc_project_mhw(mhw_annual, n_months, scenario, last_year)
+                    if not mhw_annual.empty else pd.Series(np.zeros(n_months), index=future_dates))
+
+        exog_fut = pd.DataFrame(
+            {"pH": pH_fut.values, "Temperature": Tmp_fut.values, "mhw_lagged": mhw_fut.values},
+            index=future_dates,
+        )
+
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                model = SARIMAX(ec50_series, exog=exog_hist,
+                                order=(1, 0, 1), seasonal_order=(1, 0, 1, 12),
+                                trend="c", enforce_stationarity=False, enforce_invertibility=False)
+                fit   = model.fit(disp=False)
+                fc    = fit.get_forecast(steps=n_months, exog=exog_fut)
+            fc_mean = np.asarray(fc.predicted_mean)
+        except Exception:
+            t_all   = np.arange(len(ec50_series))
+            slope, intercept, *_ = stats.linregress(t_all, ec50_series.values)
+            fc_mean = intercept + slope * (np.arange(n_months) + len(ec50_series))
+
+        fc_mean = np.clip(fc_mean, 3.0, 200.0)
+        if scenario == "bad":
+            fc_mean = fc_mean + 0.30 * post_slope_yr * years_ahead
+        elif scenario == "good":
+            fc_mean = fc_mean - 0.15 * post_slope_yr * years_ahead
+        fc_mean = np.clip(fc_mean, 3.0, 200.0)
+
+        ci_half = np.minimum(
+            1.96 * resid_std * (1.0 + _CI_GROWTH * years_ahead),
+            3.0 * series_std,
+        )
+        results[scenario] = pd.DataFrame({
+            "Datetime":      future_dates,
+            "EC50_forecast": fc_mean,
+            "CI_lower":      np.clip(fc_mean - ci_half, 0.0, None),
+            "CI_upper":      fc_mean + ci_half,
+            "scenario":      scenario,
+            "pH_proj":       pH_fut.values,
+            "Temp_proj":     Tmp_fut.values,
+            "mhw_proj":      mhw_fut.values,
+        })
+
     # ── Mechanistic (bio) scenarios ─────────────────────────────────────────
     # OLS on 5 env vars to compute scenario equilibria relative to SARIMAX anchor
     _ENV_VARS = ["Temperature", "CO2", "O2", "pH", "Salinity"]
     df_ols = df_real[[c for c in ["EC50"] + _ENV_VARS if c in df_real.columns]].dropna()
-    _sarimax_anchor = (float(results["mean"]["EC50_forecast"].iloc[-1])
-                       if not results["mean"].empty else
-                       float(df_real["EC50"].dropna().iloc[-1]) if not df_real.empty else 25.0)
+    _sarimax_anchor = float(results["mean"]["EC50_forecast"].iloc[-1])
 
     if len(df_ols) >= 10 and all(v in df_ols.columns for v in _ENV_VARS):
         import statsmodels.api as sm
@@ -422,31 +512,80 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame) -> dict:
     return results
 
 
-@st.cache_data
-def compute_correlations() -> dict:
+@st.cache_data(ttl=900, max_entries=3)
+def compute_correlations(df: pd.DataFrame) -> dict:
     """
-    Read precomputed Spearman correlation matrices (all/pre/post) from
-    results/corr_*.csv, produced by correlations.py. That module runs as
-    part of `python -m climate_change_on_sea_urchins.pipeline`, which the
-    GitHub Actions data-update workflow re-runs automatically whenever new
-    EC50/Copernicus data lands (daily check) and commits results/ back to
-    main — so these are never more than a day stale. Recomputing the same
-    trend-decomposition + Spearman matrices live on every rerun duplicated
-    that work for no freshness benefit and contributed to the app hanging
-    on Streamlit Cloud (this ran unconditionally inside the Correlations
-    tab on every interaction anywhere in the app before tabs were made
-    lazy). Does not depend on the date-range filter above — always
-    reflects the full dataset, matching the committed results/ files.
+    Compute Spearman correlation matrices (all/pre/post) directly from the
+    loaded DataFrame — avoids relying on pre-computed CSVs that may be stale.
+    Mirrors the logic of analysis/03_correlations.py.
     """
+    env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
+    mhw_cols = ["mhw_peak_intensity", "mhw_days"]
+
+    env_cols = [c for c in env_cols if c in df.columns]
+    mhw_cols = [c for c in mhw_cols if c in df.columns]
+    all_cols  = env_cols + mhw_cols
+
+    df_work = df.set_index("Datetime").copy()
+    # Use only real EC50 measurements (set imputed to NaN) then apply rolling mean
+    # to smooth measurement noise — mirrors notebook cell 7 / analysis script
+    df_work.loc[df_work["EC50_imputed"] == True, "EC50"] = np.nan
+    df_work["EC50"] = df_work["EC50"].rolling(window=12, min_periods=1, center=True).mean()
+
+    split     = pd.Timestamp("2016-01-01")
+    pre_mask  = df_work.index < split
+    post_mask = df_work.index >= split
+
+    def _extract_trends(subset):
+        trend = pd.DataFrame(index=subset.index)
+        for col in env_cols:
+            series = subset[col].copy() if col in subset.columns else pd.Series(dtype=float)
+            valid  = series.dropna()
+            if len(valid) < 24:
+                trend[col] = series
+                continue
+            try:
+                dec = seasonal_decompose(
+                    series.interpolate("linear"),
+                    model="multiplicative",
+                    period=12,
+                    extrapolate_trend="freq",
+                    two_sided=False,
+                )
+                trend[col] = dec.trend.values
+            except Exception:
+                trend[col] = series
+        for col in mhw_cols:
+            if col in subset.columns:
+                trend[col] = subset[col].values
+        return trend
+
+    def _spearman_matrix(tdf):
+        n = len(all_cols)
+        r_mat = np.eye(n)
+        p_mat = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i + 1, n):
+                if all_cols[i] not in tdf.columns or all_cols[j] not in tdf.columns:
+                    r_mat[i, j] = r_mat[j, i] = np.nan
+                    p_mat[i, j] = p_mat[j, i] = np.nan
+                    continue
+                a = tdf[all_cols[i]].dropna()
+                b = tdf[all_cols[j]].dropna()
+                common = a.index.intersection(b.index)
+                if len(common) >= 5:
+                    r, p = stats.spearmanr(a[common], b[common])
+                else:
+                    r, p = np.nan, np.nan
+                r_mat[i, j] = r_mat[j, i] = r
+                p_mat[i, j] = p_mat[j, i] = p
+        return (pd.DataFrame(r_mat, index=all_cols, columns=all_cols),
+                pd.DataFrame(p_mat, index=all_cols, columns=all_cols))
+
     results = {}
-    for label in ["all", "pre", "post"]:
-        r_path = RESULTS / f"corr_{label}.csv"
-        p_path = RESULTS / f"corr_pval_{label}.csv"
-        if r_path.exists() and p_path.exists():
-            r_df = pd.read_csv(r_path, index_col=0)
-            p_df = pd.read_csv(p_path, index_col=0)
-        else:
-            r_df, p_df = pd.DataFrame(), pd.DataFrame()
+    for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
+        subset = df_work[mask]
+        r_df, p_df = _spearman_matrix(_extract_trends(subset))
         results[label] = (r_df, p_df)
     return results
 
@@ -454,25 +593,22 @@ def compute_correlations() -> dict:
 ENV_CCF_COLS = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
 
 
-@st.cache_data
-def compute_ccf_diff() -> pd.DataFrame:
+@st.cache_data(ttl=900, max_entries=3)
+def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd.DataFrame:
     """
     Spearman CCF on first-differenced series (robust primary method — see
-    mhw_analysis.difference_series), read from results/ccf_results_diff.csv.
-    That file is produced by `python -m climate_change_on_sea_urchins.pipeline`
-    (mhw_analysis.py), which the GitHub Actions data-update workflow re-runs
-    and commits automatically whenever new EC50/Copernicus data lands — never
-    more than a day stale. Previously recomputed live on every rerun (same
-    duplicated-work problem as compute_correlations above); does not depend
-    on the date-range filter, always reflects the full dataset.
-
-    Raw-level CCF is not shown in the dashboard: MHW peak intensity, EC50,
-    and most chronic variables are non-stationary or borderline (Stationarity
-    tab), so the raw correlation comes out significant at nearly every lag
-    with no peak — the signature of confounding by shared trend, not a
-    localized biological effect.
+    mhw_analysis.difference_series). Raw-level CCF is not shown in the
+    dashboard: MHW peak intensity, EC50, and most chronic variables are
+    non-stationary or borderline (Stationarity tab), so the raw correlation
+    comes out significant at nearly every lag with no peak — the signature
+    of confounding by shared trend, not a localized biological effect.
     """
-    return load_csv("ccf_results_diff.csv")
+    targets = [c for c in ENV_CCF_COLS if c in df.columns]
+    if driver not in df.columns:
+        return pd.DataFrame()
+    df_diff = difference_series(df, [driver] + targets)
+    df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
+    return _ccf_core(df_diff, driver, targets)
 
 
 @st.cache_data(ttl=900, max_entries=3)
@@ -1256,7 +1392,7 @@ def _tab_mhw_gametes():
                     "correlating; see the \"ARIMA pre-whitening\" tab for an independent "
                     "cross-check with a different detrending method."
                 )
-                _render_ccf_panel(compute_ccf_diff(), "First differences", "diff")
+                _render_ccf_panel(compute_ccf_diff(df), "First differences", "diff")
 
             # ── 1b. CCF — ARIMA pre-whitening (separate tab: a shared radio toggle that
             #        swapped this data in-place was implicated in the app hanging/going
@@ -1836,7 +1972,7 @@ def _tab_correlations():
         label_map  = {"All": "all", "Pre-2016": "pre", "Post-2016": "post"}
         lbl        = label_map[period_tab]
 
-        corr_data = compute_correlations()
+        corr_data = compute_correlations(df)
         r_df, p_df = corr_data[lbl]
 
         # Build text annotations: show r value, append * if p>=0.05
@@ -1947,7 +2083,7 @@ def _tab_forecast():
             fig_fc.update_layout(title=title, xaxis_title="Year", yaxis_title="EC50 (mg/L)", height=500)
             st.plotly_chart(fig_fc, use_container_width=True)
 
-        _fc_results = compute_forecast(df, df_real)
+        _fc_results = compute_forecast(df, df_real, mhw_annual)
         _fc_meta    = _fc_results["meta"]
         st.info(
             f"Trained on **{_fc_meta['train_start']} – {_fc_meta['train_end']}** "
