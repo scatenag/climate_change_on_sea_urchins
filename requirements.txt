@@ -4,7 +4,14 @@
 -e .
 
 # Core scientific stack
-pandas>=2.0
+# pandas pinned below 3.0: that major bump (mandatory copy-on-write, many
+# API changes) is untested against this app and was installed unpinned on
+# Streamlit Cloud (pandas 3.0.3) while local dev/testing used 2.x — a
+# plausible contributor to the app hanging/blanking in production but not
+# reproducing reliably locally. statsmodels has also had documented pandas
+# 3.0 compatibility bugs. Revisit the pin once pandas 3.x has been
+# deliberately tested against the ARIMA/SARIMAX code paths.
+pandas>=2.0,<3.0
 numpy>=1.24
 scipy>=1.11
 statsmodels>=0.14

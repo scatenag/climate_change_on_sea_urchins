@@ -299,7 +299,7 @@ def _fc_project_mhw(mhw_annual: pd.DataFrame, n: int, scenario: str, last_year: 
     return pd.Series(trend * seasonal * scale, index=future_dates)
 
 
-@st.cache_data(show_spinner="Computing SARIMAX forecast…", ttl=3600, max_entries=10)
+@st.cache_data(show_spinner="Computing SARIMAX forecast…", ttl=900, max_entries=3)
 def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
                      mhw_annual: pd.DataFrame) -> dict:
     """
@@ -504,7 +504,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     return results
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=900, max_entries=3)
 def compute_correlations(df: pd.DataFrame) -> dict:
     """
     Compute Spearman correlation matrices (all/pre/post) directly from the
@@ -585,7 +585,7 @@ def compute_correlations(df: pd.DataFrame) -> dict:
 ENV_CCF_COLS = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=900, max_entries=3)
 def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd.DataFrame:
     """
     Spearman CCF on first-differenced series (robust primary method — see
@@ -603,7 +603,7 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
     return _ccf_core(df_diff, driver, targets)
 
 
-@st.cache_data(ttl=3600, max_entries=10)
+@st.cache_data(ttl=900, max_entries=3)
 def compute_mhw_deep(df: pd.DataFrame) -> dict:
     """
     Extended MHW→EC50 analyses:

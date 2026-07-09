@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "pandas>=2.0",
+    "pandas>=2.0,<3.0",
     "numpy>=1.24",
     "scipy>=1.11",
     "statsmodels>=0.14",
