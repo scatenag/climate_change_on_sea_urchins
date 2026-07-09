@@ -53,13 +53,21 @@ SITE = dict(lat=SITE_LAT, lon=SITE_LON, name=SITE_NAME)
 
 
 def _dl_btn(df: pd.DataFrame, filename: str, label: str = "Download CSV") -> None:
-    """Render a small CSV download button for a DataFrame."""
+    """Render a small CSV download button for a DataFrame.
+
+    on_click="ignore" makes this a frontend-only download (Streamlit docs):
+    without it, st.download_button defaults to triggering a full script
+    rerun on click, which — given every tab's content is recomputed on any
+    rerun — was a prime suspect for the app hanging/going blank right after
+    a download click, reported independently by two people in production.
+    """
     st.download_button(
         label=label,
         data=df.to_csv(index=False).encode(),
         file_name=filename,
         mime="text/csv",
         use_container_width=False,
+        on_click="ignore",
     )
 
 
@@ -2082,7 +2090,8 @@ with tabs[7]:
         for col_w, fc_df, label in [(col1, bio_bad, "bio_worst"), (col2, bio_mean, "bio_mean"), (col3, bio_good, "bio_best")]:
             with col_w:
                 st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
-                                   file_name=f"forecast_{label}.csv", mime="text/csv")
+                                   file_name=f"forecast_{label}.csv", mime="text/csv",
+                                   on_click="ignore")
 
     # ── Approach B: SARIMAX statistical model ────────────────────────────────
     with fc_tab_sarimax:
@@ -2163,7 +2172,8 @@ with tabs[7]:
         for col_w, fc_df, label in [(col1, fc_bad, "worst"), (col2, fc_mean, "mean"), (col3, fc_good, "best")]:
             with col_w:
                 st.download_button(f"Download {label} CSV", data=fc_df.to_csv(index=False),
-                                   file_name=f"forecast_{label}.csv", mime="text/csv")
+                                   file_name=f"forecast_{label}.csv", mime="text/csv",
+                                   on_click="ignore")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
