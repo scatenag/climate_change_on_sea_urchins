@@ -917,7 +917,7 @@ st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-tabs = st.tabs([
+TAB_LABELS = [
     "Overview",
     "Time Series",
     "Marine Heatwaves",
@@ -927,7 +927,21 @@ tabs = st.tabs([
     "Stationarity",
     "Forecast EC50",
     "About",
-])
+]
+# A plain st.radio, not st.tabs: st.tabs renders (and recomputes) every tab's
+# content on every rerun regardless of which one is visible — with 9 tabs
+# (some running SARIMAX/ARIMA/deep MHW analyses), that was the actual reason
+# clicking "Update" above still blanked the app even after each tab's content
+# was isolated into its own st.fragment (fragments avoid *unnecessary* reruns
+# from a widget inside them, but do nothing to stop a real, external rerun
+# like "Update" from calling into every tab again). Only the selected label's
+# function is called below (search "Tab dispatch"), so a rerun only ever
+# recomputes the one section actually being viewed.
+active_tab = st.radio(
+    "Section", TAB_LABELS, horizontal=True,
+    label_visibility="collapsed", key="active_main_tab",
+)
+st.divider()
 
 # Show EC50 data freshness in the sidebar
 with st.sidebar:
@@ -986,8 +1000,6 @@ def _tab_overview():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[0]:
-    _tab_overview()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 2 — Time Series
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1213,8 +1225,6 @@ def _tab_timeseries():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[1]:
-    _tab_timeseries()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 3 — Marine Heatwaves
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1298,8 +1308,6 @@ def _tab_marine_heatwaves():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[2]:
-    _tab_marine_heatwaves()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 4 — MHW → Gametes (lag)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1310,7 +1318,7 @@ def _tab_mhw_gametes():
 
         deep = compute_mhw_deep(df)
 
-        sub = st.tabs([
+        SUB_LABELS = [
             "Spearman CCF",
             "ARIMA pre-whitening",
             "Dose-response",
@@ -1320,7 +1328,15 @@ def _tab_mhw_gametes():
             "Variance partitioning",
             "Granger causality",
             "R analysis (SEA + DLNM)",
-        ])
+        ]
+        # st.tabs() renders every sub-analysis on every rerun of this fragment
+        # (e.g. SARIMAX-adjacent CCF recompute) regardless of which is visible —
+        # a plain radio + dispatch (see bottom of this function) only calls the
+        # selected one.
+        active_sub = st.radio(
+            "Sub-analysis", SUB_LABELS, horizontal=True,
+            label_visibility="collapsed", key="active_mhw_sub_tab",
+        )
 
         # ── 1. CCF ────────────────────────────────────────────────────────────────
         def _render_ccf_panel(ccf_df: pd.DataFrame, method_label: str, key_suffix: str) -> None:
@@ -1388,494 +1404,510 @@ def _tab_mhw_gametes():
             _dl_btn(ccf_df, f"ccf_heatmap_{key_suffix}_{_yr_start}_{_yr_end}.csv", "⬇ Lag heatmap data (CSV)")
             st.caption("All values shown; use CCF panel above for significance filtering.")
 
-        with sub[0]:
-            st.caption(
-                "Raw-level correlation is not shown here: MHW peak intensity, EC50, and "
-                "most chronic variables are non-stationary or borderline per the ADF+KPSS "
-                "tests (see the Stationarity tab), so a naive correlation comes out "
-                "significant at nearly every lag with no peak — the signature of "
-                "confounding by shared trend, not a localized biological effect. This "
-                "panel detrends by first-differencing (month-over-month change) before "
-                "correlating; see the \"ARIMA pre-whitening\" tab for an independent "
-                "cross-check with a different detrending method."
-            )
-            _render_ccf_panel(compute_ccf_diff(df), "First differences", "diff")
-
-        # ── 1b. CCF — ARIMA pre-whitening (separate tab: a shared radio toggle that
-        #        swapped this data in-place was implicated in the app hanging/going
-        #        blank on Streamlit Cloud) ────────────────────────────────────────
-        with sub[1]:
-            st.caption(
-                "Box-Jenkins pre-whitening: fits an ARIMA model to the MHW driver, "
-                "applies that same fitted filter to each variable, and cross-correlates "
-                "the residuals — an independent check of the first-differences result "
-                "via a different detrending mechanism."
-            )
-            pw_all = load_csv("ccf_results_prewhitened.csv")
-            diagnostics_all = load_json("prewhitening_diagnostics.json")
-            ccf_df_arima = (pw_all[pw_all["driver"] == "mhw_peak_intensity"].drop(columns=["driver"])
-                            if not pw_all.empty else pd.DataFrame())
-            diag = diagnostics_all.get("mhw_peak_intensity", {}) if diagnostics_all else {}
-            if diag:
-                lb_ok = diag["white_noise"]
+        def _sub_ccf_diff():
                 st.caption(
-                    f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
-                    f"Ljung-Box on driver residuals (lags 6/12/24): "
-                    f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
-                    "Computed once by the reproducible pipeline on the full dataset "
-                    "(too CPU-heavy to refit live) — does not change with the date "
-                    "filter above."
+                    "Raw-level correlation is not shown here: MHW peak intensity, EC50, and "
+                    "most chronic variables are non-stationary or borderline per the ADF+KPSS "
+                    "tests (see the Stationarity tab), so a naive correlation comes out "
+                    "significant at nearly every lag with no peak — the signature of "
+                    "confounding by shared trend, not a localized biological effect. This "
+                    "panel detrends by first-differencing (month-over-month change) before "
+                    "correlating; see the \"ARIMA pre-whitening\" tab for an independent "
+                    "cross-check with a different detrending method."
                 )
-            _render_ccf_panel(ccf_df_arima, "ARIMA pre-whitening", "arima")
+                _render_ccf_panel(compute_ccf_diff(df), "First differences", "diff")
 
-        # ── 2. Dose-response ──────────────────────────────────────────────────────
-        with sub[2]:
-            st.subheader("EC50 by MHW presence at lag = 2 months")
-            dr = deep.get("dose_response", {})
-            if dr:
-                grp = dr["grp"]
-                fig_dr = go.Figure()
-                for _, row in grp.iterrows():
-                    fig_dr.add_trace(go.Bar(
-                        x=[row["label"]],
-                        y=[row["mean"]],
-                        error_y=dict(type="data", array=[row["std"]], visible=True),
-                        name=row["label"],
-                        marker_color=WARM if row["had_mhw"] else COOL,
-                        text=[f"n={int(row['count'])}"],
-                        textposition="outside",
-                    ))
-                fig_dr.update_layout(
-                    title="Mean EC50 ± SD — MHW presence at lag=2 months<br>"
-                          f"<sub>Mann-Whitney p = {dr['mw_p']:.2e}  |  n = {dr['n']}</sub>",
-                    yaxis_title="EC50 (mg/L)",
-                    height=400, showlegend=False,
-                )
-                st.plotly_chart(fig_dr, use_container_width=True)
-                _dl_btn(grp, f"dose_response_{_yr_start}_{_yr_end}.csv", "⬇ Dose-response data (CSV)")
+            # ── 1b. CCF — ARIMA pre-whitening (separate tab: a shared radio toggle that
+            #        swapped this data in-place was implicated in the app hanging/going
+            #        blank on Streamlit Cloud) ────────────────────────────────────────
 
-                c1, c2, c3 = st.columns(3)
-                no_mhw_mean = float(grp[~grp["had_mhw"]]["mean"].values[0])
-                mhw_mean    = float(grp[grp["had_mhw"]]["mean"].values[0])
-                c1.metric("EC50 — no MHW", f"{no_mhw_mean:.1f} mg/L")
-                c2.metric("EC50 — MHW present", f"{mhw_mean:.1f} mg/L",
-                          delta=f"{mhw_mean - no_mhw_mean:.1f} mg/L")
-                c3.metric("Mann-Whitney p", f"{dr['mw_p']:.2e}")
-
-            st.subheader("Dose-response by MHW intensity tertile (MHW months only)")
-            tert = dr.get("tertile")
-            if tert is not None and not tert.empty:
-                fig_tert = go.Figure()
-                colors_t = [COOL, WARM, "#d62828"]
-                for idx, (_, row) in enumerate(tert.iterrows()):
-                    fig_tert.add_trace(go.Bar(
-                        x=[str(row["tertile"])],
-                        y=[row["mean"]],
-                        error_y=dict(type="data", array=[row["std"]], visible=True),
-                        marker_color=colors_t[idx],
-                        text=[f"n={int(row['count'])}"],
-                        textposition="outside",
-                        name=str(row["tertile"]),
-                    ))
-                fig_tert.update_layout(
-                    title="EC50 by MHW intensity tertile (lag=2) — monotonic dose-response",
-                    yaxis_title="EC50 (mg/L)", height=380, showlegend=False,
-                )
-                st.plotly_chart(fig_tert, use_container_width=True)
-                _dl_btn(tert, f"dose_response_tertile_{_yr_start}_{_yr_end}.csv", "⬇ Tertile data (CSV)")
+        def _sub_ccf_arima():
                 st.caption(
-                    "Low / Medium / High = tertiles of MHW peak intensity in months with an active MHW. "
-                    "The monotonic dose-response excludes a spurious-correlation explanation."
+                    "Box-Jenkins pre-whitening: fits an ARIMA model to the MHW driver, "
+                    "applies that same fitted filter to each variable, and cross-correlates "
+                    "the residuals — an independent check of the first-differences result "
+                    "via a different detrending mechanism."
                 )
-
-        # ── 3. Cumulative stress ──────────────────────────────────────────────────
-        with sub[3]:
-            st.subheader("12-month cumulative MHW exposure → EC50")
-            st.markdown(
-                "Hypothesis: each MHW depletes physiological reserves. The 12-month "
-                "rolling sum of MHW intensity captures this **chronic stress debt**."
-            )
-            cum_df = deep.get("cumulative", pd.DataFrame())
-            if not cum_df.empty:
-                colors_c = [WARM if p < 0.05 else OCEAN for p in cum_df["p"]]
-                fig_cum = go.Figure(go.Bar(
-                    x=cum_df["lag"], y=cum_df["r"],
-                    marker_color=colors_c,
-                    text=[f"r={r:+.2f}" for r in cum_df["r"]],
-                    textposition="outside",
-                ))
-                fig_cum.add_hline(y=0, line_color="black", line_width=0.8)
-
-                # Reference line: best acute lag
-                best_acute_r = -0.388
-                fig_cum.add_hline(y=best_acute_r, line_dash="dot", line_color=WARM,
-                                  annotation_text="acute lag=2 r=−0.39",
-                                  annotation_position="bottom right")
-                fig_cum.update_layout(
-                    title="Spearman r: cumulative 12m MHW(t−k) → EC50(t)  |  Red = p<0.05<br>"
-                          "<sub>Compared with dashed line = best single-event (acute) correlation</sub>",
-                    xaxis_title="Additional lag k on top of 12m window (months)",
-                    yaxis_title="Spearman r",
-                    height=420,
-                )
-                st.plotly_chart(fig_cum, use_container_width=True)
-                _dl_btn(cum_df, f"cumulative_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Cumulative MHW data (CSV)")
-
-                best_cum = cum_df.loc[cum_df["r"].abs().idxmax()]
-                st.success(
-                    f"Best cumulative predictor: lag = **{int(best_cum['lag'])} months** "
-                    f"(r = {best_cum['r']:+.3f}, p = {best_cum['p']:.2e})  |  "
-                    f"Stronger than acute event (r = {best_acute_r:+.3f})"
-                )
-
-            # Scatter: cumulative MHW vs EC50
-            st.subheader("Scatter: cumulative 12m MHW (lag=6) vs EC50")
-            df_s = df.copy()
-            df_s["cumMHW"] = df_s["mhw_peak_intensity"].rolling(12, min_periods=6).sum().shift(6)
-            df_real_s = df[df["EC50_imputed"] == False].copy()
-            sc_merged = df_s[["Datetime", "cumMHW"]].merge(
-                df_real_s[["Datetime", "EC50"]], on="Datetime", how="inner"
-            ).dropna()
-            fig_sc = px.scatter(
-                sc_merged, x="cumMHW", y="EC50",
-                trendline="ols",
-                color_discrete_sequence=[OCEAN],
-                labels={"cumMHW": "Cumulative 12m MHW (°C·days, lag=6)", "EC50": "EC50 (mg/L)"},
-                title="EC50 vs cumulative MHW exposure  (n={})".format(len(sc_merged)),
-            )
-            fig_sc.update_layout(height=380)
-            st.plotly_chart(fig_sc, use_container_width=True)
-            _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
-            st.caption(
-                "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
-                "Above this threshold, each additional unit of cumulative stress depresses EC50 further."
-            )
-
-        # ── 4. Seasonal pattern ───────────────────────────────────────────────────
-        with sub[4]:
-            st.subheader("Season-specific MHW→EC50 correlation (lag=2)")
-            sea_data = deep.get("seasonal", pd.DataFrame())
-            if not sea_data.empty:
-                sea_data = sea_data.copy()
-                sea_data["sig"] = sea_data["p"].apply(
-                    lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
-                )
-                season_colors = {
-                    "Winter": COOL, "Spring": "#2a9d8f",
-                    "Summer": WARM, "Autumn": "#e9c46a",
-                }
-                fig_sea2 = go.Figure()
-                for _, row in sea_data.iterrows():
-                    fig_sea2.add_trace(go.Bar(
-                        x=[row["season"]], y=[row["r"]],
-                        marker_color=season_colors.get(row["season"], NEUTRAL),
-                        text=[f"r={row['r']:+.2f}<br>{row['sig']}<br>n={int(row['n'])}"],
-                        textposition="outside",
-                        name=row["season"],
-                    ))
-                fig_sea2.add_hline(y=0, line_color="black", line_width=0.8)
-                fig_sea2.update_layout(
-                    title="MHW(lag=2) → EC50 Spearman r by season of EC50 measurement",
-                    yaxis_title="Spearman r", height=420, showlegend=False,
-                )
-                st.plotly_chart(fig_sea2, use_container_width=True)
-                _dl_btn(sea_data, f"seasonal_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Seasonal data (CSV)")
-                st.markdown(
-                    "**Interpretation**: The strongest signal appears in **Autumn** (Sep–Nov) "
-                    "and **Spring** (Mar–May), the two main spawning periods of *P. lividus*. "
-                    "Autumn EC50 reflects the quality of gonads developed during summer — "
-                    "exactly when MHW events are most frequent and intense."
-                )
-
-            # Summer MHW → Autumn EC50
-            sa = deep.get("summer_autumn", {})
-            sa_df = sa.get("df", pd.DataFrame())
-            if not sa_df.empty:
-                st.subheader("Summer MHW peak intensity → Autumn EC50 (same year)")
-                fig_sa = px.scatter(
-                    sa_df, x="Summer_peak", y="EC50_autumn",
-                    text="Year",
-                    trendline="ols",
-                    color_discrete_sequence=[WARM],
-                    labels={"Summer_peak": "Max MHW peak intensity Jun–Aug (°C·days)",
-                            "EC50_autumn": "Mean EC50 Sep–Dec (mg/L)"},
-                    title=f"Summer MHW → Autumn EC50  |  r = {sa['r']:+.3f}, p = {sa['p']:.3f}",
-                )
-                fig_sa.update_traces(textposition="top center", selector=dict(mode="markers+text"))
-                fig_sa.update_layout(height=400)
-                st.plotly_chart(fig_sa, use_container_width=True)
-                _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
-                st.caption(
-                    "Years with intense summer MHWs (e.g. 2022–2025) show systematically lower "
-                    "autumn EC50, consistent with gonadal damage accumulating during the "
-                    "summer gametogenic window."
-                )
-
-        # ── 5. Annual trends ──────────────────────────────────────────────────────
-        with sub[5]:
-            ann_data = deep.get("annual", {})
-            ann_df   = ann_data.get("df", pd.DataFrame())
-
-            if not ann_df.empty:
-                st.subheader("Annual cumulative MHW vs mean EC50")
-                fig_ann = make_subplots(
-                    rows=2, cols=1, shared_xaxes=True,
-                    subplot_titles=["Annual cumulative MHW exposure (°C·days)",
-                                    "Mean annual EC50 (mg/L)"],
-                    vertical_spacing=0.08,
-                )
-                fig_ann.add_trace(go.Bar(
-                    x=ann_df["Year"], y=ann_df["MHW_cum"],
-                    marker_color=WARM, name="Cumulative MHW",
-                ), row=1, col=1)
-                fig_ann.add_trace(go.Scatter(
-                    x=ann_df["Year"], y=ann_df["EC50_mean"],
-                    mode="lines+markers", name="Mean EC50",
-                    line=dict(color=OCEAN, width=2),
-                ), row=2, col=1)
-                # 2016 line
-                for row_i in [1, 2]:
-                    yref = "y domain" if row_i == 1 else "y2 domain"
-                    fig_ann.add_shape(
-                        type="line", x0=2016, x1=2016, y0=0, y1=1,
-                        xref="x", yref=yref,
-                        line=dict(dash="dash", color="grey", width=1),
-                    )
-                fig_ann.update_layout(height=480, showlegend=False)
-                st.plotly_chart(fig_ann, use_container_width=True)
-                _dl_btn(ann_df, f"annual_mhw_ec50_{_yr_start}_{_yr_end}.csv", "⬇ Annual data (CSV)")
-
-                c1, c2 = st.columns(2)
-                c1.metric("Same-year r (year-over-year Δ)",
-                          f"{ann_data['r_same']:+.3f}",
-                          delta=f"p = {ann_data['p_same']:.4f}  n={ann_data['n_same']}")
-                c2.metric("Year-lagged r (ΔMHW_Y → ΔEC50_Y+1)",
-                          f"{ann_data['r_lag']:+.3f}",
-                          delta=f"p = {ann_data['p_lag']:.4f}  n={ann_data['n_lag']}")
-                st.caption(
-                    "Metrics use year-over-year differences, not raw annual levels: "
-                    "cumulative MHW exposure trends up and mean EC50 trends down "
-                    "monotonically over the 23-year record, so the raw annual correlation "
-                    f"(same-year r = {ann_data['r_same_raw']:+.2f}, p = {ann_data['p_same_raw']:.4f}; "
-                    f"year-lagged r = {ann_data['r_lag_raw']:+.2f}, p = {ann_data['p_lag_raw']:.4f}) "
-                    "is confounded by that shared trend, not evidence of a year-to-year "
-                    "relationship. Only years with a full 12 months of data are included."
-                )
-                if min(ann_data["p_same"], ann_data["p_lag"]) < 0.05:
-                    st.success(
-                        f"Signal survives detrending: the "
-                        f"{'same-year' if ann_data['p_same'] < ann_data['p_lag'] else 'year-lagged'} "
-                        "relationship remains significant after removing the shared trend."
-                    )
-                else:
-                    st.info(
-                        "Neither the same-year nor the year-lagged relationship is "
-                        "significant once the shared trend is removed: year-to-year changes "
-                        "in cumulative MHW exposure do not predict year-to-year changes in "
-                        "EC50 beyond what the common multi-decadal trend already explains — "
-                        "consistent with cumulative MHW intensity being the weakest of the "
-                        "three MHW drivers on the CCF tab."
-                    )
-
-            # EC50 decline rate
-            st.subheader("EC50 decline rate: acceleration since 2016")
-            t_pre  = deep.get("trend_pre", {})
-            t_post = deep.get("trend_post", {})
-            if t_pre and t_post:
-                fig_trend = go.Figure()
-                real_ec50 = df[df["EC50_imputed"] == False]
-                fig_trend.add_trace(go.Scatter(
-                    x=real_ec50["Datetime"], y=real_ec50["EC50"],
-                    mode="markers", name="EC50 (real)",
-                    marker=dict(color=OCEAN, size=5, opacity=0.5),
-                ))
-                for label, td, color in [("Pre-2016", t_pre, COOL), ("Post-2016", t_post, WARM)]:
-                    sub2 = td["df"]
-                    x0, x1 = sub2["Datetime"].min(), sub2["Datetime"].max()
-                    y0 = td["intercept"] + td["slope_yr"] / 365 * (x0 - pd.Timestamp("2003-01-01")).days
-                    y1 = td["intercept"] + td["slope_yr"] / 365 * (x1 - pd.Timestamp("2003-01-01")).days
-                    slope_sign = "+" if td["slope_yr"] > 0 else ""
-                    fig_trend.add_trace(go.Scatter(
-                        x=[x0, x1], y=[y0, y1],
-                        mode="lines",
-                        name=f"{label}: {slope_sign}{td['slope_yr']:.2f} mg/L/yr (p={td['p']:.4f})",
-                        line=dict(color=color, width=3),
-                    ))
-                fig_trend.add_vline(x="2016-01-01", line_dash="dash", line_color="grey")
-                fig_trend.update_layout(
-                    title="EC50 trend: stable pre-2016 → rapid decline post-2016",
-                    xaxis_title="Year", yaxis_title="EC50 (mg/L)",
-                    height=420,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.01),
-                )
-                st.plotly_chart(fig_trend, use_container_width=True)
-                _dl_btn(real_ec50[["Datetime", "EC50"]], f"ec50_trend_{_yr_start}_{_yr_end}.csv", "⬇ EC50 trend data (CSV)")
-
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Pre-2016 rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
-                            delta="p = {:.4f}".format(t_pre["p"]))
-                col2.metric("Post-2016 rate", f"{t_post['slope_yr']:+.2f} mg/L/yr",
-                            delta="p = {:.4f}".format(t_post["p"]))
-                accel = abs(t_post["slope_yr"]) / max(abs(t_pre["slope_yr"]), 0.01)
-                col3.metric("Acceleration factor", f"{accel:.1f}×")
-
-        # ── 6. Variance partitioning ──────────────────────────────────────────────
-        with sub[6]:
-            st.subheader("Variance partitioning: unique EC50 variance explained by each driver")
-            st.markdown(
-                "Semi-partial R² — how much EC50 variance does each driver explain "
-                "*uniquely*, after controlling for the others?"
-            )
-            vp = deep.get("variance_part", {})
-            vp_df = vp.get("df", pd.DataFrame())
-            if not vp_df.empty:
-                fig_vp = go.Figure()
-                bar_colors = [WARM, "#f4a261", OCEAN, COOL]
-                for idx, (_, row) in enumerate(vp_df.iterrows()):
-                    fig_vp.add_trace(go.Bar(
-                        x=[row["predictor"]],
-                        y=[row["R2_unique"]],
-                        marker_color=bar_colors[idx],
-                        text=[f"R²={row['R2_unique']:.3f}"],
-                        textposition="outside",
-                        name=row["predictor"],
-                    ))
-                fig_vp.update_layout(
-                    title=f"Unique semi-partial R² for EC50  |  Full model R² = {vp['R2_full']:.3f}  "
-                          f"|  n = {vp['n']}",
-                    yaxis_title="Semi-partial R²",
-                    height=420, showlegend=False,
-                )
-                st.plotly_chart(fig_vp, use_container_width=True)
-                _dl_btn(vp_df, f"variance_partitioning_{_yr_start}_{_yr_end}.csv", "⬇ Variance data (CSV)")
-
-                # Table
-                st.dataframe(
-                    vp_df.rename(columns={
-                        "predictor": "Driver",
-                        "R2_alone": "R² (alone)",
-                        "R2_unique": "R² (unique, after controlling others)",
-                    }).round(3),
-                    hide_index=True, use_container_width=True,
-                )
-                st.info(
-                    f"**Cumulative MHW** (12m rolling, lag=6) is by far the strongest unique "
-                    f"predictor (R²={vp_df.iloc[0]['R2_unique']:.3f}), explaining "
-                    f"{vp_df.iloc[0]['R2_unique']/vp['R2_full']*100:.0f}% of the full model variance. "
-                    "Temperature and pH together add modest additional variance, consistent with "
-                    "multi-stressor synergy rather than independent additive effects."
-                )
-
-        # ── 7. Granger causality ──────────────────────────────────────────────────
-        with sub[7]:
-            granger = load_json("granger_results.json")
-            if granger:
-                rows = []
-                for var, lag_ps in granger.items():
-                    if isinstance(lag_ps, dict) and lag_ps and "error" not in lag_ps:
-                        for lag, p in lag_ps.items():
-                            rows.append(dict(variable=var, lag=int(lag), p_value=float(p)))
-                gdf = pd.DataFrame(rows)
-                if not gdf.empty:
-                    pivot = gdf.pivot(index="variable", columns="lag", values="p_value")
-                    fig_gr = px.imshow(
-                        np.log10(pivot.values.astype(float) + 1e-10),
-                        x=[str(c) for c in pivot.columns],
-                        y=list(pivot.index),
-                        color_continuous_scale="RdYlGn_r",
-                        title="Granger causality: log₁₀(p-value) — MHW → variable",
-                        labels=dict(color="log₁₀(p)"),
-                    )
-                    st.plotly_chart(fig_gr, use_container_width=True)
-                    _dl_btn(gdf, f"granger_causality_{_yr_start}_{_yr_end}.csv", "⬇ Granger data (CSV)")
+                pw_all = load_csv("ccf_results_prewhitened.csv")
+                diagnostics_all = load_json("prewhitening_diagnostics.json")
+                ccf_df_arima = (pw_all[pw_all["driver"] == "mhw_peak_intensity"].drop(columns=["driver"])
+                                if not pw_all.empty else pd.DataFrame())
+                diag = diagnostics_all.get("mhw_peak_intensity", {}) if diagnostics_all else {}
+                if diag:
+                    lb_ok = diag["white_noise"]
                     st.caption(
-                        "Green = significant (p<0.05 → log₁₀ < −1.30). "
-                        "EC50 shows non-significant Granger p-values because EC50 operates "
-                        "through multiple lag pathways simultaneously, diluting the linear "
-                        "time-series signal. Environmental variables (Temperature, CO₂, pH) "
-                        "show strong Granger causality at lags 2–4."
+                        f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
+                        f"Ljung-Box on driver residuals (lags 6/12/24): "
+                        f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
+                        "Computed once by the reproducible pipeline on the full dataset "
+                        "(too CPU-heavy to refit live) — does not change with the date "
+                        "filter above."
                     )
-            else:
-                st.warning("Run `python analysis/run_all.py` first")
+                _render_ccf_panel(ccf_df_arima, "ARIMA pre-whitening", "arima")
 
-        # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
-        with sub[8]:
-            sea_df, dlnm_df, dlnm_lag = load_r_results()
+            # ── 2. Dose-response ──────────────────────────────────────────────────────
 
-            if not sea_df.empty:
-                st.subheader("Superposed Epoch Analysis (SEA)")
-                fig_sea = go.Figure()
-                if "ci_lower" in sea_df.columns:
+        def _sub_dose_response():
+                st.subheader("EC50 by MHW presence at lag = 2 months")
+                dr = deep.get("dose_response", {})
+                if dr:
+                    grp = dr["grp"]
+                    fig_dr = go.Figure()
+                    for _, row in grp.iterrows():
+                        fig_dr.add_trace(go.Bar(
+                            x=[row["label"]],
+                            y=[row["mean"]],
+                            error_y=dict(type="data", array=[row["std"]], visible=True),
+                            name=row["label"],
+                            marker_color=WARM if row["had_mhw"] else COOL,
+                            text=[f"n={int(row['count'])}"],
+                            textposition="outside",
+                        ))
+                    fig_dr.update_layout(
+                        title="Mean EC50 ± SD — MHW presence at lag=2 months<br>"
+                              f"<sub>Mann-Whitney p = {dr['mw_p']:.2e}  |  n = {dr['n']}</sub>",
+                        yaxis_title="EC50 (mg/L)",
+                        height=400, showlegend=False,
+                    )
+                    st.plotly_chart(fig_dr, use_container_width=True)
+                    _dl_btn(grp, f"dose_response_{_yr_start}_{_yr_end}.csv", "⬇ Dose-response data (CSV)")
+
+                    c1, c2, c3 = st.columns(3)
+                    no_mhw_mean = float(grp[~grp["had_mhw"]]["mean"].values[0])
+                    mhw_mean    = float(grp[grp["had_mhw"]]["mean"].values[0])
+                    c1.metric("EC50 — no MHW", f"{no_mhw_mean:.1f} mg/L")
+                    c2.metric("EC50 — MHW present", f"{mhw_mean:.1f} mg/L",
+                              delta=f"{mhw_mean - no_mhw_mean:.1f} mg/L")
+                    c3.metric("Mann-Whitney p", f"{dr['mw_p']:.2e}")
+
+                st.subheader("Dose-response by MHW intensity tertile (MHW months only)")
+                tert = dr.get("tertile")
+                if tert is not None and not tert.empty:
+                    fig_tert = go.Figure()
+                    colors_t = [COOL, WARM, "#d62828"]
+                    for idx, (_, row) in enumerate(tert.iterrows()):
+                        fig_tert.add_trace(go.Bar(
+                            x=[str(row["tertile"])],
+                            y=[row["mean"]],
+                            error_y=dict(type="data", array=[row["std"]], visible=True),
+                            marker_color=colors_t[idx],
+                            text=[f"n={int(row['count'])}"],
+                            textposition="outside",
+                            name=str(row["tertile"]),
+                        ))
+                    fig_tert.update_layout(
+                        title="EC50 by MHW intensity tertile (lag=2) — monotonic dose-response",
+                        yaxis_title="EC50 (mg/L)", height=380, showlegend=False,
+                    )
+                    st.plotly_chart(fig_tert, use_container_width=True)
+                    _dl_btn(tert, f"dose_response_tertile_{_yr_start}_{_yr_end}.csv", "⬇ Tertile data (CSV)")
+                    st.caption(
+                        "Low / Medium / High = tertiles of MHW peak intensity in months with an active MHW. "
+                        "The monotonic dose-response excludes a spurious-correlation explanation."
+                    )
+
+            # ── 3. Cumulative stress ──────────────────────────────────────────────────
+
+        def _sub_cumulative_stress():
+                st.subheader("12-month cumulative MHW exposure → EC50")
+                st.markdown(
+                    "Hypothesis: each MHW depletes physiological reserves. The 12-month "
+                    "rolling sum of MHW intensity captures this **chronic stress debt**."
+                )
+                cum_df = deep.get("cumulative", pd.DataFrame())
+                if not cum_df.empty:
+                    colors_c = [WARM if p < 0.05 else OCEAN for p in cum_df["p"]]
+                    fig_cum = go.Figure(go.Bar(
+                        x=cum_df["lag"], y=cum_df["r"],
+                        marker_color=colors_c,
+                        text=[f"r={r:+.2f}" for r in cum_df["r"]],
+                        textposition="outside",
+                    ))
+                    fig_cum.add_hline(y=0, line_color="black", line_width=0.8)
+
+                    # Reference line: best acute lag
+                    best_acute_r = -0.388
+                    fig_cum.add_hline(y=best_acute_r, line_dash="dot", line_color=WARM,
+                                      annotation_text="acute lag=2 r=−0.39",
+                                      annotation_position="bottom right")
+                    fig_cum.update_layout(
+                        title="Spearman r: cumulative 12m MHW(t−k) → EC50(t)  |  Red = p<0.05<br>"
+                              "<sub>Compared with dashed line = best single-event (acute) correlation</sub>",
+                        xaxis_title="Additional lag k on top of 12m window (months)",
+                        yaxis_title="Spearman r",
+                        height=420,
+                    )
+                    st.plotly_chart(fig_cum, use_container_width=True)
+                    _dl_btn(cum_df, f"cumulative_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Cumulative MHW data (CSV)")
+
+                    best_cum = cum_df.loc[cum_df["r"].abs().idxmax()]
+                    st.success(
+                        f"Best cumulative predictor: lag = **{int(best_cum['lag'])} months** "
+                        f"(r = {best_cum['r']:+.3f}, p = {best_cum['p']:.2e})  |  "
+                        f"Stronger than acute event (r = {best_acute_r:+.3f})"
+                    )
+
+                # Scatter: cumulative MHW vs EC50
+                st.subheader("Scatter: cumulative 12m MHW (lag=6) vs EC50")
+                df_s = df.copy()
+                df_s["cumMHW"] = df_s["mhw_peak_intensity"].rolling(12, min_periods=6).sum().shift(6)
+                df_real_s = df[df["EC50_imputed"] == False].copy()
+                sc_merged = df_s[["Datetime", "cumMHW"]].merge(
+                    df_real_s[["Datetime", "EC50"]], on="Datetime", how="inner"
+                ).dropna()
+                fig_sc = px.scatter(
+                    sc_merged, x="cumMHW", y="EC50",
+                    trendline="ols",
+                    color_discrete_sequence=[OCEAN],
+                    labels={"cumMHW": "Cumulative 12m MHW (°C·days, lag=6)", "EC50": "EC50 (mg/L)"},
+                    title="EC50 vs cumulative MHW exposure  (n={})".format(len(sc_merged)),
+                )
+                fig_sc.update_layout(height=380)
+                st.plotly_chart(fig_sc, use_container_width=True)
+                _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
+                st.caption(
+                    "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
+                    "Above this threshold, each additional unit of cumulative stress depresses EC50 further."
+                )
+
+            # ── 4. Seasonal pattern ───────────────────────────────────────────────────
+
+        def _sub_seasonal_pattern():
+                st.subheader("Season-specific MHW→EC50 correlation (lag=2)")
+                sea_data = deep.get("seasonal", pd.DataFrame())
+                if not sea_data.empty:
+                    sea_data = sea_data.copy()
+                    sea_data["sig"] = sea_data["p"].apply(
+                        lambda p: "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
+                    )
+                    season_colors = {
+                        "Winter": COOL, "Spring": "#2a9d8f",
+                        "Summer": WARM, "Autumn": "#e9c46a",
+                    }
+                    fig_sea2 = go.Figure()
+                    for _, row in sea_data.iterrows():
+                        fig_sea2.add_trace(go.Bar(
+                            x=[row["season"]], y=[row["r"]],
+                            marker_color=season_colors.get(row["season"], NEUTRAL),
+                            text=[f"r={row['r']:+.2f}<br>{row['sig']}<br>n={int(row['n'])}"],
+                            textposition="outside",
+                            name=row["season"],
+                        ))
+                    fig_sea2.add_hline(y=0, line_color="black", line_width=0.8)
+                    fig_sea2.update_layout(
+                        title="MHW(lag=2) → EC50 Spearman r by season of EC50 measurement",
+                        yaxis_title="Spearman r", height=420, showlegend=False,
+                    )
+                    st.plotly_chart(fig_sea2, use_container_width=True)
+                    _dl_btn(sea_data, f"seasonal_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Seasonal data (CSV)")
+                    st.markdown(
+                        "**Interpretation**: The strongest signal appears in **Autumn** (Sep–Nov) "
+                        "and **Spring** (Mar–May), the two main spawning periods of *P. lividus*. "
+                        "Autumn EC50 reflects the quality of gonads developed during summer — "
+                        "exactly when MHW events are most frequent and intense."
+                    )
+
+                # Summer MHW → Autumn EC50
+                sa = deep.get("summer_autumn", {})
+                sa_df = sa.get("df", pd.DataFrame())
+                if not sa_df.empty:
+                    st.subheader("Summer MHW peak intensity → Autumn EC50 (same year)")
+                    fig_sa = px.scatter(
+                        sa_df, x="Summer_peak", y="EC50_autumn",
+                        text="Year",
+                        trendline="ols",
+                        color_discrete_sequence=[WARM],
+                        labels={"Summer_peak": "Max MHW peak intensity Jun–Aug (°C·days)",
+                                "EC50_autumn": "Mean EC50 Sep–Dec (mg/L)"},
+                        title=f"Summer MHW → Autumn EC50  |  r = {sa['r']:+.3f}, p = {sa['p']:.3f}",
+                    )
+                    fig_sa.update_traces(textposition="top center", selector=dict(mode="markers+text"))
+                    fig_sa.update_layout(height=400)
+                    st.plotly_chart(fig_sa, use_container_width=True)
+                    _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
+                    st.caption(
+                        "Years with intense summer MHWs (e.g. 2022–2025) show systematically lower "
+                        "autumn EC50, consistent with gonadal damage accumulating during the "
+                        "summer gametogenic window."
+                    )
+
+            # ── 5. Annual trends ──────────────────────────────────────────────────────
+
+        def _sub_annual_trends():
+                ann_data = deep.get("annual", {})
+                ann_df   = ann_data.get("df", pd.DataFrame())
+
+                if not ann_df.empty:
+                    st.subheader("Annual cumulative MHW vs mean EC50")
+                    fig_ann = make_subplots(
+                        rows=2, cols=1, shared_xaxes=True,
+                        subplot_titles=["Annual cumulative MHW exposure (°C·days)",
+                                        "Mean annual EC50 (mg/L)"],
+                        vertical_spacing=0.08,
+                    )
+                    fig_ann.add_trace(go.Bar(
+                        x=ann_df["Year"], y=ann_df["MHW_cum"],
+                        marker_color=WARM, name="Cumulative MHW",
+                    ), row=1, col=1)
+                    fig_ann.add_trace(go.Scatter(
+                        x=ann_df["Year"], y=ann_df["EC50_mean"],
+                        mode="lines+markers", name="Mean EC50",
+                        line=dict(color=OCEAN, width=2),
+                    ), row=2, col=1)
+                    # 2016 line
+                    for row_i in [1, 2]:
+                        yref = "y domain" if row_i == 1 else "y2 domain"
+                        fig_ann.add_shape(
+                            type="line", x0=2016, x1=2016, y0=0, y1=1,
+                            xref="x", yref=yref,
+                            line=dict(dash="dash", color="grey", width=1),
+                        )
+                    fig_ann.update_layout(height=480, showlegend=False)
+                    st.plotly_chart(fig_ann, use_container_width=True)
+                    _dl_btn(ann_df, f"annual_mhw_ec50_{_yr_start}_{_yr_end}.csv", "⬇ Annual data (CSV)")
+
+                    c1, c2 = st.columns(2)
+                    c1.metric("Same-year r (year-over-year Δ)",
+                              f"{ann_data['r_same']:+.3f}",
+                              delta=f"p = {ann_data['p_same']:.4f}  n={ann_data['n_same']}")
+                    c2.metric("Year-lagged r (ΔMHW_Y → ΔEC50_Y+1)",
+                              f"{ann_data['r_lag']:+.3f}",
+                              delta=f"p = {ann_data['p_lag']:.4f}  n={ann_data['n_lag']}")
+                    st.caption(
+                        "Metrics use year-over-year differences, not raw annual levels: "
+                        "cumulative MHW exposure trends up and mean EC50 trends down "
+                        "monotonically over the 23-year record, so the raw annual correlation "
+                        f"(same-year r = {ann_data['r_same_raw']:+.2f}, p = {ann_data['p_same_raw']:.4f}; "
+                        f"year-lagged r = {ann_data['r_lag_raw']:+.2f}, p = {ann_data['p_lag_raw']:.4f}) "
+                        "is confounded by that shared trend, not evidence of a year-to-year "
+                        "relationship. Only years with a full 12 months of data are included."
+                    )
+                    if min(ann_data["p_same"], ann_data["p_lag"]) < 0.05:
+                        st.success(
+                            f"Signal survives detrending: the "
+                            f"{'same-year' if ann_data['p_same'] < ann_data['p_lag'] else 'year-lagged'} "
+                            "relationship remains significant after removing the shared trend."
+                        )
+                    else:
+                        st.info(
+                            "Neither the same-year nor the year-lagged relationship is "
+                            "significant once the shared trend is removed: year-to-year changes "
+                            "in cumulative MHW exposure do not predict year-to-year changes in "
+                            "EC50 beyond what the common multi-decadal trend already explains — "
+                            "consistent with cumulative MHW intensity being the weakest of the "
+                            "three MHW drivers on the CCF tab."
+                        )
+
+                # EC50 decline rate
+                st.subheader("EC50 decline rate: acceleration since 2016")
+                t_pre  = deep.get("trend_pre", {})
+                t_post = deep.get("trend_post", {})
+                if t_pre and t_post:
+                    fig_trend = go.Figure()
+                    real_ec50 = df[df["EC50_imputed"] == False]
+                    fig_trend.add_trace(go.Scatter(
+                        x=real_ec50["Datetime"], y=real_ec50["EC50"],
+                        mode="markers", name="EC50 (real)",
+                        marker=dict(color=OCEAN, size=5, opacity=0.5),
+                    ))
+                    for label, td, color in [("Pre-2016", t_pre, COOL), ("Post-2016", t_post, WARM)]:
+                        sub2 = td["df"]
+                        x0, x1 = sub2["Datetime"].min(), sub2["Datetime"].max()
+                        y0 = td["intercept"] + td["slope_yr"] / 365 * (x0 - pd.Timestamp("2003-01-01")).days
+                        y1 = td["intercept"] + td["slope_yr"] / 365 * (x1 - pd.Timestamp("2003-01-01")).days
+                        slope_sign = "+" if td["slope_yr"] > 0 else ""
+                        fig_trend.add_trace(go.Scatter(
+                            x=[x0, x1], y=[y0, y1],
+                            mode="lines",
+                            name=f"{label}: {slope_sign}{td['slope_yr']:.2f} mg/L/yr (p={td['p']:.4f})",
+                            line=dict(color=color, width=3),
+                        ))
+                    fig_trend.add_vline(x="2016-01-01", line_dash="dash", line_color="grey")
+                    fig_trend.update_layout(
+                        title="EC50 trend: stable pre-2016 → rapid decline post-2016",
+                        xaxis_title="Year", yaxis_title="EC50 (mg/L)",
+                        height=420,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.01),
+                    )
+                    st.plotly_chart(fig_trend, use_container_width=True)
+                    _dl_btn(real_ec50[["Datetime", "EC50"]], f"ec50_trend_{_yr_start}_{_yr_end}.csv", "⬇ EC50 trend data (CSV)")
+
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Pre-2016 rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
+                                delta="p = {:.4f}".format(t_pre["p"]))
+                    col2.metric("Post-2016 rate", f"{t_post['slope_yr']:+.2f} mg/L/yr",
+                                delta="p = {:.4f}".format(t_post["p"]))
+                    accel = abs(t_post["slope_yr"]) / max(abs(t_pre["slope_yr"]), 0.01)
+                    col3.metric("Acceleration factor", f"{accel:.1f}×")
+
+            # ── 6. Variance partitioning ──────────────────────────────────────────────
+
+        def _sub_variance_partitioning():
+                st.subheader("Variance partitioning: unique EC50 variance explained by each driver")
+                st.markdown(
+                    "Semi-partial R² — how much EC50 variance does each driver explain "
+                    "*uniquely*, after controlling for the others?"
+                )
+                vp = deep.get("variance_part", {})
+                vp_df = vp.get("df", pd.DataFrame())
+                if not vp_df.empty:
+                    fig_vp = go.Figure()
+                    bar_colors = [WARM, "#f4a261", OCEAN, COOL]
+                    for idx, (_, row) in enumerate(vp_df.iterrows()):
+                        fig_vp.add_trace(go.Bar(
+                            x=[row["predictor"]],
+                            y=[row["R2_unique"]],
+                            marker_color=bar_colors[idx],
+                            text=[f"R²={row['R2_unique']:.3f}"],
+                            textposition="outside",
+                            name=row["predictor"],
+                        ))
+                    fig_vp.update_layout(
+                        title=f"Unique semi-partial R² for EC50  |  Full model R² = {vp['R2_full']:.3f}  "
+                              f"|  n = {vp['n']}",
+                        yaxis_title="Semi-partial R²",
+                        height=420, showlegend=False,
+                    )
+                    st.plotly_chart(fig_vp, use_container_width=True)
+                    _dl_btn(vp_df, f"variance_partitioning_{_yr_start}_{_yr_end}.csv", "⬇ Variance data (CSV)")
+
+                    # Table
+                    st.dataframe(
+                        vp_df.rename(columns={
+                            "predictor": "Driver",
+                            "R2_alone": "R² (alone)",
+                            "R2_unique": "R² (unique, after controlling others)",
+                        }).round(3),
+                        hide_index=True, use_container_width=True,
+                    )
+                    st.info(
+                        f"**Cumulative MHW** (12m rolling, lag=6) is by far the strongest unique "
+                        f"predictor (R²={vp_df.iloc[0]['R2_unique']:.3f}), explaining "
+                        f"{vp_df.iloc[0]['R2_unique']/vp['R2_full']*100:.0f}% of the full model variance. "
+                        "Temperature and pH together add modest additional variance, consistent with "
+                        "multi-stressor synergy rather than independent additive effects."
+                    )
+
+            # ── 7. Granger causality ──────────────────────────────────────────────────
+
+        def _sub_granger_causality():
+                granger = load_json("granger_results.json")
+                if granger:
+                    rows = []
+                    for var, lag_ps in granger.items():
+                        if isinstance(lag_ps, dict) and lag_ps and "error" not in lag_ps:
+                            for lag, p in lag_ps.items():
+                                rows.append(dict(variable=var, lag=int(lag), p_value=float(p)))
+                    gdf = pd.DataFrame(rows)
+                    if not gdf.empty:
+                        pivot = gdf.pivot(index="variable", columns="lag", values="p_value")
+                        fig_gr = px.imshow(
+                            np.log10(pivot.values.astype(float) + 1e-10),
+                            x=[str(c) for c in pivot.columns],
+                            y=list(pivot.index),
+                            color_continuous_scale="RdYlGn_r",
+                            title="Granger causality: log₁₀(p-value) — MHW → variable",
+                            labels=dict(color="log₁₀(p)"),
+                        )
+                        st.plotly_chart(fig_gr, use_container_width=True)
+                        _dl_btn(gdf, f"granger_causality_{_yr_start}_{_yr_end}.csv", "⬇ Granger data (CSV)")
+                        st.caption(
+                            "Green = significant (p<0.05 → log₁₀ < −1.30). "
+                            "EC50 shows non-significant Granger p-values because EC50 operates "
+                            "through multiple lag pathways simultaneously, diluting the linear "
+                            "time-series signal. Environmental variables (Temperature, CO₂, pH) "
+                            "show strong Granger causality at lags 2–4."
+                        )
+                else:
+                    st.warning("Run `python analysis/run_all.py` first")
+
+            # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
+
+        def _sub_r_analysis():
+                sea_df, dlnm_df, dlnm_lag = load_r_results()
+
+                if not sea_df.empty:
+                    st.subheader("Superposed Epoch Analysis (SEA)")
+                    fig_sea = go.Figure()
+                    if "ci_lower" in sea_df.columns:
+                        fig_sea.add_trace(go.Scatter(
+                            x=pd.concat([sea_df["lag"], sea_df["lag"][::-1]]),
+                            y=pd.concat([sea_df["ci_upper"], sea_df["ci_lower"][::-1]]),
+                            fill="toself", fillcolor="rgba(231,111,81,0.2)",
+                            line=dict(width=0), name="Bootstrap CI 95%",
+                        ))
                     fig_sea.add_trace(go.Scatter(
-                        x=pd.concat([sea_df["lag"], sea_df["lag"][::-1]]),
-                        y=pd.concat([sea_df["ci_upper"], sea_df["ci_lower"][::-1]]),
-                        fill="toself", fillcolor="rgba(231,111,81,0.2)",
-                        line=dict(width=0), name="Bootstrap CI 95%",
+                        x=sea_df["lag"], y=sea_df["mean_ec50"],
+                        mode="lines+markers", name="Composite EC50",
+                        line=dict(color=WARM, width=2),
                     ))
-                fig_sea.add_trace(go.Scatter(
-                    x=sea_df["lag"], y=sea_df["mean_ec50"],
-                    mode="lines+markers", name="Composite EC50",
-                    line=dict(color=WARM, width=2),
-                ))
-                fig_sea.add_hline(y=float(sea_df["mean_ec50"].mean()), line_dash="dash",
-                                  line_color="grey", annotation_text="overall mean")
-                fig_sea.add_vline(x=0, line_dash="dash", line_color="black")
-                fig_sea.update_layout(
-                    title="SEA: composite EC50 around MHW peaks (lag 0 = event peak)",
-                    xaxis_title="Lag (months)", yaxis_title="Mean EC50 (mg/L)", height=400,
-                )
-                st.plotly_chart(fig_sea, use_container_width=True)
-                _dl_btn(sea_df, "sea_results.csv", "⬇ SEA data (CSV)")
+                    fig_sea.add_hline(y=float(sea_df["mean_ec50"].mean()), line_dash="dash",
+                                      line_color="grey", annotation_text="overall mean")
+                    fig_sea.add_vline(x=0, line_dash="dash", line_color="black")
+                    fig_sea.update_layout(
+                        title="SEA: composite EC50 around MHW peaks (lag 0 = event peak)",
+                        xaxis_title="Lag (months)", yaxis_title="Mean EC50 (mg/L)", height=400,
+                    )
+                    st.plotly_chart(fig_sea, use_container_width=True)
+                    _dl_btn(sea_df, "sea_results.csv", "⬇ SEA data (CSV)")
 
-            if not dlnm_lag.empty:
-                st.subheader("DLNM — Cumulative lag-response profile")
-                fig_dlnm = go.Figure()
-                if "ci_lower" in dlnm_lag.columns:
+                if not dlnm_lag.empty:
+                    st.subheader("DLNM — Cumulative lag-response profile")
+                    fig_dlnm = go.Figure()
+                    if "ci_lower" in dlnm_lag.columns:
+                        fig_dlnm.add_trace(go.Scatter(
+                            x=pd.concat([dlnm_lag["lag"], dlnm_lag["lag"][::-1]]),
+                            y=pd.concat([dlnm_lag["ci_upper"], dlnm_lag["ci_lower"][::-1]]),
+                            fill="toself", fillcolor="rgba(0,119,182,0.15)",
+                            line=dict(width=0), name="CI 95%",
+                        ))
                     fig_dlnm.add_trace(go.Scatter(
-                        x=pd.concat([dlnm_lag["lag"], dlnm_lag["lag"][::-1]]),
-                        y=pd.concat([dlnm_lag["ci_upper"], dlnm_lag["ci_lower"][::-1]]),
-                        fill="toself", fillcolor="rgba(0,119,182,0.15)",
-                        line=dict(width=0), name="CI 95%",
+                        x=dlnm_lag["lag"], y=dlnm_lag["cumulative_rr"],
+                        mode="lines+markers", name="Cumulative RR",
+                        line=dict(color=OCEAN, width=2),
                     ))
-                fig_dlnm.add_trace(go.Scatter(
-                    x=dlnm_lag["lag"], y=dlnm_lag["cumulative_rr"],
-                    mode="lines+markers", name="Cumulative RR",
-                    line=dict(color=OCEAN, width=2),
-                ))
-                fig_dlnm.add_hline(y=0, line_dash="dash", line_color="grey")
-                fig_dlnm.update_layout(
-                    title="DLNM: cumulative EC50 change by lag (at mean MHW intensity)",
-                    xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (mg/L)", height=400,
-                )
-                st.plotly_chart(fig_dlnm, use_container_width=True)
-                _dl_btn(dlnm_lag, "dlnm_lag_profile.csv", "⬇ DLNM lag profile (CSV)")
+                    fig_dlnm.add_hline(y=0, line_dash="dash", line_color="grey")
+                    fig_dlnm.update_layout(
+                        title="DLNM: cumulative EC50 change by lag (at mean MHW intensity)",
+                        xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (mg/L)", height=400,
+                    )
+                    st.plotly_chart(fig_dlnm, use_container_width=True)
+                    _dl_btn(dlnm_lag, "dlnm_lag_profile.csv", "⬇ DLNM lag profile (CSV)")
 
-            me_df = load_csv("mixed_effects_predictions.csv")
-            if not me_df.empty:
-                st.subheader("Mixed effects model: predicted EC50 by MHW intensity")
-                me_df = me_df.copy()
-                me_df["Intensity (°C)"] = me_df["intensity_max"].apply(lambda x: f"{x:.1f} °C")
-                fig_me = px.line(
-                    me_df, x="lag_post_end", y="EC50_pred",
-                    color="Intensity (°C)",
-                    color_discrete_sequence=px.colors.sequential.Reds[2:],
-                    labels={"lag_post_end": "Months after event end",
-                            "EC50_pred": "Predicted EC50 (mg/L)"},
-                    title="Predicted EC50 in the 12 months post-MHW by intensity",
-                )
-                fig_me.update_layout(height=400)
-                st.plotly_chart(fig_me, use_container_width=True)
-                _dl_btn(me_df, "mixed_effects_predictions.csv", "⬇ Mixed effects data (CSV)")
+                me_df = load_csv("mixed_effects_predictions.csv")
+                if not me_df.empty:
+                    st.subheader("Mixed effects model: predicted EC50 by MHW intensity")
+                    me_df = me_df.copy()
+                    me_df["Intensity (°C)"] = me_df["intensity_max"].apply(lambda x: f"{x:.1f} °C")
+                    fig_me = px.line(
+                        me_df, x="lag_post_end", y="EC50_pred",
+                        color="Intensity (°C)",
+                        color_discrete_sequence=px.colors.sequential.Reds[2:],
+                        labels={"lag_post_end": "Months after event end",
+                                "EC50_pred": "Predicted EC50 (mg/L)"},
+                        title="Predicted EC50 in the 12 months post-MHW by intensity",
+                    )
+                    fig_me.update_layout(height=400)
+                    st.plotly_chart(fig_me, use_container_width=True)
+                    _dl_btn(me_df, "mixed_effects_predictions.csv", "⬇ Mixed effects data (CSV)")
 
-            if sea_df.empty and dlnm_df.empty:
-                st.info("Run `Rscript scripts/mhw_lag_analysis.R` to generate R results.")
+                if sea_df.empty and dlnm_df.empty:
+                    st.info("Run `Rscript scripts/mhw_lag_analysis.R` to generate R results.")
+
+        _SUB_DISPATCH = {
+            "Spearman CCF": _sub_ccf_diff,
+            "ARIMA pre-whitening": _sub_ccf_arima,
+            "Dose-response": _sub_dose_response,
+            "Cumulative stress": _sub_cumulative_stress,
+            "Seasonal pattern": _sub_seasonal_pattern,
+            "Annual trends": _sub_annual_trends,
+            "Variance partitioning": _sub_variance_partitioning,
+            "Granger causality": _sub_granger_causality,
+            "R analysis (SEA + DLNM)": _sub_r_analysis,
+        }
+        _SUB_DISPATCH[active_sub]()
 
 
-    # ═══════════════════════════════════════════════════════════════════════════════
-
-
-with tabs[3]:
-    _tab_mhw_gametes()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — Pre / Post split (interactive)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1953,8 +1985,6 @@ def _tab_pre_post_split():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[4]:
-    _tab_pre_post_split()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 6 — Correlations
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1998,8 +2028,6 @@ def _tab_correlations():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[5]:
-    _tab_correlations()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — Stationarity
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2041,8 +2069,6 @@ def _tab_stationarity():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[6]:
-    _tab_stationarity()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 8 — Forecast EC50
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2269,8 +2295,6 @@ def _tab_forecast():
     # ═══════════════════════════════════════════════════════════════════════════════
 
 
-with tabs[7]:
-    _tab_forecast()
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 9 — About
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2325,5 +2349,16 @@ from SARIMAX residual SD (capped at historical σ, +3%/yr), hard-capped at 3 × 
 """)
 
 
-with tabs[8]:
-    _tab_about()
+# ── Tab dispatch — call only the active section's function ──────────────────
+_TAB_DISPATCH = {
+    "Overview": _tab_overview,
+    "Time Series": _tab_timeseries,
+    "Marine Heatwaves": _tab_marine_heatwaves,
+    "MHW → Gametes (lag)": _tab_mhw_gametes,
+    "Pre / Post split": _tab_pre_post_split,
+    "Correlations": _tab_correlations,
+    "Stationarity": _tab_stationarity,
+    "Forecast EC50": _tab_forecast,
+    "About": _tab_about,
+}
+_TAB_DISPATCH[active_tab]()
