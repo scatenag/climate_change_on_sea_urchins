@@ -315,7 +315,9 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     Returns dict with keys 'bad'/'mean'/'good' → DataFrames, plus 'meta'.
     Also computes the mechanistic (bio) scenarios (Approach B).
     """
+    print(f"DIAG: compute_forecast START n={len(df)} range={df['Datetime'].min()}..{df['Datetime'].max()}", flush=True)
     opt_lag = _fc_find_lag(df_real, df)
+    print(f"DIAG: compute_forecast opt_lag done ({opt_lag})", flush=True)
     monthly = _fc_build_monthly(df_real, df, opt_lag)
     monthly = monthly.set_index("Datetime").asfreq("MS")
 
@@ -357,6 +359,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
         resid_std = min(float(np.std(fit_obj.resid)), series_std)
     except Exception:
         pass
+    print(f"DIAG: compute_forecast pilot SARIMAX fit done (fit_obj is None: {fit_obj is None})", flush=True)
 
     # Post-training slope for calibrated scenario adjustment
     t_post = np.arange(len(ec50_series))
@@ -367,6 +370,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     years_ahead = np.arange(1, n_months + 1) / 12.0
 
     for scenario in ["bad", "mean", "good"]:
+        print(f"DIAG: compute_forecast scenario={scenario} starting", flush=True)
         sc_mult = _ENV_SCALE[scenario]
         pH_fut   = _fc_project_env(monthly["pH"],          n_months, last_year, sc_mult)
         Tmp_fut  = _fc_project_env(monthly["Temperature"], n_months, last_year, sc_mult)
@@ -513,6 +517,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     results["bio_bad"]  = bio_results["bad"]
     results["bio_mean"] = bio_results["mean"]
     results["bio_good"] = bio_results["good"]
+    print("DIAG: compute_forecast DONE, returning", flush=True)
     return results
 
 
@@ -523,6 +528,7 @@ def compute_correlations(df: pd.DataFrame) -> dict:
     loaded DataFrame — avoids relying on pre-computed CSVs that may be stale.
     Mirrors the logic of analysis/03_correlations.py.
     """
+    print(f"DIAG: compute_correlations START n={len(df)}", flush=True)
     env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
     mhw_cols = ["mhw_peak_intensity", "mhw_days"]
 
@@ -588,9 +594,11 @@ def compute_correlations(df: pd.DataFrame) -> dict:
 
     results = {}
     for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
+        print(f"DIAG: compute_correlations label={label} starting", flush=True)
         subset = df_work[mask]
         r_df, p_df = _spearman_matrix(_extract_trends(subset))
         results[label] = (r_df, p_df)
+    print("DIAG: compute_correlations DONE, returning", flush=True)
     return results
 
 
@@ -607,12 +615,15 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
     comes out significant at nearly every lag with no peak — the signature
     of confounding by shared trend, not a localized biological effect.
     """
+    print(f"DIAG: compute_ccf_diff START n={len(df)}", flush=True)
     targets = [c for c in ENV_CCF_COLS if c in df.columns]
     if driver not in df.columns:
         return pd.DataFrame()
     df_diff = difference_series(df, [driver] + targets)
     df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
-    return _ccf_core(df_diff, driver, targets)
+    out = _ccf_core(df_diff, driver, targets)
+    print("DIAG: compute_ccf_diff DONE, returning", flush=True)
+    return out
 
 
 @st.cache_data(ttl=900, max_entries=3)
@@ -626,6 +637,7 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
       - decline: EC50 trend pre/post 2016
       - variance_part: semi-partial R² decomposition
     """
+    print(f"DIAG: compute_mhw_deep START n={len(df)}", flush=True)
     from numpy.linalg import lstsq
 
     out = {}
@@ -808,6 +820,7 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
         out["variance_part"] = {"df": pd.DataFrame(vp_rows), "n": len(vp_merged),
                                  "R2_full": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)}
 
+    print("DIAG: compute_mhw_deep DONE, returning", flush=True)
     return out
 
 
@@ -870,11 +883,13 @@ if "applied_yr_start" not in st.session_state:
     st.session_state["applied_yr_start"] = _data_min_yr
     st.session_state["applied_yr_end"]   = _data_max_yr
 if _apply:
+    print(f"DIAG: Update clicked, new range {_sel_start}-{_sel_end}", flush=True)
     st.session_state["applied_yr_start"] = _sel_start
     st.session_state["applied_yr_end"]   = _sel_end
 
 _yr_start = st.session_state["applied_yr_start"]
 _yr_end   = st.session_state["applied_yr_end"]
+print(f"DIAG: script top-level running, applied range {_yr_start}-{_yr_end}", flush=True)
 
 # Clamp in case start > end
 if _yr_start > _yr_end:
@@ -935,6 +950,7 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_overview():
+        print("DIAG: _tab_overview tab body START", flush=True)
         _title_col, _ico_col = st.columns([12, 1])
         with _title_col:
             st.title("Climate Change on Sea Urchins")
@@ -977,6 +993,7 @@ with tabs[0]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_timeseries():
+        print("DIAG: _tab_timeseries tab body START", flush=True)
         st.header("Time Series")
 
         cols_opts = ["Temperature", "Salinity", "O2", "pH", "CO2", "EC50"]
@@ -1203,6 +1220,7 @@ with tabs[1]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_marine_heatwaves():
+        print("DIAG: _tab_marine_heatwaves tab body START", flush=True)
         st.header("Marine Heatwaves")
 
         # Temperature + MHW shading
@@ -1287,6 +1305,7 @@ with tabs[2]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_mhw_gametes():
+        print("DIAG: _tab_mhw_gametes tab body START", flush=True)
         st.header("MHW → Gamete sensitivity: lag analysis")
 
         deep = compute_mhw_deep(df)
@@ -1862,6 +1881,7 @@ with tabs[3]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_pre_post_split():
+        print("DIAG: _tab_pre_post_split tab body START", flush=True)
         st.header("Pre / Post split")
         st.caption(
             "The default split year, **2016**, is the discriminant identified in "
@@ -1940,6 +1960,7 @@ with tabs[4]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_correlations():
+        print("DIAG: _tab_correlations tab body START", flush=True)
         st.header("Spearman Correlation Matrices")
 
         period_tab = st.radio("Period", ["All", "Pre-2016", "Post-2016"], horizontal=True)
@@ -1984,6 +2005,7 @@ with tabs[5]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_stationarity():
+        print("DIAG: _tab_stationarity tab body START", flush=True)
         st.header("Stationarity Tests (ADF + KPSS)")
 
         stat_res = load_json("stationarity_results.json")
@@ -2026,6 +2048,7 @@ with tabs[6]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_forecast():
+        print("DIAG: _tab_forecast tab body START", flush=True)
         st.header("Forecast EC50")
 
         def _fc_plot(fc_triples, title, year_range, last_obs_date, key_suffix):
@@ -2253,6 +2276,7 @@ with tabs[7]:
 # ═══════════════════════════════════════════════════════════════════════════════
 @st.fragment
 def _tab_about():
+        print("DIAG: _tab_about tab body START", flush=True)
         st.header("About")
         st.markdown("""
 ### Methods
