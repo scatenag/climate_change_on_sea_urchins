@@ -7,8 +7,19 @@ font = "sans serif"
 
 [server]
 headless = true
-enableCORS = false
 enableXsrfProtection = true
+# enableCORS is intentionally omitted: Streamlit silently forces it back to
+# true whenever enableXsrfProtection is true, so setting it to false here
+# was a no-op that just obscured the actual (CORS-enabled) behavior.
 
 [browser]
 gatherUsageStats = false
+
+[runner]
+# Default (true) starts a new script run before the previous one is
+# guaranteed to have stopped, so two runs' memory can briefly overlap. On a
+# memory-constrained host (Streamlit Community Cloud's free tier caps around
+# 1GB) that overlap was a plausible trigger for the process being killed and
+# rebooted on ordinary widget interaction. false trades a little rerun
+# latency for not running two script executions at once.
+fastReruns = false

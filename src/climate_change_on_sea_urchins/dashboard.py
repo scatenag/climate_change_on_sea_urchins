@@ -5,10 +5,21 @@ Environmental variables and analysis results loaded from pre-computed CSVs.
 """
 import io
 import json
+import os
 import sys
 import time
 import warnings
 from pathlib import Path
+
+# Must be set before numpy/scipy/statsmodels are imported: without an
+# explicit cap, OpenBLAS/MKL auto-detect the HOST's core count (not the
+# container's cgroup limit) and can spawn far more threads than a
+# memory-constrained Streamlit Cloud container can afford, especially during
+# SARIMAX/lstsq calls — a known Docker over-provisioning trap.
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+           "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 from PIL import Image
 
 import numpy as np
@@ -121,8 +132,8 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     try:
         # Cache-buster: prevents Google Sheets CDN from serving a stale export
         bust = int(time.time())
-        import io, urllib.request
-        req = urllib.request.urlopen(f"{EXPORT_URL}&t={bust}", timeout=15)
+        import urllib.request
+        req = urllib.request.urlopen(f"{EXPORT_URL}&t={bust}", timeout=8)
         raw = pd.read_csv(io.BytesIO(req.read()))
         raw.columns = raw.columns.str.strip()
         raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
@@ -844,31 +855,36 @@ df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 _data_min_yr = int(df["Datetime"].dt.year.min())
 _data_max_yr = int(df["Datetime"].dt.year.max())
 
-with st.container():
+# Both the year sliders and the two buttons live in their own @st.fragment,
+# same as every other slider/form in this app (Time Series, Pre/Post split,
+# Forecast). A bare widget outside any fragment reruns the ENTIRE script on
+# every interaction — re-running uncached load_main() (which can block on a
+# live Google Sheets fetch) and re-dispatching whatever tab is active. That
+# was true for every prior "blank on touch" incident here regardless of
+# which specific widget (form, slider, button) carried it. Fragment-scoping
+# means touching a slider only reruns this fragment; "Update"/"Refresh EC50"
+# explicitly call st.rerun() (full-app scope by default, even from inside a
+# fragment) to commit the change with a single, deliberate full rerun.
+@st.fragment
+def _date_range_control():
     st.markdown("#### Date range")
-    # Plain (non-form) sliders + a plain button. Filtering below only ever
-    # reads st.session_state["applied_yr_*"], which is only updated when
-    # "Update" is actually clicked — so dragging the sliders reruns the
-    # script (cheap: only the active tab recomputes, via the lazy st.radio
-    # dispatch below, and with an unchanged applied range every downstream
-    # st.cache_data call is a cache hit) but never changes what's shown
-    # until Update is pressed. st.form/st.form_submit_button was tried here
-    # earlier but reproduced a blank-page hang on every single tab (even the
-    # trivial Overview one) that plain widgets don't.
     _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
     with _fcol1:
-        _sel_start = st.slider(
+        st.slider(
             "From year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_min_yr, step=1, key="yr_start",
         )
     with _fcol2:
-        _sel_end = st.slider(
+        st.slider(
             "To year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_max_yr, step=1, key="yr_end",
         )
     with _fcol3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        _apply = st.button("Update", type="primary", use_container_width=True)
+        if st.button("Update", type="primary", use_container_width=True):
+            st.session_state["applied_yr_start"] = st.session_state.yr_start
+            st.session_state["applied_yr_end"]   = st.session_state.yr_end
+            st.rerun()
     if st.button("↺ Refresh EC50",
                  help="Force re-download of EC50 data from Google Sheets. "
                       "Environmental data (Copernicus) and MHW are updated automatically "
@@ -876,19 +892,17 @@ with st.container():
         fetch_ec50_live.clear()
         st.rerun()
 
-# The date filter only takes effect when "Update" is clicked — moving the
-# sliders alone used to apply immediately on every drag (Streamlit reruns the
-# whole script on any widget change), forcing every analysis in the app to
-# recompute uncached on every touch. That was a repeated trigger for the app
-# hanging/going blank on Streamlit Cloud, on top of the download-button and
-# ARIMA-radio triggers fixed earlier — same underlying cause, different door.
+with st.container():
+    _date_range_control()
+
+# The date filter only takes effect when "Update" is clicked (committed to
+# st.session_state["applied_yr_*"] inside _date_range_control() above, which
+# then calls st.rerun() itself) — everything below just reads the committed
+# values, so dragging the sliders alone (fragment-scoped, see above) never
+# reaches this code at all.
 if "applied_yr_start" not in st.session_state:
     st.session_state["applied_yr_start"] = _data_min_yr
     st.session_state["applied_yr_end"]   = _data_max_yr
-if _apply:
-    print(f"DIAG: Update clicked, new range {_sel_start}-{_sel_end}", flush=True)
-    st.session_state["applied_yr_start"] = _sel_start
-    st.session_state["applied_yr_end"]   = _sel_end
 
 _yr_start = st.session_state["applied_yr_start"]
 _yr_end   = st.session_state["applied_yr_end"]
