@@ -2361,4 +2361,6 @@ _TAB_DISPATCH = {
     "Forecast EC50": _tab_forecast,
     "About": _tab_about,
 }
+print(f"DIAG: about to dispatch active_tab={active_tab!r}", flush=True)
 _TAB_DISPATCH[active_tab]()
+print("DIAG: script FULLY DONE (dispatch returned, nothing left to run)", flush=True)
