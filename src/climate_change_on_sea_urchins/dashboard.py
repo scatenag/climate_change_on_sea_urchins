@@ -846,26 +846,29 @@ _data_max_yr = int(df["Datetime"].dt.year.max())
 
 with st.container():
     st.markdown("#### Date range")
-    # st.slider triggers a rerun on every drag, even outside a form — wrapping
-    # both sliders + the submit button in st.form suppresses that: nothing
-    # reruns until "Update" is actually pressed. A plain st.button gate (the
-    # previous fix) still let a bare slider touch trigger a full-app rerun,
-    # which was still crashing the app in production even without "Update".
-    with st.form("date_range_form"):
-        _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
-        with _fcol1:
-            _sel_start = st.slider(
-                "From year", min_value=_data_min_yr, max_value=_data_max_yr,
-                value=_data_min_yr, step=1, key="yr_start",
-            )
-        with _fcol2:
-            _sel_end = st.slider(
-                "To year", min_value=_data_min_yr, max_value=_data_max_yr,
-                value=_data_max_yr, step=1, key="yr_end",
-            )
-        with _fcol3:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            _apply = st.form_submit_button("Update", type="primary", use_container_width=True)
+    # Plain (non-form) sliders + a plain button. Filtering below only ever
+    # reads st.session_state["applied_yr_*"], which is only updated when
+    # "Update" is actually clicked — so dragging the sliders reruns the
+    # script (cheap: only the active tab recomputes, via the lazy st.radio
+    # dispatch below, and with an unchanged applied range every downstream
+    # st.cache_data call is a cache hit) but never changes what's shown
+    # until Update is pressed. st.form/st.form_submit_button was tried here
+    # earlier but reproduced a blank-page hang on every single tab (even the
+    # trivial Overview one) that plain widgets don't.
+    _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
+    with _fcol1:
+        _sel_start = st.slider(
+            "From year", min_value=_data_min_yr, max_value=_data_max_yr,
+            value=_data_min_yr, step=1, key="yr_start",
+        )
+    with _fcol2:
+        _sel_end = st.slider(
+            "To year", min_value=_data_min_yr, max_value=_data_max_yr,
+            value=_data_max_yr, step=1, key="yr_end",
+        )
+    with _fcol3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _apply = st.button("Update", type="primary", use_container_width=True)
     if st.button("↺ Refresh EC50",
                  help="Force re-download of EC50 data from Google Sheets. "
                       "Environmental data (Copernicus) and MHW are updated automatically "
