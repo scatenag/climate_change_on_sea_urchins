@@ -38,8 +38,11 @@ sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the pa
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
+    compute_granger as _granger_core,
     difference_series,
 )
+from .stationarity import test_series as _stationarity_test_series
+from .common import ALL_COLS, MHW_COLS, ENV_COLS
 
 # ── Page config ───────────────────────────────────────────────────────────────
 # page_icon is a plain emoji, not Image.open(...): Streamlit Cloud's debug
@@ -631,6 +634,28 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
     df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
     out = _ccf_core(df_diff, driver, targets)
     return out
+
+
+@st.cache_data(show_spinner="⏳ Please wait — computing Granger causality for the selected date range…", ttl=900, max_entries=3)
+def compute_granger_live(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> dict:
+    """Live wrapper around mhw_analysis.compute_granger — pure Python/statsmodels
+    (unlike the SEA/DLNM/mixed-effects models, which run in R and stay precomputed),
+    so this can recompute on the selected date range like the other CCF panels."""
+    targets = [c for c in ENV_CCF_COLS if c in df.columns and c != driver]
+    return _granger_core(df, driver, targets)
+
+
+@st.cache_data(show_spinner="⏳ Please wait — computing stationarity tests for the selected date range…", ttl=900, max_entries=3)
+def compute_stationarity_live(df: pd.DataFrame, df_real: pd.DataFrame) -> list[dict]:
+    """Live wrapper around stationarity.test_series (ADF + KPSS) — plain
+    statsmodels calls, cheap enough to recompute on the selected date range."""
+    results = []
+    for col in ALL_COLS + MHW_COLS:
+        if col not in df.columns:
+            continue
+        src = df_real if col == "EC50" else df
+        results.append(_stationarity_test_series(src[col], col))
+    return results
 
 
 @st.cache_data(show_spinner="⏳ Please wait — computing MHW deep-dive analyses for the selected date range…", ttl=900, max_entries=3)
@@ -1806,7 +1831,7 @@ def _tab_mhw_gametes():
             # ── 7. Granger causality ──────────────────────────────────────────────────
 
         def _sub_granger_causality():
-                granger = load_json("granger_results.json")
+                granger = compute_granger_live(df)
                 if granger:
                     rows = []
                     for var, lag_ps in granger.items():
@@ -1834,11 +1859,17 @@ def _tab_mhw_gametes():
                             "show strong Granger causality at lags 2–4."
                         )
                 else:
-                    st.warning("Run `python analysis/run_all.py` first")
+                    st.warning("Not enough data in the selected date range to run this test.")
 
             # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
 
         def _sub_r_analysis():
+                st.caption(
+                    "Superposed epoch analysis, DLNM, and the mixed-effects model are "
+                    "fitted in R (dlnm/mgcv/lme4) on the full 2003–2025 record and "
+                    "precomputed offline — these fits are too computationally heavy to "
+                    "refit live and do not reflect the date filter above."
+                )
                 sea_df, dlnm_df, dlnm_lag = load_r_results()
 
                 if not sea_df.empty:
@@ -2045,7 +2076,7 @@ def _tab_correlations():
 def _tab_stationarity():
         st.header("Stationarity Tests (ADF + KPSS)")
 
-        stat_res = load_json("stationarity_results.json")
+        stat_res = compute_stationarity_live(df, df_real)
         if stat_res:
             rows = []
             for r in stat_res:
@@ -2072,7 +2103,7 @@ def _tab_stationarity():
             st.dataframe(styled, use_container_width=True, hide_index=True)
             _dl_btn(stat_table, f"stationarity_{_yr_start}_{_yr_end}.csv")
         else:
-            st.warning("Run `python analysis/run_all.py` first")
+            st.warning("Not enough data in the selected date range to run these tests.")
 
 
     # ═══════════════════════════════════════════════════════════════════════════════
