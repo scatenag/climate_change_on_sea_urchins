@@ -1079,8 +1079,17 @@ def _tab_timeseries():
                         hoverinfo="skip",
                         showlegend=(i == 1),
                     ), row=i, col=1)
-                    # CI band — no hover
-                    ci_ok = ci_df.dropna(subset=["EC50_ci_upper","EC50_ci_lower"])
+                    # CI band — no hover. ci_df itself stays unfiltered (the
+                    # sidebar uses it to show overall live-data freshness,
+                    # independent of the selected date range), so the date
+                    # filter is applied here instead -- otherwise this band
+                    # always spans the full dataset regardless of the
+                    # selected range, forcing the shared x-axis (see
+                    # make_subplots(shared_xaxes=True) above) to stay wide
+                    # even when every other trace is correctly narrowed.
+                    ci_ok = ci_df[
+                        (ci_df["Datetime"] >= _t0) & (ci_df["Datetime"] <= _t1)
+                    ].dropna(subset=["EC50_ci_upper","EC50_ci_lower"])
                     if not ci_ok.empty:
                         fig.add_trace(go.Scatter(
                             x=pd.concat([ci_ok["Datetime"], ci_ok["Datetime"][::-1]]),
