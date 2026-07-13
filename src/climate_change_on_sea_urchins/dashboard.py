@@ -4,6 +4,22 @@ EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
 print("DIAG: dashboard.py module top -- script execution (re)started", flush=True)
+
+# One-time, process-lifetime diagnostic: every rerun after the first hangs
+# somewhere between Streamlit's own "Removing orphaned deferred
+# callables..." log line and this script re-executing -- i.e. inside
+# Streamlit's internals, not our code (confirmed: not media files, not the
+# file watcher, both already ruled out and disabled). This registers a
+# process-wide timer (independent of whether this module body ever runs
+# again) that dumps every thread's live stack trace to stderr every 20s,
+# so the *next* hang shows exactly which Streamlit-internal frame it's
+# stuck in instead of guessing blind again.
+import faulthandler
+import sys as _sys
+if not getattr(faulthandler, "_ccsu_dump_registered", False):
+    faulthandler.dump_traceback_later(20, repeat=True, file=_sys.stderr, exit=False)
+    faulthandler._ccsu_dump_registered = True
+
 import base64
 import io
 import json
