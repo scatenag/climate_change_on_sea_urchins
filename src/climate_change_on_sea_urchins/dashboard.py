@@ -4,6 +4,7 @@ EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
 print("DIAG: dashboard.py module top -- script execution (re)started", flush=True)
+import base64
 import io
 import json
 import os
@@ -20,8 +21,6 @@ from pathlib import Path
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
            "VECLIB_MAXIMUM_THREADS", "NUMEXPR_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
-
-from PIL import Image
 
 import numpy as np
 import pandas as pd
@@ -44,9 +43,16 @@ from .mhw_analysis import (
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
+# page_icon is a plain emoji, not Image.open(...): Streamlit Cloud's debug
+# log showed the app permanently hanging (script thread starts, then never
+# reaches dashboard.py's own first print()) inside its own media-file
+# cleanup, every single rerun, specifically deleting the two real PNG
+# files this page registered (this icon + the logo below) -- the CSV
+# download's file is never involved. An emoji page_icon never touches
+# MediaFileManager at all, sidestepping whatever the underlying bug is.
 st.set_page_config(
     page_title="Sea Urchins & Climate Change",
-    page_icon=Image.open(str(ROOT_ASSETS / "sea_urchin.png")),
+    page_icon="🦔",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -882,21 +888,23 @@ def _date_range_sliders():
             value=_data_max_yr, step=1, key="yr_end",
         )
 
-# Title + icon moved here (shared, runs on every rerun) from inside the
-# Overview tab: an st.image() call that only executes when Overview is the
-# active tab gets its registered media file marked "orphaned" by Streamlit
-# the moment you switch to any other tab, since the code path producing it
-# no longer runs. Streamlit Cloud's debug log showed the app permanently
-# hanging (script thread starts, then nothing -- not even DIAG's own first
-# print()) exactly inside its own orphaned-media-file cleanup right after
-# a tab switch, deleting real files it had registered for Overview. Making
-# the image render unconditionally on every rerun means it's never
-# orphaned, sidestepping whatever the underlying Streamlit bug is.
+# Logo is inlined as a base64 data URI in markdown, not st.image(): the
+# latter registers a real file with Streamlit's MediaFileManager, and
+# Streamlit Cloud's debug log showed the app permanently hanging (script
+# thread starts, then never reaches dashboard.py's own first print()) on
+# every single rerun, right inside that manager's own cleanup step,
+# specifically while deleting the two real PNG files this page registers
+# (this logo + the page_icon, now also fixed) -- the CSV download's file
+# is never involved. A data: URI never touches MediaFileManager at all.
+_logo_b64 = base64.b64encode((ROOT_ASSETS / "sea_urchin_transparent.png").read_bytes()).decode()
 _title_col, _ico_col = st.columns([12, 1])
 with _title_col:
     st.title("Climate Change on Sea Urchins")
 with _ico_col:
-    st.image(str(ROOT_ASSETS / "sea_urchin_transparent.png"), width=80)
+    st.markdown(
+        f'<img src="data:image/png;base64,{_logo_b64}" width="80">',
+        unsafe_allow_html=True,
+    )
 
 st.markdown("#### Date range")
 _date_range_sliders()
