@@ -15,3 +15,13 @@ enableXsrfProtection = true
 [browser]
 gatherUsageStats = false
 
+[logger]
+# App-level DIAG print()s already proved dashboard.py's own script code is
+# never re-entered on the click that blanks the page (zero new lines, not
+# even the very first one) -- so the stall is on Streamlit's own side of
+# the WebSocket/session boundary, before our code would run at all. Debug
+# level surfaces Streamlit's internal AppSession/ScriptRunner/Server log
+# messages (received rerun request, session state handling, etc.) so we
+# can see where *that* gets stuck instead of guessing blind.
+level = "debug"
+

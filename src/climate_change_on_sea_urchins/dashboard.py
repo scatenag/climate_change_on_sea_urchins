@@ -3,6 +3,7 @@ Climate Change on Sea Urchins — Streamlit Dashboard
 EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
+print("DIAG: dashboard.py module top -- script execution (re)started", flush=True)
 import io
 import json
 import os
