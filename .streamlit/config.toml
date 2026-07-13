@@ -27,6 +27,24 @@ fileWatcherType = "none"
 [browser]
 gatherUsageStats = false
 
+[runner]
+# postScriptGC (default true) forces a full gc.collect(2) after every
+# single script run, completely unlogged (no debug line before or after).
+# Production's debug log shows the hang landing immediately after the one
+# logged step ("Removing orphaned deferred callables...") that precedes
+# this GC call in _on_script_finished -- and, critically, a second,
+# completely fresh session (new WebSocket, empty widget state, nothing to
+# do with the tab click) hangs at the exact same point too, meaning
+# something in the whole PROCESS's state breaks after the first script run,
+# not anything session- or request-specific. A GC cycle that hangs or
+# crashes on a __del__/finalizer somewhere in this app's C-extension-heavy
+# dependency stack (numpy/pandas/scipy/statsmodels/plotly/pmdarima) under
+# Streamlit Cloud's very recent Python 3.14 runtime is a strong candidate:
+# it would be silent (gc.collect() has no logging around it at all) and
+# would explain why it's the *second* run specifically that fails (objects
+# from the first run's execution are what the GC would be collecting).
+postScriptGC = false
+
 [logger]
 # App-level DIAG print()s already proved dashboard.py's own script code is
 # never re-entered on the click that blanks the page (zero new lines, not
