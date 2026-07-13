@@ -20,7 +20,14 @@ pmdarima>=2.0
 
 # Visualization & dashboard
 plotly>=5.18
-streamlit>=1.35
+# Upper-bounded below the Tornado->Uvicorn internal server migration
+# (happened between 1.56 and 1.57): unpinned, Streamlit Cloud silently
+# picks up whatever is newest on every redeploy, and production started
+# failing to handle a second script rerun (tab switch, button click -- the
+# very first interaction after load produces a blank page with zero
+# server-side trace) right around when it drifted onto a 1.57+ build.
+# Revisit once that migration has had time to mature upstream.
+streamlit>=1.35,<1.57
 Pillow>=10.0
 
 # Marine Heatwaves (vendored as marineHeatWaves.py — no install needed)
