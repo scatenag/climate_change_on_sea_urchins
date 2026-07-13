@@ -849,10 +849,21 @@ df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 _data_min_yr = int(df["Datetime"].dt.year.min())
 _data_max_yr = int(df["Datetime"].dt.year.max())
 
+@st.fragment
 def _date_range_slider():
     # A single range slider (tuple value) instead of two independent
     # sliders: the two handles can't cross, so "from" > "to" is simply not
     # a reachable state, no extra validation needed.
+    #
+    # Back in its own @st.fragment: now that app.py forces a genuine fresh
+    # re-import on every rerun, a full rerun does real work again (loads
+    # data, re-renders the active tab, etc.) -- dragging a top-level,
+    # non-fragmented slider fires one full rerun per drag tick, and enough
+    # of those in quick succession crashed the process with a segfault
+    # (almost certainly native code in numpy/scipy/statsmodels/pandas
+    # getting re-entered faster than it can handle). Fragment-scoping the
+    # slider keeps a drag confined to just this fragment; only committing
+    # via "Update" triggers a real full-app rerun.
     st.slider(
         "From year – To year", min_value=_data_min_yr, max_value=_data_max_yr,
         value=(_data_min_yr, _data_max_yr), step=1, key="yr_range",
