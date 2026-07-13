@@ -882,6 +882,22 @@ def _date_range_sliders():
             value=_data_max_yr, step=1, key="yr_end",
         )
 
+# Title + icon moved here (shared, runs on every rerun) from inside the
+# Overview tab: an st.image() call that only executes when Overview is the
+# active tab gets its registered media file marked "orphaned" by Streamlit
+# the moment you switch to any other tab, since the code path producing it
+# no longer runs. Streamlit Cloud's debug log showed the app permanently
+# hanging (script thread starts, then nothing -- not even DIAG's own first
+# print()) exactly inside its own orphaned-media-file cleanup right after
+# a tab switch, deleting real files it had registered for Overview. Making
+# the image render unconditionally on every rerun means it's never
+# orphaned, sidestepping whatever the underlying Streamlit bug is.
+_title_col, _ico_col = st.columns([12, 1])
+with _title_col:
+    st.title("Climate Change on Sea Urchins")
+with _ico_col:
+    st.image(str(ROOT_ASSETS / "sea_urchin_transparent.png"), width=80)
+
 st.markdown("#### Date range")
 _date_range_sliders()
 _bcol1, _bcol2, _ = st.columns([1, 1, 3])
@@ -984,11 +1000,6 @@ with st.sidebar:
 @st.fragment
 def _tab_overview():
         print("DIAG: _tab_overview tab body START", flush=True)
-        _title_col, _ico_col = st.columns([12, 1])
-        with _title_col:
-            st.title("Climate Change on Sea Urchins")
-        with _ico_col:
-            st.image(str(ROOT_ASSETS / "sea_urchin_transparent.png"), width=80)
         st.markdown(
             "Study on the impact of climate change and **Marine Heatwaves** "
             "on gamete sensitivity of *Paracentrotus lividus* in the North Tyrrhenian Sea."
