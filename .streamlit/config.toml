@@ -11,47 +11,14 @@ enableXsrfProtection = true
 # enableCORS is intentionally omitted: Streamlit silently forces it back to
 # true whenever enableXsrfProtection is true, so setting it to false here
 # was a no-op that just obscured the actual (CORS-enabled) behavior.
-#
-# fileWatcherType = "none": the production debug log shows the hang lands
-# every single time right after "Removing orphaned deferred callables...",
-# immediately before Streamlit's LocalSourcesWatcher registers file-system
-# watches on this app's modules -- which are spread across two separate
-# directory trees (config.py at the repo root; dashboard.py/mhw_analysis.py
-# /common.py inside src/climate_change_on_sea_urchins/, a leftover of the
-# JOSS src-layout repackaging). Disabling the watcher entirely removes that
-# subsystem from the picture: no watches, no watchdog Observer thread, no
-# "Watcher created for..." log lines. If the hang disappears, the watcher
-# (not application code, already ruled out via DIAG prints) was the cause.
-fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
 
 [runner]
-# postScriptGC (default true) forces a full gc.collect(2) after every
-# single script run, completely unlogged (no debug line before or after).
-# Production's debug log shows the hang landing immediately after the one
-# logged step ("Removing orphaned deferred callables...") that precedes
-# this GC call in _on_script_finished -- and, critically, a second,
-# completely fresh session (new WebSocket, empty widget state, nothing to
-# do with the tab click) hangs at the exact same point too, meaning
-# something in the whole PROCESS's state breaks after the first script run,
-# not anything session- or request-specific. A GC cycle that hangs or
-# crashes on a __del__/finalizer somewhere in this app's C-extension-heavy
-# dependency stack (numpy/pandas/scipy/statsmodels/plotly/pmdarima) under
-# Streamlit Cloud's very recent Python 3.14 runtime is a strong candidate:
-# it would be silent (gc.collect() has no logging around it at all) and
-# would explain why it's the *second* run specifically that fails (objects
-# from the first run's execution are what the GC would be collecting).
-postScriptGC = false
-
-[logger]
-# App-level DIAG print()s already proved dashboard.py's own script code is
-# never re-entered on the click that blanks the page (zero new lines, not
-# even the very first one) -- so the stall is on Streamlit's own side of
-# the WebSocket/session boundary, before our code would run at all. Debug
-# level surfaces Streamlit's internal AppSession/ScriptRunner/Server log
-# messages (received rerun request, session state handling, etc.) so we
-# can see where *that* gets stuck instead of guessing blind.
-level = "debug"
-
+# Neither setting below turned out to be the cause of the blank-page bug
+# (root cause: app.py's import of the dashboard package was cached after
+# the first run, see app.py's comment) -- kept anyway as cheap, low-risk
+# hygiene since testing showed no downside.
+postScriptGC = false  # skip the full gc.collect(2) Streamlit runs after every script
+fastReruns = false    # avoid Streamlit's documented "can lead to race conditions" rerun path

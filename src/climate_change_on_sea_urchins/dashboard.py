@@ -3,23 +3,6 @@ Climate Change on Sea Urchins — Streamlit Dashboard
 EC50 data fetched live from Google Sheets (TTL 1 h).
 Environmental variables and analysis results loaded from pre-computed CSVs.
 """
-print("DIAG: dashboard.py module top -- script execution (re)started", flush=True)
-
-# One-time, process-lifetime diagnostic: every rerun after the first hangs
-# somewhere between Streamlit's own "Removing orphaned deferred
-# callables..." log line and this script re-executing -- i.e. inside
-# Streamlit's internals, not our code (confirmed: not media files, not the
-# file watcher, both already ruled out and disabled). This registers a
-# process-wide timer (independent of whether this module body ever runs
-# again) that dumps every thread's live stack trace to stderr every 20s,
-# so the *next* hang shows exactly which Streamlit-internal frame it's
-# stuck in instead of guessing blind again.
-import faulthandler
-import sys as _sys
-if not getattr(faulthandler, "_ccsu_dump_registered", False):
-    faulthandler.dump_traceback_later(20, repeat=True, file=_sys.stderr, exit=False)
-    faulthandler._ccsu_dump_registered = True
-
 import base64
 import io
 import json
@@ -349,9 +332,7 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     Returns dict with keys 'bad'/'mean'/'good' → DataFrames, plus 'meta'.
     Also computes the mechanistic (bio) scenarios (Approach B).
     """
-    print(f"DIAG: compute_forecast START n={len(df)} range={df['Datetime'].min()}..{df['Datetime'].max()}", flush=True)
     opt_lag = _fc_find_lag(df_real, df)
-    print(f"DIAG: compute_forecast opt_lag done ({opt_lag})", flush=True)
     monthly = _fc_build_monthly(df_real, df, opt_lag)
     monthly = monthly.set_index("Datetime").asfreq("MS")
 
@@ -393,7 +374,6 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
         resid_std = min(float(np.std(fit_obj.resid)), series_std)
     except Exception:
         pass
-    print(f"DIAG: compute_forecast pilot SARIMAX fit done (fit_obj is None: {fit_obj is None})", flush=True)
 
     # Post-training slope for calibrated scenario adjustment
     t_post = np.arange(len(ec50_series))
@@ -404,7 +384,6 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     years_ahead = np.arange(1, n_months + 1) / 12.0
 
     for scenario in ["bad", "mean", "good"]:
-        print(f"DIAG: compute_forecast scenario={scenario} starting", flush=True)
         sc_mult = _ENV_SCALE[scenario]
         pH_fut   = _fc_project_env(monthly["pH"],          n_months, last_year, sc_mult)
         Tmp_fut  = _fc_project_env(monthly["Temperature"], n_months, last_year, sc_mult)
@@ -551,7 +530,6 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
     results["bio_bad"]  = bio_results["bad"]
     results["bio_mean"] = bio_results["mean"]
     results["bio_good"] = bio_results["good"]
-    print("DIAG: compute_forecast DONE, returning", flush=True)
     return results
 
 
@@ -562,7 +540,6 @@ def compute_correlations(df: pd.DataFrame) -> dict:
     loaded DataFrame — avoids relying on pre-computed CSVs that may be stale.
     Mirrors the logic of analysis/03_correlations.py.
     """
-    print(f"DIAG: compute_correlations START n={len(df)}", flush=True)
     env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
     mhw_cols = ["mhw_peak_intensity", "mhw_days"]
 
@@ -628,11 +605,9 @@ def compute_correlations(df: pd.DataFrame) -> dict:
 
     results = {}
     for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
-        print(f"DIAG: compute_correlations label={label} starting", flush=True)
         subset = df_work[mask]
         r_df, p_df = _spearman_matrix(_extract_trends(subset))
         results[label] = (r_df, p_df)
-    print("DIAG: compute_correlations DONE, returning", flush=True)
     return results
 
 
@@ -649,14 +624,12 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
     comes out significant at nearly every lag with no peak — the signature
     of confounding by shared trend, not a localized biological effect.
     """
-    print(f"DIAG: compute_ccf_diff START n={len(df)}", flush=True)
     targets = [c for c in ENV_CCF_COLS if c in df.columns]
     if driver not in df.columns:
         return pd.DataFrame()
     df_diff = difference_series(df, [driver] + targets)
     df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
     out = _ccf_core(df_diff, driver, targets)
-    print("DIAG: compute_ccf_diff DONE, returning", flush=True)
     return out
 
 
@@ -671,7 +644,6 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
       - decline: EC50 trend pre/post 2016
       - variance_part: semi-partial R² decomposition
     """
-    print(f"DIAG: compute_mhw_deep START n={len(df)}", flush=True)
     from numpy.linalg import lstsq
 
     out = {}
@@ -854,7 +826,6 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
         out["variance_part"] = {"df": pd.DataFrame(vp_rows), "n": len(vp_merged),
                                  "R2_full": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)}
 
-    print("DIAG: compute_mhw_deep DONE, returning", flush=True)
     return out
 
 
@@ -935,7 +906,6 @@ if _apply:
 
 _yr_start = st.session_state["applied_yr_start"]
 _yr_end   = st.session_state["applied_yr_end"]
-print(f"DIAG: script top-level running, applied range {_yr_start}-{_yr_end}", flush=True)
 
 # Clamp in case start > end
 if _yr_start > _yr_end:
@@ -1010,7 +980,6 @@ with st.sidebar:
 # TAB 1 — Overview
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_overview():
-        print("DIAG: _tab_overview tab body START", flush=True)
         st.markdown(
             "Study on the impact of climate change and **Marine Heatwaves** "
             "on gamete sensitivity of *Paracentrotus lividus* in the North Tyrrhenian Sea."
@@ -1045,7 +1014,6 @@ def _tab_overview():
 # TAB 2 — Time Series
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_timeseries():
-        print("DIAG: _tab_timeseries tab body START", flush=True)
         st.header("Time Series")
 
         cols_opts = ["Temperature", "Salinity", "O2", "pH", "CO2", "EC50"]
@@ -1269,7 +1237,6 @@ def _tab_timeseries():
 # TAB 3 — Marine Heatwaves
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_marine_heatwaves():
-        print("DIAG: _tab_marine_heatwaves tab body START", flush=True)
         st.header("Marine Heatwaves")
 
         # Temperature + MHW shading
@@ -1351,7 +1318,6 @@ def _tab_marine_heatwaves():
 # TAB 4 — MHW → Gametes (lag)
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_mhw_gametes():
-        print("DIAG: _tab_mhw_gametes tab body START", flush=True)
         st.header("MHW → Gamete sensitivity: lag analysis")
 
         deep = compute_mhw_deep(df)
@@ -1950,7 +1916,6 @@ def _tab_mhw_gametes():
 # TAB 5 — Pre / Post split (interactive)
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_pre_post_split():
-        print("DIAG: _tab_pre_post_split tab body START", flush=True)
         st.header("Pre / Post split")
         st.caption(
             "The default split year, **2016**, is the discriminant identified in "
@@ -2026,7 +1991,6 @@ def _tab_pre_post_split():
 # TAB 6 — Correlations
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_correlations():
-        print("DIAG: _tab_correlations tab body START", flush=True)
         st.header("Spearman Correlation Matrices")
 
         period_tab = st.radio("Period", ["All", "Pre-2016", "Post-2016"], horizontal=True)
@@ -2068,7 +2032,6 @@ def _tab_correlations():
 # TAB 7 — Stationarity
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_stationarity():
-        print("DIAG: _tab_stationarity tab body START", flush=True)
         st.header("Stationarity Tests (ADF + KPSS)")
 
         stat_res = load_json("stationarity_results.json")
@@ -2108,7 +2071,6 @@ def _tab_stationarity():
 # TAB 8 — Forecast EC50
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_forecast():
-        print("DIAG: _tab_forecast tab body START", flush=True)
         st.header("Forecast EC50")
 
         def _fc_plot(fc_triples, title, year_range, last_obs_date, key_suffix):
@@ -2333,7 +2295,6 @@ def _tab_forecast():
 # TAB 9 — About
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_about():
-        print("DIAG: _tab_about tab body START", flush=True)
         st.header("About")
         st.markdown("""
 ### Methods
@@ -2394,6 +2355,4 @@ _TAB_DISPATCH = {
     "Forecast EC50": _tab_forecast,
     "About": _tab_about,
 }
-print(f"DIAG: about to dispatch active_tab={active_tab!r}", flush=True)
 _TAB_DISPATCH[active_tab]()
-print("DIAG: script FULLY DONE (dispatch returned, nothing left to run)", flush=True)
