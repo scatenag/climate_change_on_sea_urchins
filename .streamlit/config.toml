@@ -11,6 +11,18 @@ enableXsrfProtection = true
 # enableCORS is intentionally omitted: Streamlit silently forces it back to
 # true whenever enableXsrfProtection is true, so setting it to false here
 # was a no-op that just obscured the actual (CORS-enabled) behavior.
+#
+# fileWatcherType = "none": the production debug log shows the hang lands
+# every single time right after "Removing orphaned deferred callables...",
+# immediately before Streamlit's LocalSourcesWatcher registers file-system
+# watches on this app's modules -- which are spread across two separate
+# directory trees (config.py at the repo root; dashboard.py/mhw_analysis.py
+# /common.py inside src/climate_change_on_sea_urchins/, a leftover of the
+# JOSS src-layout repackaging). Disabling the watcher entirely removes that
+# subsystem from the picture: no watches, no watchdog Observer thread, no
+# "Watcher created for..." log lines. If the hang disappears, the watcher
+# (not application code, already ruled out via DIAG prints) was the cause.
+fileWatcherType = "none"
 
 [browser]
 gatherUsageStats = false
