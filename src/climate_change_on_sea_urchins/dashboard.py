@@ -849,18 +849,14 @@ df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 _data_min_yr = int(df["Datetime"].dt.year.min())
 _data_max_yr = int(df["Datetime"].dt.year.max())
 
-def _date_range_sliders():
-    _c1, _c2 = st.columns(2)
-    with _c1:
-        st.slider(
-            "From year", min_value=_data_min_yr, max_value=_data_max_yr,
-            value=_data_min_yr, step=1, key="yr_start",
-        )
-    with _c2:
-        st.slider(
-            "To year", min_value=_data_min_yr, max_value=_data_max_yr,
-            value=_data_max_yr, step=1, key="yr_end",
-        )
+def _date_range_slider():
+    # A single range slider (tuple value) instead of two independent
+    # sliders: the two handles can't cross, so "from" > "to" is simply not
+    # a reachable state, no extra validation needed.
+    st.slider(
+        "From year – To year", min_value=_data_min_yr, max_value=_data_max_yr,
+        value=(_data_min_yr, _data_max_yr), step=1, key="yr_range",
+    )
 
 # Logo is inlined as a base64 data URI in markdown, not st.image(): the
 # latter registers a real file with Streamlit's MediaFileManager, and
@@ -881,7 +877,7 @@ with _ico_col:
     )
 
 st.markdown("#### Date range")
-_date_range_sliders()
+_date_range_slider()
 _bcol1, _bcol2, _ = st.columns([1, 1, 3])
 with _bcol1:
     _apply = st.button("Update", type="primary", use_container_width=True)
@@ -895,21 +891,16 @@ if _refresh:
 
 # The date filter only takes effect when "Update" is clicked — everything
 # below just reads the committed st.session_state["applied_yr_*"] values, so
-# dragging the sliders alone (fragment-scoped, see above) never changes what
+# dragging the slider alone (fragment-scoped, see above) never changes what
 # gets computed/shown until Update's own top-level rerun commits it here.
 if "applied_yr_start" not in st.session_state:
     st.session_state["applied_yr_start"] = _data_min_yr
     st.session_state["applied_yr_end"]   = _data_max_yr
 if _apply:
-    st.session_state["applied_yr_start"] = st.session_state.yr_start
-    st.session_state["applied_yr_end"]   = st.session_state.yr_end
+    st.session_state["applied_yr_start"], st.session_state["applied_yr_end"] = st.session_state.yr_range
 
 _yr_start = st.session_state["applied_yr_start"]
 _yr_end   = st.session_state["applied_yr_end"]
-
-# Clamp in case start > end
-if _yr_start > _yr_end:
-    _yr_start, _yr_end = _yr_end, _yr_start
 
 _t0 = pd.Timestamp(f"{_yr_start}-01-01")
 _t1 = pd.Timestamp(f"{_yr_end}-12-31")
