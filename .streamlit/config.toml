@@ -23,3 +23,4 @@ gatherUsageStats = false
 # rebooted on ordinary widget interaction. false trades a little rerun
 # latency for not running two script executions at once.
 fastReruns = false
+

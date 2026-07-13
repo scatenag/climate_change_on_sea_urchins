@@ -855,54 +855,55 @@ df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 _data_min_yr = int(df["Datetime"].dt.year.min())
 _data_max_yr = int(df["Datetime"].dt.year.max())
 
-# Both the year sliders and the two buttons live in their own @st.fragment,
-# same as every other slider/form in this app (Time Series, Pre/Post split,
-# Forecast). A bare widget outside any fragment reruns the ENTIRE script on
-# every interaction — re-running uncached load_main() (which can block on a
-# live Google Sheets fetch) and re-dispatching whatever tab is active. That
-# was true for every prior "blank on touch" incident here regardless of
-# which specific widget (form, slider, button) carried it. Fragment-scoping
-# means touching a slider only reruns this fragment; "Update"/"Refresh EC50"
-# explicitly call st.rerun() (full-app scope by default, even from inside a
-# fragment) to commit the change with a single, deliberate full rerun.
+# The sliders alone live in their own @st.fragment (touching them reruns
+# only this fragment, not the whole script/app — confirmed fixed touching
+# them no longer blanks the page). "Update" and "Refresh EC50" are
+# deliberately kept OUTSIDE the fragment, as plain top-level widgets:
+# reproduced locally (Playwright + server-side DIAG prints) that calling
+# st.rerun() from *inside* a fragment, specifically when that fragment is
+# executing as a fragment-scoped rerun (not the initial full-script pass),
+# never actually starts the new run — the log shows the call happening and
+# then nothing further, ever, no error either. A plain top-level st.button
+# needs no explicit st.rerun() at all: Streamlit already reruns the whole
+# script automatically on any top-level widget interaction, the same
+# mechanism the tab-radio uses and that has never failed here.
 @st.fragment
-def _date_range_control():
-    st.markdown("#### Date range")
-    _fcol1, _fcol2, _fcol3 = st.columns([3, 3, 1])
-    with _fcol1:
+def _date_range_sliders():
+    _c1, _c2 = st.columns(2)
+    with _c1:
         st.slider(
             "From year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_min_yr, step=1, key="yr_start",
         )
-    with _fcol2:
+    with _c2:
         st.slider(
             "To year", min_value=_data_min_yr, max_value=_data_max_yr,
             value=_data_max_yr, step=1, key="yr_end",
         )
-    with _fcol3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if st.button("Update", type="primary", use_container_width=True):
-            st.session_state["applied_yr_start"] = st.session_state.yr_start
-            st.session_state["applied_yr_end"]   = st.session_state.yr_end
-            st.rerun()
-    if st.button("↺ Refresh EC50",
-                 help="Force re-download of EC50 data from Google Sheets. "
-                      "Environmental data (Copernicus) and MHW are updated automatically "
-                      "by the nightly GitHub Actions workflow."):
-        fetch_ec50_live.clear()
-        st.rerun()
 
-with st.container():
-    _date_range_control()
+st.markdown("#### Date range")
+_date_range_sliders()
+_bcol1, _bcol2, _ = st.columns([1, 1, 3])
+with _bcol1:
+    _apply = st.button("Update", type="primary", use_container_width=True)
+with _bcol2:
+    _refresh = st.button("↺ Refresh EC50",
+                          help="Force re-download of EC50 data from Google Sheets. "
+                               "Environmental data (Copernicus) and MHW are updated "
+                               "automatically by the nightly GitHub Actions workflow.")
+if _refresh:
+    fetch_ec50_live.clear()
 
-# The date filter only takes effect when "Update" is clicked (committed to
-# st.session_state["applied_yr_*"] inside _date_range_control() above, which
-# then calls st.rerun() itself) — everything below just reads the committed
-# values, so dragging the sliders alone (fragment-scoped, see above) never
-# reaches this code at all.
+# The date filter only takes effect when "Update" is clicked — everything
+# below just reads the committed st.session_state["applied_yr_*"] values, so
+# dragging the sliders alone (fragment-scoped, see above) never changes what
+# gets computed/shown until Update's own top-level rerun commits it here.
 if "applied_yr_start" not in st.session_state:
     st.session_state["applied_yr_start"] = _data_min_yr
     st.session_state["applied_yr_end"]   = _data_max_yr
+if _apply:
+    st.session_state["applied_yr_start"] = st.session_state.yr_start
+    st.session_state["applied_yr_end"]   = st.session_state.yr_end
 
 _yr_start = st.session_state["applied_yr_start"]
 _yr_end   = st.session_state["applied_yr_end"]
