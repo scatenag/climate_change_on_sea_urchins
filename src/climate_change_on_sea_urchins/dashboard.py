@@ -878,19 +878,6 @@ df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
 _data_min_yr = int(df["Datetime"].dt.year.min())
 _data_max_yr = int(df["Datetime"].dt.year.max())
 
-# The sliders alone live in their own @st.fragment (touching them reruns
-# only this fragment, not the whole script/app — confirmed fixed touching
-# them no longer blanks the page). "Update" and "Refresh EC50" are
-# deliberately kept OUTSIDE the fragment, as plain top-level widgets:
-# reproduced locally (Playwright + server-side DIAG prints) that calling
-# st.rerun() from *inside* a fragment, specifically when that fragment is
-# executing as a fragment-scoped rerun (not the initial full-script pass),
-# never actually starts the new run — the log shows the call happening and
-# then nothing further, ever, no error either. A plain top-level st.button
-# needs no explicit st.rerun() at all: Streamlit already reruns the whole
-# script automatically on any top-level widget interaction, the same
-# mechanism the tab-radio uses and that has never failed here.
-@st.fragment
 def _date_range_sliders():
     _c1, _c2 = st.columns(2)
     with _c1:
@@ -989,13 +976,14 @@ TAB_LABELS = [
 ]
 # A plain st.radio, not st.tabs: st.tabs renders (and recomputes) every tab's
 # content on every rerun regardless of which one is visible — with 9 tabs
-# (some running SARIMAX/ARIMA/deep MHW analyses), that was the actual reason
-# clicking "Update" above still blanked the app even after each tab's content
-# was isolated into its own st.fragment (fragments avoid *unnecessary* reruns
-# from a widget inside them, but do nothing to stop a real, external rerun
-# like "Update" from calling into every tab again). Only the selected label's
-# function is called below (search "Tab dispatch"), so a rerun only ever
-# recomputes the one section actually being viewed.
+# (some running SARIMAX/ARIMA/deep MHW analyses), that would recompute all
+# of them on every interaction. Only the selected label's function is
+# called below (search "Tab dispatch"), so a rerun only ever recomputes
+# the one section actually being viewed. No @st.fragment is used anywhere
+# in this file: it was suspected (and removed) as a possible trigger for a
+# bug where a rerun request got misrouted to a stale/no-longer-existing
+# fragment instead of running the full script, silently producing a blank
+# page with no error and no script output.
 active_tab = st.radio(
     "Section", TAB_LABELS, horizontal=True,
     label_visibility="collapsed", key="active_main_tab",
@@ -1021,7 +1009,6 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — Overview
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_overview():
         print("DIAG: _tab_overview tab body START", flush=True)
         st.markdown(
@@ -1057,7 +1044,6 @@ def _tab_overview():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 2 — Time Series
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_timeseries():
         print("DIAG: _tab_timeseries tab body START", flush=True)
         st.header("Time Series")
@@ -1282,7 +1268,6 @@ def _tab_timeseries():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 3 — Marine Heatwaves
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_marine_heatwaves():
         print("DIAG: _tab_marine_heatwaves tab body START", flush=True)
         st.header("Marine Heatwaves")
@@ -1365,7 +1350,6 @@ def _tab_marine_heatwaves():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 4 — MHW → Gametes (lag)
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_mhw_gametes():
         print("DIAG: _tab_mhw_gametes tab body START", flush=True)
         st.header("MHW → Gamete sensitivity: lag analysis")
@@ -1965,7 +1949,6 @@ def _tab_mhw_gametes():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — Pre / Post split (interactive)
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_pre_post_split():
         print("DIAG: _tab_pre_post_split tab body START", flush=True)
         st.header("Pre / Post split")
@@ -2042,7 +2025,6 @@ def _tab_pre_post_split():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 6 — Correlations
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_correlations():
         print("DIAG: _tab_correlations tab body START", flush=True)
         st.header("Spearman Correlation Matrices")
@@ -2085,7 +2067,6 @@ def _tab_correlations():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — Stationarity
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_stationarity():
         print("DIAG: _tab_stationarity tab body START", flush=True)
         st.header("Stationarity Tests (ADF + KPSS)")
@@ -2126,7 +2107,6 @@ def _tab_stationarity():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 8 — Forecast EC50
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_forecast():
         print("DIAG: _tab_forecast tab body START", flush=True)
         st.header("Forecast EC50")
@@ -2352,7 +2332,6 @@ def _tab_forecast():
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 9 — About
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.fragment
 def _tab_about():
         print("DIAG: _tab_about tab body START", flush=True)
         st.header("About")
