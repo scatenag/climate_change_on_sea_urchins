@@ -1041,13 +1041,16 @@ def _tab_overview():
                 "Months not yet folded into the multiyear reanalysis are backfilled from the "
                 "equivalent MEDSEA_ANALYSISFORECAST near-real-time product (same variables)."
             )
-            st.warning(
-                "CO₂ unit caveat: the CO₂ column in the original 2003–2022 dataset (Sartori et "
-                "al. 2023) has values ~33–58 with no recorded unit, while Copernicus's spco2 is "
-                "surface pCO₂ in µatm (typically ~380–450 in the Mediterranean) — these are "
-                "plausibly different quantities. `scripts/build_dataset.py` cross-checks the "
-                "overlap period before merging; treat the merged CO₂ series with this caveat in "
-                "mind for anything beyond internal trend analysis."
+            st.info(
+                "CO₂ unit note: an automated cross-check (`scripts/build_dataset.py::"
+                "cross_check_co2`, also enforced in `tests/test_data_quality.py`) confirms the "
+                "Copernicus-derived CO₂ series and the original 2003–2022 series (Sartori et al. "
+                "2023) agree closely over their 19-year overlap (ratio 0.99 ± 0.01) — internally "
+                "consistent. The absolute unit inherited from Copernicus's `spco2` variable "
+                "(nominally µatm) is not independently verified beyond this consistency check, "
+                "since both series read ~31–58 rather than the ~380–450 µatm typical of "
+                "Mediterranean surface pCO₂; treat the CO₂ series as a reliable internal signal "
+                "(trends, correlations) rather than an absolute reference value."
             )
             st.markdown(
                 "**Marine heatwave detection**: Hobday et al. (2016) method — 90th-percentile "
@@ -1056,7 +1059,8 @@ def _tab_overview():
             )
             st.markdown(
                 "**EC50 bioassay**: *Paracentrotus lividus* fertilization/embryo-toxicity assay, "
-                "collected and maintained by **ISPRA**, published as a public Google Sheets export."
+                "collected and maintained by **[ISPRA](https://www.isprambiente.gov.it/)**, "
+                "published as a public Google Sheets export."
             )
             st.caption(
                 "Full details, exact endpoints, and the automated validation checks: see "
@@ -1220,31 +1224,36 @@ def _tab_timeseries():
 
                 fig.update_yaxes(title_text=col, row=i, col=1)
 
-            # MHW shading — use add_shape per row (avoids annotation issues)
-            # Plotly first axis is "y domain", second is "y2 domain", etc.
-            def _yref(row_i: int) -> str:
-                return "y domain" if row_i == 1 else f"y{row_i} domain"
-
+            # MHW shading — one shape per event spanning the whole figure height
+            # (yref="paper", independent of any row's own y-axis) instead of one
+            # shape per (event, row): with shared_xaxes=True all rows share the
+            # same x scale, so a single xref="x" + yref="paper" rect already
+            # lines up correctly across every row. The previous per-row version
+            # added up to n_rows x len(mhw_events) shapes (e.g. 6 x 129 = 774
+            # with all variables selected) -- each fig.add_shape() call carries
+            # real per-call schema-validation cost, so that scaling was the
+            # actual bottleneck behind the tab's multi-second load, confirmed
+            # by timing the figure-build step directly (~4.8s at n_shapes=260
+            # for just 2 rows, before this fix).
             if show_mhw:
                 for _, ev in mhw_events.iterrows():
                     x0 = str(ev["start_date"])[:10]
                     x1 = str(ev["end_date"])[:10]
-                    for row_i in range(1, n_rows + 1):
-                        fig.add_shape(
-                            type="rect",
-                            x0=x0, x1=x1, y0=0, y1=1,
-                            xref="x", yref=_yref(row_i),
-                            fillcolor="rgba(231,111,81,0.10)", line_width=0,
-                        )
+                    fig.add_shape(
+                        type="rect",
+                        x0=x0, x1=x1, y0=0, y1=1,
+                        xref="x", yref="paper",
+                        fillcolor="rgba(231,111,81,0.10)", line_width=0,
+                    )
 
-            # 2016 split line — use add_shape (not add_vline, which breaks on subplots with string x)
-            for row_i in range(1, n_rows + 1):
-                fig.add_shape(
-                    type="line",
-                    x0="2016-01-01", x1="2016-01-01", y0=0, y1=1,
-                    xref="x", yref=_yref(row_i),
-                    line=dict(dash="dash", color="grey", width=1),
-                )
+            # 2016 split line — use add_shape (not add_vline, which breaks on
+            # subplots with string x); one shape spanning the whole figure.
+            fig.add_shape(
+                type="line",
+                x0="2016-01-01", x1="2016-01-01", y0=0, y1=1,
+                xref="x", yref="paper",
+                line=dict(dash="dash", color="grey", width=1),
+            )
 
             fig.update_layout(
                 height=max(300, 230 * n_rows),
@@ -2415,7 +2424,7 @@ from SARIMAX residual SD (capped at historical σ, +3%/yr), hard-capped at 3 × 
 | Data | Source |
 |------|--------|
 | Monthly and daily SST, Salinity, O₂, pH, CO₂ | Copernicus Marine Service (MEDSEA_MULTIYEAR) |
-| Monthly EC50 bioassay | ISPRA — Istituto Superiore per la Protezione e la Ricerca Ambientale |
+| Monthly EC50 bioassay | [ISPRA](https://www.isprambiente.gov.it/) — Istituto Superiore per la Protezione e la Ricerca Ambientale |
 
 ### Key references
 

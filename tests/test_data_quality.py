@@ -192,3 +192,36 @@ def test_ccf_results_bounded(fname):
     assert df["spearman_r"].between(-1.0001, 1.0001).all(), f"{fname}: spearman_r outside [-1,1]"
     assert df["p_value"].between(-0.0001, 1.0001).all(), f"{fname}: p_value outside [0,1]"
     assert (df["n"] > 0).all(), f"{fname}: non-positive sample size 'n'"
+
+
+# ---------------------------------------------------------------------------
+# Provenance cross-check — CO2 unit consistency
+#
+# scripts/build_dataset.py::cross_check_co2() prints this same comparison
+# but only when someone runs the script locally, so its result (currently
+# ratio 0.99 +/- 0.01, see README "CO2 unit note") was never actually
+# enforced anywhere. Turning it into an assertion means a future data
+# refresh that silently breaks this consistency (e.g. a Copernicus product
+# change) fails CI instead of only being visible to whoever happens to
+# re-run build_dataset.py locally and read its stdout.
+# ---------------------------------------------------------------------------
+
+def test_co2_cross_check_ratio_near_one():
+    env = pd.read_csv(ROOT / "data" / "env_copernicus.csv", parse_dates=["Datetime"])
+    orig = pd.read_csv(ROOT / "data" / "data.csv")
+    orig.columns = orig.columns.str.strip()
+    orig = orig.rename(columns={"CO2_Con": "CO2"})
+    orig["Datetime"] = pd.to_datetime(orig["date"], dayfirst=True)
+
+    merged = pd.merge(
+        env[["Datetime", "CO2"]],
+        orig[["Datetime", "CO2"]].rename(columns={"CO2": "CO2_orig"}),
+        on="Datetime", how="inner",
+    ).dropna()
+    assert not merged.empty, "No overlap between Copernicus and original CO2 series to cross-check"
+
+    ratio = (merged["CO2"] / merged["CO2_orig"]).mean()
+    assert 0.9 <= ratio <= 1.1, (
+        f"Copernicus/original CO2 ratio drifted to {ratio:.2f} (expected ~1.0) — "
+        "the two series are no longer consistent, see README 'CO2 unit note'"
+    )

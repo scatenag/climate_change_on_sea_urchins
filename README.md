@@ -127,13 +127,15 @@ Months not yet folded into the multiyear reanalysis are backfilled from the equi
 `MEDSEA_ANALYSISFORECAST` near-real-time product (`..._anfc_...` dataset IDs, same variables) —
 see the fallback IDs in the fetch scripts.
 
-> ⚠️ **CO₂ unit caveat** (flagged directly in `scripts/fetch_copernicus.py`): the CO₂ column in
-> the original 2003–2022 dataset (`data/data.csv`, from Sartori et al. 2023) has values ~33–58
-> with no recorded unit, while Copernicus's `spco2` is surface pCO₂ in µatm (typically ~380–450
-> in the Mediterranean) — these are plausibly *different quantities*.
-> [`scripts/build_dataset.py`](scripts/build_dataset.py) cross-checks the overlap period before
-> merging; treat the merged CO₂ series with this caveat in mind for anything beyond internal
-> trend analysis.
+> ℹ️ **CO₂ unit note**: an automated cross-check
+> ([`scripts/build_dataset.py::cross_check_co2`](scripts/build_dataset.py), also enforced in
+> [`tests/test_data_quality.py`](tests/test_data_quality.py)) confirms the Copernicus-derived CO₂
+> series and the original 2003–2022 series (`data/data.csv`, Sartori et al. 2023) agree closely
+> over their 19-year overlap (ratio 0.99 ± 0.01) — internally consistent. The absolute unit
+> inherited from Copernicus's `spco2` variable (nominally µatm) is not independently verified
+> beyond this consistency check, since both series read ~31–58 rather than the ~380–450 µatm
+> typical of Mediterranean surface pCO₂; treat the CO₂ series as a reliable internal signal
+> (trends, correlations) rather than an absolute reference value.
 
 ### Marine heatwave detection
 
@@ -146,8 +148,8 @@ run uses the equivalent, explicitly-parameterized reimplementation in
 ### EC50 bioassay (biological sentinel data)
 
 *Paracentrotus lividus* fertilization/embryo-toxicity assay (metal toxicity endpoint), collected
-and maintained by **ISPRA** (Italian National Institute for Environmental Protection and
-Research), published as a public Google Sheets export
+and maintained by **[ISPRA](https://www.isprambiente.gov.it/)** (Italian National Institute for
+Environmental Protection and Research), published as a public Google Sheets export
 (`config.py:EC50_EXPORT_URL` → `https://docs.google.com/spreadsheets/d/<sheet-id>/export?format=csv`,
 raw columns `ID, DATE, EC50, UL, LL, pos, neg`).
 
