@@ -16,9 +16,19 @@ enableXsrfProtection = true
 gatherUsageStats = false
 
 [runner]
-# Neither setting below turned out to be the cause of the blank-page bug
-# (root cause: app.py's import of the dashboard package was cached after
-# the first run, see app.py's comment) -- kept anyway as cheap, low-risk
-# hygiene since testing showed no downside.
-postScriptGC = false  # skip the full gc.collect(2) Streamlit runs after every script
+# postScriptGC was previously disabled here on the theory it was cheap,
+# low-risk hygiene with "no downside" -- that conclusion was based on
+# short local test sessions (a handful of reruns). In production, sessions
+# run 10+ reruns over several minutes before crashing with a segfault, a
+# pattern (fine for minutes, then crashes) much more consistent with
+# reference-cycle memory buildup across reruns (Plotly figures are a
+# classic case: circular refs that only Python's cycle-collecting GC, not
+# plain refcounting, can free) than with any single rerun's cost. Since
+# postScriptGC=false explicitly skips Streamlit's own gc.collect(2) after
+# every script run, re-enabling it (the Streamlit default) directly
+# targets that failure mode. Re-enabled after numpy/scipy version pinning
+# alone did not stop the crashes -- see project memory for the full
+# incident history. Locally measured: steady-state RSS after a simulated
+# multi-tab session was ~285MB with this enabled vs. ~325MB disabled
+# (~14% lower) -- a real, if not conclusively proven, improvement.
 fastReruns = false    # avoid Streamlit's documented "can lead to race conditions" rerun path
