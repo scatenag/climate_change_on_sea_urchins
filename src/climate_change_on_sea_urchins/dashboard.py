@@ -88,6 +88,29 @@ def _dl_btn(df: pd.DataFrame, filename: str, label: str = "Download CSV") -> Non
     )
 
 
+# Unit label for each variable, reused wherever a regression slope needs a
+# physically meaningful "per year" unit rather than a bare number.
+_VAR_UNITS = {
+    "Temperature": "°C", "Salinity": "PSU", "O2": "mmol/m³",
+    "pH": "", "CO2": "µatm", "EC50": "mg/L",
+}
+
+
+def _regression_caption(slope: float, intercept: float, r_val: float, p_val: float,
+                         unit: str = "", n: int | None = None, per: str = "yr") -> str:
+    """One-line, reusable statement of a linear regression's coefficients —
+    every trend line fitted by linear regression in this dashboard reports
+    through this same helper, so the wording/precision stays consistent.
+    `per` is the x-axis's own unit (default "yr" for the common time-trend
+    case; pass e.g. "°C·days of cumulative MHW" for a non-time regressor)."""
+    n_str = f", n={n}" if n is not None else ""
+    unit_str = f" {unit}" if unit else ""
+    return (
+        f"Linear regression: slope = {slope:+.4g}{unit_str} per {per}, "
+        f"intercept = {intercept:.4g}, R² = {r_val**2:.3f}, p = {p_val:.4g}{n_str}"
+    )
+
+
 # ── Cached loaders ────────────────────────────────────────────────────────────
 
 def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
@@ -1081,15 +1104,16 @@ def _tab_timeseries():
         cols_opts = ["Temperature", "Salinity", "O2", "pH", "CO2", "EC50"]
 
         with st.form("ts_form"):
-            c1, c2, c3 = st.columns([3, 1, 1])
+            c1, c2 = st.columns([3, 1])
             with c1:
                 st.multiselect("Variables to display", cols_opts,
                                default=["Temperature", "EC50"], key="ts_selected")
             with c2:
-                st.checkbox("MHW shading",           value=True,  key="ts_show_mhw")
-                st.checkbox("Show trend",             value=True,  key="ts_show_trend")
-            with c3:
-                st.checkbox("Seasonal decomposition", value=False, key="ts_show_decomp")
+                st.checkbox("MHW shading",         value=True, key="ts_show_mhw")
+                st.checkbox("Raw values trend",    value=True, key="ts_show_trend",
+                             help="13-month centered rolling mean of the raw series above — "
+                                  "not the same as the seasonal decomposition's own linear Trend "
+                                  "component shown below.")
             submitted = st.form_submit_button("▶ Update", use_container_width=False)
 
         if submitted:
@@ -1097,19 +1121,16 @@ def _tab_timeseries():
                 "selected":    st.session_state.ts_selected,
                 "show_mhw":    st.session_state.ts_show_mhw,
                 "show_trend":  st.session_state.ts_show_trend,
-                "show_decomp": st.session_state.ts_show_decomp,
             }
 
         _ts = st.session_state.get("ts_committed", {
             "selected":    ["Temperature", "EC50"],
             "show_mhw":    True,
             "show_trend":  True,
-            "show_decomp": False,
         })
         selected    = _ts["selected"]
         show_mhw    = _ts["show_mhw"]
         show_trend  = _ts["show_trend"]
-        show_decomp = _ts["show_decomp"]
 
         if selected:
             n_rows = len(selected)
@@ -1216,7 +1237,7 @@ def _tab_timeseries():
                     trend_vals = src.rolling(13, center=True, min_periods=6).mean()
                     fig.add_trace(go.Scatter(
                         x=trend_vals.index, y=trend_vals.values,
-                        mode="lines", name=f"{col} trend",
+                        mode="lines", name=f"{col} raw values trend",
                         line=dict(color=color, width=2.5, dash="dot"),
                         hoverinfo="skip",
                         showlegend=(i == 1),
@@ -1264,8 +1285,8 @@ def _tab_timeseries():
             _dl_btn(df[["Datetime"] + selected].dropna(how="all"),
                     f"timeseries_{_yr_start}_{_yr_end}.csv")
 
-        # ── Seasonal decomposition ────────────────────────────────────────────────
-        if show_decomp and selected:
+        # ── Seasonal decomposition — always shown (not gated behind a checkbox) ────
+        if selected:
             from statsmodels.tsa.seasonal import seasonal_decompose
             st.subheader("Seasonal decomposition (additive, period=12)")
             for col in selected:
@@ -1284,11 +1305,23 @@ def _tab_timeseries():
                     st.warning(f"Decomposition {col}: {e}")
                     continue
                 color = col_colors.get(col, NEUTRAL)
+
+                # Linear regression on the decomposition's own trend component
+                # (distinct from the rolling-mean "raw values trend" on the main
+                # chart above) — reported via the shared _regression_caption
+                # helper for consistency with every other trend line in the app.
+                t_years = (dec.trend.index - dec.trend.index[0]).days / 365.25
+                slope, intercept, r_val, p_val, _ = stats.linregress(t_years, dec.trend.values)
+                fit_vals = intercept + slope * t_years
+
                 sub = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
                                     subplot_titles=["Trend", "Seasonal", "Residual"])
                 sub.add_trace(go.Scatter(x=dec.trend.index, y=dec.trend.values,
                                          mode="lines", line=dict(color=color, width=2),
                                          name="Trend"), row=1, col=1)
+                sub.add_trace(go.Scatter(x=dec.trend.index, y=fit_vals,
+                                         mode="lines", line=dict(color="black", width=1.5, dash="dot"),
+                                         name="Linear fit"), row=1, col=1)
                 sub.add_trace(go.Scatter(x=dec.seasonal.index, y=dec.seasonal.values,
                                          mode="lines", line=dict(color=OCEAN, width=1.2),
                                          name="Seasonal"), row=2, col=1)
@@ -1297,9 +1330,12 @@ def _tab_timeseries():
                                          name="Residual"), row=3, col=1)
                 sub.update_layout(height=450, title_text=f"Decomposition: {col}", showlegend=False)
                 st.plotly_chart(sub, use_container_width=True)
+                st.caption(_regression_caption(slope, intercept, r_val, p_val,
+                                                unit=_VAR_UNITS.get(col, ""), n=len(t_years)))
                 dec_df = pd.DataFrame({
                     "Datetime": dec.trend.index,
                     "trend": dec.trend.values,
+                    "trend_linear_fit": fit_vals,
                     "seasonal": dec.seasonal.values,
                     "residual": dec.resid.values,
                 })
@@ -1340,41 +1376,46 @@ def _tab_marine_heatwaves():
             yrs = mhw_annual["year"].values
 
             def _trend_line(x, y):
-                from scipy.stats import linregress
-                slope, intercept, *_ = linregress(x, y)
-                return intercept + slope * x
+                slope, intercept, r_val, p_val, _ = stats.linregress(x, y)
+                return intercept + slope * x, slope, intercept, r_val, p_val
 
             with col1:
+                fit, slope, intercept, r_val, p_val = _trend_line(yrs, mhw_annual["event_count"].values)
                 fig_cnt = go.Figure()
                 fig_cnt.add_trace(go.Bar(
                     x=yrs, y=mhw_annual["event_count"],
                     name="Events", marker_color=OCEAN, opacity=0.85,
                 ))
                 fig_cnt.add_trace(go.Scatter(
-                    x=yrs, y=_trend_line(yrs, mhw_annual["event_count"].values),
-                    name="Trend", mode="lines",
+                    x=yrs, y=fit,
+                    name=f"Trend: {slope:+.3f}/yr (p={p_val:.4f})", mode="lines",
                     line=dict(color="#e63946", width=2.5, dash="dash"),
                 ))
                 fig_cnt.update_layout(title="MHW events per year",
                                       xaxis_title="Year", yaxis_title="Count",
                                       legend=dict(orientation="h", y=1.12))
                 st.plotly_chart(fig_cnt, use_container_width=True)
+                st.caption(_regression_caption(slope, intercept, r_val, p_val,
+                                                unit="events", n=len(yrs)))
                 _dl_btn(mhw_annual[["year","event_count"]], f"mhw_event_count_{_yr_start}_{_yr_end}.csv")
             with col2:
+                fit, slope, intercept, r_val, p_val = _trend_line(yrs, mhw_annual["max_intensity"].values)
                 fig_int = go.Figure()
                 fig_int.add_trace(go.Bar(
                     x=yrs, y=mhw_annual["max_intensity"],
                     name="Max intensity", marker_color=WARM, opacity=0.85,
                 ))
                 fig_int.add_trace(go.Scatter(
-                    x=yrs, y=_trend_line(yrs, mhw_annual["max_intensity"].values),
-                    name="Trend", mode="lines",
+                    x=yrs, y=fit,
+                    name=f"Trend: {slope:+.3f}°C/yr (p={p_val:.4f})", mode="lines",
                     line=dict(color="#e63946", width=2.5, dash="dash"),
                 ))
                 fig_int.update_layout(title="Max MHW intensity (°C above threshold)",
                                       xaxis_title="Year", yaxis_title="°C",
                                       legend=dict(orientation="h", y=1.12))
                 st.plotly_chart(fig_int, use_container_width=True)
+                st.caption(_regression_caption(slope, intercept, r_val, p_val,
+                                                unit="°C", n=len(yrs)))
                 _dl_btn(mhw_annual[["year","max_intensity"]], f"mhw_intensity_{_yr_start}_{_yr_end}.csv")
 
         # Event catalog
@@ -1646,6 +1687,11 @@ def _tab_mhw_gametes():
                 )
                 fig_sc.update_layout(height=380)
                 st.plotly_chart(fig_sc, use_container_width=True)
+                _sc_fit = px.get_trendline_results(fig_sc).iloc[0]["px_fit_results"]
+                st.caption(_regression_caption(
+                    _sc_fit.params[1], _sc_fit.params[0], np.sqrt(_sc_fit.rsquared), _sc_fit.pvalues[1],
+                    unit="mg/L EC50", n=len(sc_merged), per="°C·day of cumulative MHW",
+                ))
                 _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
                 st.caption(
                     "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
@@ -1706,6 +1752,11 @@ def _tab_mhw_gametes():
                     fig_sa.update_traces(textposition="top center", selector=dict(mode="markers+text"))
                     fig_sa.update_layout(height=400)
                     st.plotly_chart(fig_sa, use_container_width=True)
+                    _sa_fit = px.get_trendline_results(fig_sa).iloc[0]["px_fit_results"]
+                    st.caption(_regression_caption(
+                        _sa_fit.params[1], _sa_fit.params[0], np.sqrt(_sa_fit.rsquared), _sa_fit.pvalues[1],
+                        unit="mg/L autumn EC50", n=len(sa_df), per="°C·day of summer MHW peak intensity",
+                    ))
                     _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
                     st.caption(
                         "Years with intense summer MHWs (e.g. 2022–2025) show systematically lower "
