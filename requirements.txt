@@ -12,8 +12,19 @@
 # 3.0 compatibility bugs. Revisit the pin once pandas 3.x has been
 # deliberately tested against the ARIMA/SARIMAX code paths.
 pandas>=2.0,<3.0
-numpy>=1.24
-scipy>=1.11
+# numpy/scipy upper-bounded for the same reason as pandas above: unpinned,
+# Streamlit Cloud resolved numpy 2.5.1 / scipy 1.18.0 (barely-released at
+# the time) while local dev/testing used numpy 1.26.4 / scipy 1.15.3
+# throughout. Production segfaulted repeatedly under real use (heavy
+# statsmodels/numpy/scipy calls -- SARIMAX, correlations, MHW analysis);
+# pinning Python itself via runtime.txt/.python-version did NOT fix it
+# (confirmed: still crashed on Python 3.12.13), which points at these
+# specific numpy/scipy releases rather than the Python version. Bounded to
+# the exact range already proven stable through this whole project's local
+# testing. Revisit once numpy 2.5.x/scipy 1.18.x have more production
+# mileage elsewhere.
+numpy>=1.24,<2.0
+scipy>=1.11,<1.16
 statsmodels>=0.14
 scikit-learn>=1.3
 pmdarima>=2.0
