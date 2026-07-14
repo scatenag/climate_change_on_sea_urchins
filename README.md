@@ -1,6 +1,7 @@
 # Climate Change on Sea Urchins 🦔
 
 [![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
+[![Data validated](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/main?labpath=analysis.ipynb)
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20924982.svg)](https://doi.org/10.5281/zenodo.20924982)
@@ -102,10 +103,68 @@ pip install -e ".[notebook]"
 jupyter notebook analysis.ipynb
 ```
 
-## Data sources
+## Data provenance & sources
 
-| Data | Source |
-|---|---|
-| Monthly SST, Salinity, O₂, pH, CO₂ | Copernicus Marine Service — MEDSEA_MULTIYEAR |
-| Daily SST (for MHW detection) | Copernicus Marine Service — MEDSEA_MULTIYEAR daily |
-| Monthly EC50 bioassay | ISPRA — Italian National Institute for Environmental Protection and Research |
+Site: **43.4278°N, 10.3956°E** (off Livorno, North Tyrrhenian Sea), ±0.1° bounding box, surface
+layer (0–10 m) — see [`config.py`](config.py) for the single source of truth.
+
+### Environmental variables (Copernicus Marine Service)
+
+Fetched via the [`copernicusmarine`](https://pypi.org/project/copernicusmarine/) Python toolbox
+(not a plain REST endpoint) — see [`scripts/fetch_copernicus.py`](scripts/fetch_copernicus.py) /
+[`scripts/fetch_copernicus_daily.py`](scripts/fetch_copernicus_daily.py) for the exact calls.
+
+| Variable | Product | Dataset ID | CMEMS variable | Unit |
+|---|---|---|---|---|
+| Temperature | [Mediterranean Sea Physics Reanalysis — MEDSEA_MULTIYEAR_PHY_006_004](https://data.marine.copernicus.eu/product/MEDSEA_MULTIYEAR_PHY_006_004/description) | `cmems_mod_med_phy-temp_my_4.2km_P1M-m` | `thetao` | °C |
+| Salinity | same product | `cmems_mod_med_phy-sal_my_4.2km_P1M-m` | `so` | PSU |
+| O₂ | [Mediterranean Sea Biogeochemistry Reanalysis — MEDSEA_MULTIYEAR_BGC_006_008](https://data.marine.copernicus.eu/product/MEDSEA_MULTIYEAR_BGC_006_008/description) | `cmems_mod_med_bgc-bio_my_4.2km_P1M-m` | `o2` | mmol/m³ |
+| pH | same product | `cmems_mod_med_bgc-car_my_4.2km_P1M-m` | `ph` | total scale |
+| CO₂ | same product | `cmems_mod_med_bgc-co2_my_4.2km_P1M-m` | `spco2` | µatm |
+| Daily SST (MHW detection only) | Physics Reanalysis, daily resolution | `cmems_mod_med_phy-temp_my_4.2km_P1D-m` | `thetao` | °C |
+
+Months not yet folded into the multiyear reanalysis are backfilled from the equivalent
+`MEDSEA_ANALYSISFORECAST` near-real-time product (`..._anfc_...` dataset IDs, same variables) —
+see the fallback IDs in the fetch scripts.
+
+> ⚠️ **CO₂ unit caveat** (flagged directly in `scripts/fetch_copernicus.py`): the CO₂ column in
+> the original 2003–2022 dataset (`data/data.csv`, from Sartori et al. 2023) has values ~33–58
+> with no recorded unit, while Copernicus's `spco2` is surface pCO₂ in µatm (typically ~380–450
+> in the Mediterranean) — these are plausibly *different quantities*.
+> [`scripts/build_dataset.py`](scripts/build_dataset.py) cross-checks the overlap period before
+> merging; treat the merged CO₂ series with this caveat in mind for anything beyond internal
+> trend analysis.
+
+### Marine heatwave detection
+
+Hobday et al. (2016) method — 90th-percentile threshold on an 11-day moving-window daily
+climatology (2003–2012 baseline), 5-day minimum event duration, ≤2-day gaps merged. Vendored
+reference implementation in [`marineHeatWaves.py`](marineHeatWaves.py); the production detection
+run uses the equivalent, explicitly-parameterized reimplementation in
+[`scripts/detect_mhw.py`](scripts/detect_mhw.py).
+
+### EC50 bioassay (biological sentinel data)
+
+*Paracentrotus lividus* fertilization/embryo-toxicity assay (metal toxicity endpoint), collected
+and maintained by **ISPRA** (Italian National Institute for Environmental Protection and
+Research), published as a public Google Sheets export
+(`config.py:EC50_EXPORT_URL` → `https://docs.google.com/spreadsheets/d/<sheet-id>/export?format=csv`,
+raw columns `ID, DATE, EC50, UL, LL, pos, neg`).
+
+## Automation & data validation
+
+| Workflow | Trigger / frequency | What it does |
+|---|---|---|
+| [`tests.yml`](.github/workflows/tests.yml) | Every push/PR to `main` | Code-correctness test suite (`pytest tests/`) |
+| [`update_ec50.yml`](.github/workflows/update_ec50.yml) | Daily 06:00 UTC (EC50) + monthly on the 5th at 07:00 UTC (Copernicus env data) + manual | Re-fetches EC50/Copernicus data, rebuilds the merged dataset, reruns the Python analysis pipeline, commits+pushes anything that changed |
+| [`validate_data.yml`](.github/workflows/validate_data.yml) | Daily 06:30 UTC + on push touching `data/`/`results/` + manual | Runs [`tests/test_data_quality.py`](tests/test_data_quality.py) — see below |
+
+**What the "Data validated" badge certifies, and what it doesn't:** it reflects that the current
+`data/` and `results/` files pass automated checks for internal consistency — values within
+physically plausible ranges, no duplicate/out-of-order timestamps, EC50 confidence intervals
+bracketing their point estimate, marine heatwave event geometry self-consistent (start ≤ peak ≤
+end, duration meeting the Hobday minimum), and p-values/correlation coefficients from the
+analysis pipeline within their valid mathematical range. It does **not** certify the deeper
+scientific accuracy of the upstream Copernicus reanalysis or of the EC50 bioassay itself — those
+remain the responsibility of the original data providers (CMEMS, ISPRA) and standard scientific
+peer review. See [`tests/test_data_quality.py`](tests/test_data_quality.py) for the exact checks.

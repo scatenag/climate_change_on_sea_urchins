@@ -1,0 +1,34 @@
+name: Validate data
+
+# Distinct from tests.yml (code correctness): this workflow checks whether
+# the *data currently in the repo* is internally consistent and physically
+# plausible — see tests/test_data_quality.py for exactly what "valid" means
+# here. Its pass/fail status is the "data validated" badge in the README.
+on:
+  schedule:
+    # 30 min after update_ec50.yml's daily 06:00 UTC run, so a same-day
+    # data refresh has already landed before this checks it.
+    - cron: "30 6 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "results/**"
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run data quality checks
+        run: pytest tests/test_data_quality.py -v
