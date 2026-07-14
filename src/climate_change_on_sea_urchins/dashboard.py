@@ -1453,11 +1453,13 @@ def _tab_mhw_gametes():
                     st.caption(
                         f"Driver ARIMA order (by AIC): {tuple(diag['order'])} · "
                         f"Ljung-Box on driver residuals (lags 6/12/24): "
-                        f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}. "
-                        "Computed once by the reproducible pipeline on the full dataset "
-                        "(too CPU-heavy to refit live) — does not change with the date "
-                        "filter above."
+                        f"{'white noise confirmed ✓' if lb_ok else 'residual autocorrelation remains ✗'}."
                     )
+                st.error(
+                    "Computed once by the reproducible pipeline on the full dataset "
+                    "(too CPU-heavy to refit live) — does not change with the date "
+                    "filter above."
+                )
                 _render_ccf_panel(ccf_df_arima, "ARIMA pre-whitening", "arima")
 
             # ── 2. Dose-response ──────────────────────────────────────────────────────
@@ -1806,7 +1808,7 @@ def _tab_mhw_gametes():
             # ── 7. Granger causality ──────────────────────────────────────────────────
 
         def _sub_granger_causality():
-                st.caption(
+                st.error(
                     "Pairwise Granger F-tests (lags 1–12) computed once by the "
                     "reproducible pipeline on the full dataset — does not change "
                     "with the date filter above."
@@ -1844,7 +1846,7 @@ def _tab_mhw_gametes():
             # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
 
         def _sub_r_analysis():
-                st.caption(
+                st.error(
                     "Superposed epoch analysis, DLNM, and the mixed-effects model are "
                     "fitted in R (dlnm/mgcv/lme4) on the full 2003–2025 record and "
                     "precomputed offline — these fits are too computationally heavy to "
@@ -2055,7 +2057,7 @@ def _tab_correlations():
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_stationarity():
         st.header("Stationarity Tests (ADF + KPSS)")
-        st.caption(
+        st.error(
             "ADF and KPSS tests computed once by the reproducible pipeline on "
             "the full dataset — does not change with the date filter above."
         )
