@@ -1109,11 +1109,12 @@ def _tab_timeseries():
                 st.multiselect("Variables to display", cols_opts,
                                default=["Temperature", "EC50"], key="ts_selected")
             with c2:
-                st.checkbox("MHW shading",         value=True, key="ts_show_mhw")
-                st.checkbox("Raw values trend",    value=True, key="ts_show_trend",
-                             help="13-month centered rolling mean of the raw series above — "
-                                  "not the same as the seasonal decomposition's own linear Trend "
-                                  "component shown below.")
+                st.checkbox("MHW shading",           value=True, key="ts_show_mhw")
+                st.checkbox("13-month rolling mean",  value=True, key="ts_show_trend",
+                             help="Centered rolling mean of the raw series above — a smoothing "
+                                  "average, not a fitted trend. For an actual linear-regression "
+                                  "trend with coefficients, see the seasonal decomposition's own "
+                                  "Trend component below.")
             submitted = st.form_submit_button("▶ Update", use_container_width=False)
 
         if submitted:
@@ -1237,7 +1238,7 @@ def _tab_timeseries():
                     trend_vals = src.rolling(13, center=True, min_periods=6).mean()
                     fig.add_trace(go.Scatter(
                         x=trend_vals.index, y=trend_vals.values,
-                        mode="lines", name=f"{col} raw values trend",
+                        mode="lines", name=f"{col} 13mo rolling mean",
                         line=dict(color=color, width=2.5, dash="dot"),
                         hoverinfo="skip",
                         showlegend=(i == 1),
@@ -1307,8 +1308,9 @@ def _tab_timeseries():
                 color = col_colors.get(col, NEUTRAL)
 
                 # Linear regression on the decomposition's own trend component
-                # (distinct from the rolling-mean "raw values trend" on the main
-                # chart above) — reported via the shared _regression_caption
+                # (distinct from the "13-month rolling mean" smoothing average on
+                # the main chart above, which is not a fitted trend) — reported
+                # via the shared _regression_caption
                 # helper for consistency with every other trend line in the app.
                 t_years = (dec.trend.index - dec.trend.index[0]).days / 365.25
                 slope, intercept, r_val, p_val, _ = stats.linregress(t_years, dec.trend.values)
