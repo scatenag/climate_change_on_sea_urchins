@@ -657,6 +657,43 @@ def compute_ccf_diff(df: pd.DataFrame, driver: str = "mhw_peak_intensity") -> pd
 
 
 @st.cache_data(show_spinner=False, ttl=900, max_entries=3)
+def compute_seasonal_decomposition(df: pd.DataFrame, selected: list[str]) -> dict:
+    """Seasonal decomposition + linear regression on the trend component, for
+    each of `selected`. Was previously computed inline in _tab_timeseries() on
+    every rerun (uncached) -- became a real cost once the decomposition was
+    made unconditional (always shown, not opt-in behind a checkbox), since it
+    now runs on every visit to what is likely the most-visited tab."""
+    results = {}
+    for col in selected:
+        src = df[~df["EC50_imputed"]][["Datetime", "EC50"]].rename(columns={"EC50": col}) \
+              if col == "EC50" else df[["Datetime", col]]
+        series = (src.dropna(subset=[col])
+                    .set_index("Datetime")[col]
+                    .asfreq("MS")
+                    .interpolate("linear"))
+        if len(series) < 24:
+            results[col] = {"error": "insufficient_data"}
+            continue
+        try:
+            dec = seasonal_decompose(series, model="additive", period=12, extrapolate_trend="freq")
+        except Exception as e:
+            results[col] = {"error": str(e)}
+            continue
+        t_years = (dec.trend.index - dec.trend.index[0]).days / 365.25
+        slope, intercept, r_val, p_val, _ = stats.linregress(t_years, dec.trend.values)
+        results[col] = {
+            "index": dec.trend.index,
+            "trend": dec.trend.values,
+            "seasonal": dec.seasonal.values,
+            "resid": dec.resid.values,
+            "fit_vals": intercept + slope * t_years,
+            "slope": slope, "intercept": intercept, "r_val": r_val, "p_val": p_val,
+            "n": len(t_years),
+        }
+    return results
+
+
+@st.cache_data(show_spinner=False, ttl=900, max_entries=3)
 def compute_mhw_deep(df: pd.DataFrame) -> dict:
     """
     Extended MHW→EC50 analyses:
@@ -1288,58 +1325,42 @@ def _tab_timeseries():
 
         # ── Seasonal decomposition — always shown (not gated behind a checkbox) ────
         if selected:
-            from statsmodels.tsa.seasonal import seasonal_decompose
             st.subheader("Seasonal decomposition (additive, period=12)")
+            decomp_results = compute_seasonal_decomposition(df, selected)
             for col in selected:
-                src = df[~df["EC50_imputed"]][["Datetime","EC50"]].rename(columns={"EC50": col}) \
-                      if col == "EC50" else df[["Datetime", col]]
-                series = (src.dropna(subset=[col])
-                            .set_index("Datetime")[col]
-                            .asfreq("MS")
-                            .interpolate("linear"))
-                if len(series) < 24:
-                    st.info(f"Insufficient data for decomposition of {col}.")
-                    continue
-                try:
-                    dec = seasonal_decompose(series, model="additive", period=12, extrapolate_trend="freq")
-                except Exception as e:
-                    st.warning(f"Decomposition {col}: {e}")
+                res = decomp_results.get(col, {})
+                if "error" in res:
+                    if res["error"] == "insufficient_data":
+                        st.info(f"Insufficient data for decomposition of {col}.")
+                    else:
+                        st.warning(f"Decomposition {col}: {res['error']}")
                     continue
                 color = col_colors.get(col, NEUTRAL)
 
-                # Linear regression on the decomposition's own trend component
-                # (distinct from the "13-month moving average" smoothing average
-                # on the main chart above, which is not a fitted trend) — reported
-                # via the shared _regression_caption
-                # helper for consistency with every other trend line in the app.
-                t_years = (dec.trend.index - dec.trend.index[0]).days / 365.25
-                slope, intercept, r_val, p_val, _ = stats.linregress(t_years, dec.trend.values)
-                fit_vals = intercept + slope * t_years
-
                 sub = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.06,
                                     subplot_titles=["Trend", "Seasonal", "Residual"])
-                sub.add_trace(go.Scatter(x=dec.trend.index, y=dec.trend.values,
+                sub.add_trace(go.Scatter(x=res["index"], y=res["trend"],
                                          mode="lines", line=dict(color=color, width=2),
                                          name="Trend"), row=1, col=1)
-                sub.add_trace(go.Scatter(x=dec.trend.index, y=fit_vals,
+                sub.add_trace(go.Scatter(x=res["index"], y=res["fit_vals"],
                                          mode="lines", line=dict(color="black", width=1.5, dash="dot"),
                                          name="Linear fit"), row=1, col=1)
-                sub.add_trace(go.Scatter(x=dec.seasonal.index, y=dec.seasonal.values,
+                sub.add_trace(go.Scatter(x=res["index"], y=res["seasonal"],
                                          mode="lines", line=dict(color=OCEAN, width=1.2),
                                          name="Seasonal"), row=2, col=1)
-                sub.add_trace(go.Scatter(x=dec.resid.index, y=dec.resid.values,
+                sub.add_trace(go.Scatter(x=res["index"], y=res["resid"],
                                          mode="lines", line=dict(color="grey", width=1),
                                          name="Residual"), row=3, col=1)
                 sub.update_layout(height=450, title_text=f"Decomposition: {col}", showlegend=False)
                 st.plotly_chart(sub, use_container_width=True)
-                st.caption(_regression_caption(slope, intercept, r_val, p_val,
-                                                unit=_VAR_UNITS.get(col, ""), n=len(t_years)))
+                st.caption(_regression_caption(res["slope"], res["intercept"], res["r_val"], res["p_val"],
+                                                unit=_VAR_UNITS.get(col, ""), n=res["n"]))
                 dec_df = pd.DataFrame({
-                    "Datetime": dec.trend.index,
-                    "trend": dec.trend.values,
-                    "trend_linear_fit": fit_vals,
-                    "seasonal": dec.seasonal.values,
-                    "residual": dec.resid.values,
+                    "Datetime": res["index"],
+                    "trend": res["trend"],
+                    "trend_linear_fit": res["fit_vals"],
+                    "seasonal": res["seasonal"],
+                    "residual": res["resid"],
                 })
                 _dl_btn(dec_df, f"decomp_{col}_{_yr_start}_{_yr_end}.csv", f"⬇ {col} decomposition (CSV)")
 
