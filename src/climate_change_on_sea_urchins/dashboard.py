@@ -986,6 +986,12 @@ def _tab_overview():
             "Study on the impact of climate change and **Marine Heatwaves** "
             "on gamete sensitivity of *Paracentrotus lividus* in the North Tyrrhenian Sea."
         )
+        st.markdown(
+            "[![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=main)]"
+            "(https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml) "
+            "[![Data validated](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml/badge.svg?branch=main)]"
+            "(https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml)"
+        )
 
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Period", f"{df['Datetime'].dt.year.min()}–{df['Datetime'].dt.year.max()}")
@@ -1007,6 +1013,56 @@ def _tab_overview():
             height=350, margin=dict(l=0, r=0, t=0, b=0),
         )
         st.plotly_chart(fig_map, use_container_width=True)
+
+        with st.expander("📋 Data provenance & sources"):
+            st.markdown(
+                f"Site: **{SITE['lat']:.4f}°N, {SITE['lon']:.4f}°E** "
+                f"({SITE['name']}, North Tyrrhenian Sea), ±0.1° bounding box, surface layer (0–10 m)."
+            )
+            st.markdown("**Environmental variables — Copernicus Marine Service**")
+            st.dataframe(
+                pd.DataFrame([
+                    {"Variable": "Temperature", "Product": "Mediterranean Sea Physics Reanalysis (MEDSEA_MULTIYEAR_PHY_006_004)",
+                     "Dataset ID": "cmems_mod_med_phy-temp_my_4.2km_P1M-m", "CMEMS var": "thetao", "Unit": "°C"},
+                    {"Variable": "Salinity", "Product": "same product",
+                     "Dataset ID": "cmems_mod_med_phy-sal_my_4.2km_P1M-m", "CMEMS var": "so", "Unit": "PSU"},
+                    {"Variable": "O₂", "Product": "Mediterranean Sea Biogeochemistry Reanalysis (MEDSEA_MULTIYEAR_BGC_006_008)",
+                     "Dataset ID": "cmems_mod_med_bgc-bio_my_4.2km_P1M-m", "CMEMS var": "o2", "Unit": "mmol/m³"},
+                    {"Variable": "pH", "Product": "same product",
+                     "Dataset ID": "cmems_mod_med_bgc-car_my_4.2km_P1M-m", "CMEMS var": "ph", "Unit": "total scale"},
+                    {"Variable": "CO₂", "Product": "same product",
+                     "Dataset ID": "cmems_mod_med_bgc-co2_my_4.2km_P1M-m", "CMEMS var": "spco2", "Unit": "µatm"},
+                    {"Variable": "Daily SST (MHW detection)", "Product": "Physics Reanalysis, daily resolution",
+                     "Dataset ID": "cmems_mod_med_phy-temp_my_4.2km_P1D-m", "CMEMS var": "thetao", "Unit": "°C"},
+                ]),
+                hide_index=True, use_container_width=True,
+            )
+            st.caption(
+                "Months not yet folded into the multiyear reanalysis are backfilled from the "
+                "equivalent MEDSEA_ANALYSISFORECAST near-real-time product (same variables)."
+            )
+            st.warning(
+                "CO₂ unit caveat: the CO₂ column in the original 2003–2022 dataset (Sartori et "
+                "al. 2023) has values ~33–58 with no recorded unit, while Copernicus's spco2 is "
+                "surface pCO₂ in µatm (typically ~380–450 in the Mediterranean) — these are "
+                "plausibly different quantities. `scripts/build_dataset.py` cross-checks the "
+                "overlap period before merging; treat the merged CO₂ series with this caveat in "
+                "mind for anything beyond internal trend analysis."
+            )
+            st.markdown(
+                "**Marine heatwave detection**: Hobday et al. (2016) method — 90th-percentile "
+                "threshold on an 11-day moving-window daily climatology (2003–2012 baseline), "
+                "5-day minimum event duration, ≤2-day gaps merged."
+            )
+            st.markdown(
+                "**EC50 bioassay**: *Paracentrotus lividus* fertilization/embryo-toxicity assay, "
+                "collected and maintained by **ISPRA**, published as a public Google Sheets export."
+            )
+            st.caption(
+                "Full details, exact endpoints, and the automated validation checks: see "
+                "[README → Data provenance & sources](https://github.com/scatenag/climate_change_on_sea_urchins#data-provenance--sources) "
+                "and [tests/test_data_quality.py](https://github.com/scatenag/climate_change_on_sea_urchins/blob/main/tests/test_data_quality.py)."
+            )
 
 
     # ═══════════════════════════════════════════════════════════════════════════════
