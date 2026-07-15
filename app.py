@@ -12,6 +12,8 @@ Equivalent, once the package is installed (`pip install -e .`):
 """
 import sys
 
+import climate_change_on_sea_urchins as _ccsu  # never touched by the deletion loop below; see its RERUN_LOCK docstring
+
 # Streamlit re-executes THIS file's bytecode on every rerun, but a plain
 # `import climate_change_on_sea_urchins.dashboard` is only a fresh import
 # (running dashboard.py's module body -- every widget, every tab) on the
@@ -26,7 +28,18 @@ import sys
 # Forcing dashboard.py out of sys.modules before each import makes every
 # rerun a genuine fresh import, matching what a single-file app gets for
 # free.
-for _mod_name in [m for m in sys.modules if m.startswith("climate_change_on_sea_urchins.dashboard")]:
-    del sys.modules[_mod_name]
+#
+# RERUN_LOCK: two Streamlit sessions can end up executing this block
+# concurrently (a second visitor, or a browser reconnecting after a
+# dropped WebSocket before the old session finished -- see
+# RERUN_LOCK's docstring in climate_change_on_sea_urchins/__init__.py for
+# the production evidence). `del sys.modules[...]` bypasses Python's own
+# per-module import lock, so two threads racing here is a real hazard, not
+# a theoretical one. Holding the lock through the reimport (which runs
+# dashboard.py's entire top-level body -- the whole app) also prevents two
+# reruns from concurrently executing heavy numpy/scipy/pandas C calls.
+with _ccsu.RERUN_LOCK:
+    for _mod_name in [m for m in sys.modules if m.startswith("climate_change_on_sea_urchins.dashboard")]:
+        del sys.modules[_mod_name]
 
-import climate_change_on_sea_urchins.dashboard  # noqa: F401
+    import climate_change_on_sea_urchins.dashboard  # noqa: F401
