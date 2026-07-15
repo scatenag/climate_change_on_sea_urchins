@@ -218,8 +218,26 @@ def load_env_data():
     return df, mhwe, mhwa
 
 
+def _current_rss_mb() -> float:
+    """Current resident memory in MB, read from /proc (Linux only; returns
+    -1 elsewhere). Temporary diagnostic for the ongoing Streamlit Cloud
+    segfault investigation -- logs the real production memory trajectory
+    on every rerun instead of relying on local simulations, which don't
+    share Streamlit Cloud's tighter container memory ceiling. Remove once
+    that investigation is closed."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024  # kB -> MB
+    except Exception:
+        pass
+    return -1.0
+
+
 def load_main():
     """Merge static env data with live EC50 from Google Sheets (cached 10 min, see fetch_ec50_live)."""
+    print(f"DIAG-MEM: RSS={_current_rss_mb():.1f}MB at rerun start", flush=True)
     df_env, mhwe, mhwa = load_env_data()
     ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
 
