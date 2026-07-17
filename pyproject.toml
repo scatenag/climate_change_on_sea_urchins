@@ -36,8 +36,8 @@ dependencies = [
     "streamlit>=1.35,<1.57",
     "plotly>=5.18",
     "Pillow>=10.0",
-    "skccm>=0.1",
-    "pycwt>=0.5.0b0",
+    "skccm==0.2.dev0",
+    "pycwt==0.4.0b0",
 ]
 
 [project.optional-dependencies]
