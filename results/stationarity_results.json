@@ -2,10 +2,10 @@
   {
     "variable": "O2",
     "n": 277,
-    "adf_stat": -2.1035188495024233,
-    "adf_p": 0.2431020106828493,
+    "adf_stat": -2.1035188495024357,
+    "adf_p": 0.24310201068284426,
     "adf_stationary": false,
-    "kpss_stat": 0.29981588911280554,
+    "kpss_stat": 0.2998158891128055,
     "kpss_p": 0.1,
     "kpss_stationary": true,
     "conclusion": "uncertain"
@@ -13,8 +13,8 @@
   {
     "variable": "CO2",
     "n": 276,
-    "adf_stat": -1.403364260296086,
-    "adf_p": 0.5806621913087856,
+    "adf_stat": -1.4033642602960859,
+    "adf_p": 0.5806621913087857,
     "adf_stationary": false,
     "kpss_stat": 0.5054458971738671,
     "kpss_p": 0.04044011324912903,
@@ -24,10 +24,10 @@
   {
     "variable": "Temperature",
     "n": 281,
-    "adf_stat": -2.2603114515549705,
-    "adf_p": 0.18508786525456955,
+    "adf_stat": -2.26031145155497,
+    "adf_p": 0.18508786525456972,
     "adf_stationary": false,
-    "kpss_stat": 0.1399777568170643,
+    "kpss_stat": 0.13997775681706429,
     "kpss_p": 0.1,
     "kpss_stationary": true,
     "conclusion": "uncertain"
@@ -35,8 +35,8 @@
   {
     "variable": "Salinity",
     "n": 277,
-    "adf_stat": -2.6153169192471166,
-    "adf_p": 0.08987271313963874,
+    "adf_stat": -2.6153169192471823,
+    "adf_p": 0.08987271313962558,
     "adf_stationary": false,
     "kpss_stat": 0.8597135264083844,
     "kpss_p": 0.01,
@@ -46,21 +46,21 @@
   {
     "variable": "pH",
     "n": 277,
-    "adf_stat": -0.8541328402693139,
-    "adf_p": 0.8027018148837,
+    "adf_stat": -0.8541328402693759,
+    "adf_p": 0.8027018148836806,
     "adf_stationary": false,
-    "kpss_stat": 0.5338200687636536,
-    "kpss_p": 0.03404953406224018,
+    "kpss_stat": 0.533820068763654,
+    "kpss_p": 0.034049534062240094,
     "kpss_stationary": false,
     "conclusion": "non-stationary"
   },
   {
     "variable": "EC50",
     "n": 161,
-    "adf_stat": -0.5468609340473549,
-    "adf_p": 0.8825430025175981,
+    "adf_stat": -0.5468609340473544,
+    "adf_p": 0.8825430025175982,
     "adf_stationary": false,
-    "kpss_stat": 1.4554261393000336,
+    "kpss_stat": 1.455426139300034,
     "kpss_p": 0.01,
     "kpss_stationary": false,
     "conclusion": "non-stationary"
@@ -68,10 +68,10 @@
   {
     "variable": "mhw_peak_intensity",
     "n": 281,
-    "adf_stat": -5.513190218636534,
-    "adf_p": 1.9512051775750224e-06,
+    "adf_stat": -5.513190218636537,
+    "adf_p": 1.9512051775749754e-06,
     "adf_stationary": true,
-    "kpss_stat": 1.6095170033102795,
+    "kpss_stat": 1.60951700331028,
     "kpss_p": 0.01,
     "kpss_stationary": false,
     "conclusion": "uncertain"
@@ -79,10 +79,10 @@
   {
     "variable": "mhw_days",
     "n": 281,
-    "adf_stat": -2.345180113890223,
-    "adf_p": 0.15781006414540416,
+    "adf_stat": -2.345180113890232,
+    "adf_p": 0.15781006414540144,
     "adf_stationary": false,
-    "kpss_stat": 1.5697361556412968,
+    "kpss_stat": 1.5697361556412963,
     "kpss_p": 0.01,
     "kpss_stationary": false,
     "conclusion": "non-stationary"

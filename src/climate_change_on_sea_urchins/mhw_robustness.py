@@ -197,8 +197,7 @@ def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dic
     x = (x - x.mean()) / x.std()
     y = (y - y.mean()) / y.std()
 
-    mother = wavelet.Morlet(6)
-    WCT, _aWCT, _coi, freq, _sig = wavelet.wct(x, y, 1, sig=False, mother=mother)
+    WCT, _aWCT, _coi, freq, _sig = wavelet.wct(x, y, 1, sig=False, wavelet="morlet")
     period = 1 / freq
     band_mask = (period >= 1) & (period <= 8)
     observed = float(WCT[band_mask, :].mean())
@@ -209,7 +208,7 @@ def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dic
     for _ in range(n_surrogates):
         shift = rng.integers(12, n - 12)
         y_shift = np.roll(y, shift)
-        WCT_s, *_ = wavelet.wct(x, y_shift, 1, sig=False, mother=mother)
+        WCT_s, *_ = wavelet.wct(x, y_shift, 1, sig=False, wavelet="morlet")
         null_stats.append(float(WCT_s[band_mask, :].mean()))
     null_stats = np.array(null_stats)
     p_value = float((null_stats >= observed).mean())
