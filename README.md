@@ -61,12 +61,13 @@ df_full, df_real, events, monthly = load_data()
 | File / Folder | Description |
 |---|---|
 | [`pyproject.toml`](pyproject.toml) | Package metadata, dependencies, console-script entry points |
-| [`src/climate_change_on_sea_urchins/`](src/climate_change_on_sea_urchins/) | The installable package: 6 analysis modules + `common.py` (shared data loading) + `pipeline.py` (orchestrates all 6) + `dashboard.py` (the Streamlit app) |
+| [`src/climate_change_on_sea_urchins/`](src/climate_change_on_sea_urchins/) | The installable package: `mhw_detection`, `timeseries`, `period_split`, `correlations`, `stationarity`, `mhw_analysis`, `mhw_lag_extra` (SEA + mixed-effects, Python port of the former R analyses), `mhw_robustness` (5-method robustness battery), `forecast` + `common.py` (shared data loading) + `pipeline.py` (orchestrates all of the above) + `dashboard.py` (the Streamlit app) |
 | [`config.py`](config.py) | Single source of truth for site coordinates and the EC50 data-source URL — edit this to adapt the framework (see [`docs/ADAPTING.md`](docs/ADAPTING.md)) |
 | [`app.py`](app.py) | Thin entry point (`import climate_change_on_sea_urchins.dashboard`) — kept so `streamlit run app.py` and the existing Streamlit Community Cloud deployment work unchanged |
 | [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) — standalone, not part of the installable package since they require Copernicus credentials |
-| [`marineHeatWaves.py`](marineHeatWaves.py) | Vendored MHW detection library (Hobday et al. 2016) |
-| [`analysis.ipynb`](analysis.ipynb) | Exploratory notebook (illustration only — the tested, reusable code is the package above) — launch via Binder badge above |
+| [`marineHeatWaves.py`](marineHeatWaves.py) | Vendored reference implementation (Hobday et al. 2016); not currently invoked — MHW detection actually runs via [`mhw_detection.py`](src/climate_change_on_sea_urchins/mhw_detection.py)'s own implementation of the same algorithm, as part of `ccsu-run-pipeline` |
+| [`analysis.ipynb`](analysis.ipynb) | End-to-end notebook: re-executes MHW detection and the full package pipeline (CCF, stationarity, Granger, SARIMAX forecast) live, from the committed data snapshot — launch via Binder badge above |
+| [`legacy/analysis_2023_exploratory.ipynb`](legacy/analysis_2023_exploratory.ipynb) | Superseded exploratory notebook behind the original Sartori et al. (2023) analysis — kept for reference, not maintained |
 
 ### Data
 | File | Description |
@@ -94,9 +95,14 @@ ccsu-dashboard
 
 ## Running the notebook
 
-Click the **Binder** badge above to run the notebook interactively in the browser — no installation required.
+Click the **Binder** badge above to run `analysis.ipynb` interactively in the browser — no
+installation required. It reruns MHW detection and the full statistical pipeline (same code as
+`ccsu-run-pipeline`) from the data already committed to this repository; raw ingestion from
+Copernicus Marine and the ISPRA Google Sheet needs private credentials that Binder doesn't have,
+so the notebook starts from those committed snapshots rather than re-downloading them. R-based
+analyses (SEA, DLNM, mixed-effects) are not included — Binder's Python kernel has no R.
 
-To run locally (the notebook additionally needs `jupyter` and `pmdarima`):
+To run locally (the notebook additionally needs `jupyter`):
 
 ```bash
 pip install -e ".[notebook]"
@@ -143,7 +149,9 @@ Hobday et al. (2016) method — 90th-percentile threshold on an 11-day moving-wi
 climatology (2003–2012 baseline), 5-day minimum event duration, ≤2-day gaps merged. Vendored
 reference implementation in [`marineHeatWaves.py`](marineHeatWaves.py); the production detection
 run uses the equivalent, explicitly-parameterized reimplementation in
-[`scripts/detect_mhw.py`](scripts/detect_mhw.py).
+[`mhw_detection.py`](src/climate_change_on_sea_urchins/mhw_detection.py), run automatically as
+the first step of `ccsu-run-pipeline` so the event catalogue can never drift out of sync with
+`data/sst_daily.csv` again (see `git log` around 2026-07 for why this matters).
 
 ### EC50 bioassay (biological sentinel data)
 

@@ -21,9 +21,10 @@ guide is organised by how much work each kind of change actually requires.
   salinity, O2, pH, CO2): update `ENV_COLS` in
   [`src/climate_change_on_sea_urchins/common.py`](../src/climate_change_on_sea_urchins/common.py)
   and the corresponding download/parsing logic in `scripts/fetch_copernicus*.py`.
-- **A different MHW detection sensitivity**: `scripts/detect_mhw.py` exposes `CLIM_START`,
-  `CLIM_END`, and `PCTILE` (climatology baseline window and percentile threshold) as
-  module-level constants.
+- **A different MHW detection sensitivity**:
+  [`mhw_detection.py`](../src/climate_change_on_sea_urchins/mhw_detection.py) exposes
+  `CLIM_START`, `CLIM_END`, and `PCTILE` (climatology baseline window and percentile threshold)
+  as module-level constants.
 - **A different bioassay schema** (different column names or a different toxicant/endpoint
   than copper EC50): the parsing logic is isolated in `scripts/fetch_ec50.py::fetch_raw()`, and
   the confidence-interval computation in `scripts/build_dataset.py`.

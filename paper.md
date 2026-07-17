@@ -103,9 +103,9 @@ oxygen, pH, surface CO$_2$) as monthly means at the monitoring site, plus daily 
 detection. Monthly EC$_{50}$ bioassay records are fetched live from a cloud spreadsheet maintained by
 ISPRA (the Italian Institute for Environmental Protection and Research), the national agency
 running the underlying ecotoxicological monitoring programme. MHW events are detected by
-`scripts/detect_mhw.py` using `marineHeatWaves.py` [@hobday_2016], a community-standard
-algorithm vendored under its original licence, applying a 90th-percentile threshold over at
-least five consecutive days. `scripts/build_dataset.py` aligns all three streams on a common
+`mhw_detection.py`, the package's own implementation of the Hobday et al. (2016) algorithm
+[@hobday_2016], applying a 90th-percentile threshold over at least five consecutive days, run as
+the first step of the automated pipeline. `scripts/build_dataset.py` aligns all three streams on a common
 monthly DatetimeIndex, producing `data_extended.csv` (276 months, 2003--2025) and
 `data_ec50_ci.csv` (EC$_{50}$ values with 95% CI and an `EC50_imputed` flag). All downstream analyses use only the months with real EC$_{50}$ measurements (158 at the time
 of writing) and the MHW catalogue (129 events, four intensity categories); both grow

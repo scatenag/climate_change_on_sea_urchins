@@ -6,7 +6,7 @@ the climate-change-ecotoxicology sister project.
 
 Input:  data/sst_daily.csv          (Datetime, Temperature)
 Output: data/mhw_events.csv        — event catalog
-        data/mhw_monthly.csv       — monthly aggregated metrics (for analysis.ipynb)
+        data/mhw_monthly.csv       — monthly aggregated metrics
         data/mhw_annual.csv        — annual block statistics
 
 Hobday criteria:
@@ -15,13 +15,18 @@ Hobday criteria:
   - Gap allowance: ≤2 days gap merges two events
   - Categories:    Moderate / Strong / Severe / Extreme
   - Climatology baseline: configurable (default 2003–2012, first 10 years)
+
+Runs as part of `ccsu-run-pipeline` (see pipeline.py) so the MHW catalogue is
+always regenerated from the current data/sst_daily.csv together with every
+other analysis step — never a separate manual step to remember. (A prior
+version of this project kept this detection step outside the automated
+pipeline; the MHW catalogue then silently fell out of sync with a corrected
+sst_daily.csv for months. See CHANGELOG / project history.)
 """
-
-import pandas as pd
 import numpy as np
-from pathlib import Path
+import pandas as pd
+from .common import ROOT
 
-ROOT         = Path(__file__).parent.parent
 SST_PATH     = ROOT / "data" / "sst_daily.csv"
 OUT_EVENTS   = ROOT / "data" / "mhw_events.csv"
 OUT_MONTHLY  = ROOT / "data" / "mhw_monthly.csv"
@@ -202,7 +207,7 @@ def to_annual(events: list) -> pd.DataFrame:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
+def run() -> None:
     if not SST_PATH.exists():
         raise FileNotFoundError(
             f"Daily SST file not found: {SST_PATH}\n"
@@ -242,8 +247,8 @@ def main():
         annual.to_csv(OUT_ANNUAL, index=False)
         print(f"  Saved: {OUT_ANNUAL} ({len(annual)} years)")
 
-    print("\nDone.")
+    print("✓ mhw_detection complete")
 
 
 if __name__ == "__main__":
-    main()
+    run()

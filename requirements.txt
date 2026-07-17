@@ -27,7 +27,12 @@ numpy>=1.24,<2.0
 scipy>=1.11,<1.16
 statsmodels>=0.14
 scikit-learn>=1.3
-pmdarima>=2.0
+
+# MHW->EC50 robustness battery (mhw_robustness.py): Convergent Cross Mapping
+# and wavelet coherence, two of five independent checks run alongside the
+# primary CCF/Granger/SEA/DLNM analyses.
+skccm>=0.1
+pycwt>=0.5.0b0
 
 # Visualization & dashboard
 plotly>=5.18
@@ -41,9 +46,9 @@ plotly>=5.18
 streamlit>=1.35,<1.57
 Pillow>=10.0
 
-# Marine Heatwaves (vendored as marineHeatWaves.py — no install needed)
-# If not vendored, uncomment:
-# git+https://github.com/ecjoliver/marineHeatWaves.git
+# Marine Heatwave detection: own implementation in mhw_detection.py, no
+# install needed. marineHeatWaves.py is vendored at the repo root for
+# reference but not imported by any current code path.
 
 # Testing
 pytest>=7.0

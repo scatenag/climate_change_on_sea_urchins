@@ -23,11 +23,11 @@
   },
   {
     "variable": "Temperature",
-    "n": 277,
-    "adf_stat": -2.260504294444962,
-    "adf_p": 0.1850225723469987,
+    "n": 281,
+    "adf_stat": -2.2603114515549705,
+    "adf_p": 0.18508786525456955,
     "adf_stationary": false,
-    "kpss_stat": 0.18841716903742353,
+    "kpss_stat": 0.1399777568170643,
     "kpss_p": 0.1,
     "kpss_stationary": true,
     "conclusion": "uncertain"
@@ -68,10 +68,10 @@
   {
     "variable": "mhw_peak_intensity",
     "n": 281,
-    "adf_stat": -5.383899510546462,
-    "adf_p": 3.6611772795985944e-06,
+    "adf_stat": -5.513190218636534,
+    "adf_p": 1.9512051775750224e-06,
     "adf_stationary": true,
-    "kpss_stat": 1.0524681753097664,
+    "kpss_stat": 1.6095170033102795,
     "kpss_p": 0.01,
     "kpss_stationary": false,
     "conclusion": "uncertain"
@@ -79,12 +79,12 @@
   {
     "variable": "mhw_days",
     "n": 281,
-    "adf_stat": -5.502715410192009,
-    "adf_p": 2.054091535957359e-06,
-    "adf_stationary": true,
-    "kpss_stat": 0.9070877791849725,
+    "adf_stat": -2.345180113890223,
+    "adf_p": 0.15781006414540416,
+    "adf_stationary": false,
+    "kpss_stat": 1.5697361556412968,
     "kpss_p": 0.01,
     "kpss_stationary": false,
-    "conclusion": "uncertain"
+    "conclusion": "non-stationary"
   }
 ]

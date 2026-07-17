@@ -4,7 +4,9 @@ Download daily SST from Copernicus Marine for Marine Heatwave detection.
 marineHeatWaves.detect() requires daily data — monthly data is NOT sufficient.
 
 Site: off Livorno / North Tyrrhenian Sea (43.4278°N, 10.3956°E), surface layer
-Period: 2003-01-01 → 2024-04-30
+Period: 2003-01-01 → 2026-06-30 (END below tracks the MY dataset's own coverage, which
+extends via monthly interim updates to ~1 month before present; check the catalog if this
+script starts failing near the END date)
 
 Output: data/sst_daily.csv
         Columns: Datetime (daily), Temperature
@@ -26,7 +28,7 @@ from config import SITE_LAT, SITE_LON, BBOX_DELTA
 DEPTH_MIN = 0.0
 DEPTH_MAX = 5.0    # surface only for SST
 START = "2003-01-01"
-END   = "2024-04-30"
+END   = "2026-06-30"
 
 RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
 OUT_PATH = Path(__file__).parent.parent / "data" / "sst_daily.csv"

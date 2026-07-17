@@ -65,27 +65,65 @@ jobs:
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
         run: python scripts/fetch_copernicus_update.py
 
+      # Full re-fetch (not incremental) of the daily SST cache used for MHW
+      # detection. Runs on the same monthly cadence as the env-variable
+      # update above, right alongside it, specifically so the two can never
+      # fall out of sync again the way they did between 2026-03 and 2026-07
+      # (see drafts/nuova pubblicazione/refresh_dati_copernicus_2026-07-18.md).
+      - name: Update daily SST cache for MHW detection
+        if: steps.check_monthly.outputs.run_copernicus == 'true'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/fetch_copernicus_daily.py
+
       - name: Check if Copernicus data changed
         id: check_copernicus
         run: |
-          if git diff --quiet data/env_copernicus.csv; then
+          if git diff --quiet data/env_copernicus.csv data/sst_daily.csv; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Rerun MHW detection (if Copernicus updated)
-        if: steps.check_copernicus.outputs.changed == 'true'
-        run: python scripts/detect_mhw.py
-
       # ── Step 3: Rebuild dataset + analysis (if anything changed) ─────────────
-      - name: Rebuild dataset and re-run analysis
+      # ccsu-run-pipeline regenerates the MHW catalogue (data/mhw_events.csv
+      # etc.) from data/sst_daily.csv as its own first step — no separate
+      # MHW-detection call needed here.
+      - name: Rebuild dataset and re-run Python analysis
         if: >
           steps.check_ec50.outputs.changed == 'true' ||
           steps.check_copernicus.outputs.changed == 'true'
         run: |
           python scripts/build_dataset.py
           python -m climate_change_on_sea_urchins.pipeline
+
+      # ── Step 3b: DLNM (R) — same trigger, kept in sync automatically ─────────
+      - name: Set up R
+        if: >
+          steps.check_ec50.outputs.changed == 'true' ||
+          steps.check_copernicus.outputs.changed == 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install R packages for DLNM
+        if: >
+          steps.check_ec50.outputs.changed == 'true' ||
+          steps.check_copernicus.outputs.changed == 'true'
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          packages: |
+            any::dlnm
+            any::mgcv
+            any::dplyr
+            any::readr
+
+      - name: Run DLNM analysis (R)
+        if: >
+          steps.check_ec50.outputs.changed == 'true' ||
+          steps.check_copernicus.outputs.changed == 'true'
+        run: Rscript scripts/mhw_lag_analysis.R
 
       # ── Step 4: Commit and push ───────────────────────────────────────────────
       - name: Commit and push updated results
@@ -96,7 +134,8 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/ec50_sheets.csv data/data_extended.csv data/data_ec50_ci.csv \
-                  data/env_copernicus.csv data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
+                  data/env_copernicus.csv data/sst_daily.csv \
+                  data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
                   results/
-          git diff --cached --quiet || git commit -m "Auto-update: env+EC50 data [skip ci]"
+          git diff --cached --quiet || git commit -m "Auto-update: env+EC50+SST data, Python+R analysis [skip ci]"
           git push origin main

@@ -1,13 +1,25 @@
 """Run all analysis modules in sequence, populating results/."""
-from . import timeseries, period_split, correlations, stationarity, mhw_analysis, forecast
+from . import (
+    mhw_detection, timeseries, period_split, correlations, stationarity,
+    mhw_analysis, mhw_lag_extra, mhw_robustness, forecast,
+)
 
 _MODULES = [
-    ("timeseries",   timeseries),
-    ("period_split", period_split),
-    ("correlations", correlations),
-    ("stationarity", stationarity),
-    ("mhw_analysis", mhw_analysis),
-    ("forecast",     forecast),
+    # mhw_detection runs first: it regenerates data/mhw_events.csv,
+    # mhw_monthly.csv and mhw_annual.csv from data/sst_daily.csv, which every
+    # module below depends on via common.load_data(). Keeping this inside the
+    # automated pipeline (rather than a separate manual script) is what
+    # prevents the MHW catalogue from silently drifting out of sync with
+    # sst_daily.csv, as happened for months in this project's history.
+    ("mhw_detection", mhw_detection),
+    ("timeseries",    timeseries),
+    ("period_split",  period_split),
+    ("correlations",  correlations),
+    ("stationarity",  stationarity),
+    ("mhw_analysis",  mhw_analysis),
+    ("mhw_lag_extra", mhw_lag_extra),
+    ("mhw_robustness", mhw_robustness),
+    ("forecast",      forecast),
 ]
 
 

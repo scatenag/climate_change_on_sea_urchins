@@ -1489,7 +1489,8 @@ def _tab_mhw_gametes():
             "Annual trends",
             "Variance partitioning",
             "Granger causality",
-            "R analysis (SEA + DLNM)",
+            "SEA + DLNM (event-based)",
+            "Robustness battery",
         ]
         # st.tabs() renders every sub-analysis on every rerun of this fragment
         # (e.g. SARIMAX-adjacent CCF recompute) regardless of which is visible —
@@ -2004,10 +2005,13 @@ def _tab_mhw_gametes():
 
         def _sub_r_analysis():
                 st.error(
-                    "Superposed epoch analysis, DLNM, and the mixed-effects model are "
-                    "fitted in R (dlnm/mgcv/lme4) on the full 2003–2025 record and "
+                    "Superposed epoch analysis and the mixed-effects model (statsmodels, "
+                    "Python) and DLNM (dlnm/mgcv, R) are fitted on the full record and "
                     "precomputed offline — these fits are too computationally heavy to "
-                    "refit live and do not reflect the date filter above."
+                    "refit live and do not reflect the date filter above. All three refresh "
+                    "automatically as part of the data-update pipeline; DLNM is the only one "
+                    "still requiring R, since there is no comparably mature Python "
+                    "cross-basis implementation."
                 )
                 sea_df, dlnm_df, dlnm_lag = load_r_results()
 
@@ -2077,7 +2081,125 @@ def _tab_mhw_gametes():
                     _dl_btn(me_df, "mixed_effects_predictions.csv", "⬇ Mixed effects data (CSV)")
 
                 if sea_df.empty and dlnm_df.empty:
-                    st.info("Run `Rscript scripts/mhw_lag_analysis.R` to generate R results.")
+                    st.info("Run `ccsu-run-pipeline` (SEA, mixed-effects) and "
+                            "`Rscript scripts/mhw_lag_analysis.R` (DLNM) to generate results.")
+
+            # ── 9. Robustness battery ────────────────────────────────────────────────
+
+        def _sub_robustness_battery():
+                st.error(
+                    "Five methodologically independent checks on the MHW → EC50 lag "
+                    "hypothesis, added after a 2026-07 data-provenance investigation "
+                    "(see the project's drafts/ for the full writeup). Precomputed offline "
+                    "as part of the data-update pipeline — does not change with the date "
+                    "filter above."
+                )
+                st.caption(
+                    "None of these five methods — deliberately chosen to be as different "
+                    "from each other and from the primary CCF/Granger/SEA/DLNM suite as "
+                    "possible — finds a robust MHW → EC50 relationship. Shown here in full "
+                    "rather than only in the paper, in the spirit of not hiding a negative "
+                    "result."
+                )
+
+                severe = load_csv("robustness_severe_ccf.csv")
+                if not severe.empty:
+                    st.subheader("1. Severe/Extreme-only driver")
+                    st.caption(
+                        "Only Severe/Extreme-category MHW events count toward the driver "
+                        "(zero otherwise) — tests whether only intense heatwaves, not the "
+                        "full spectrum, leave a mark."
+                    )
+                    fig = go.Figure()
+                    fig.add_trace(go.Bar(x=severe["lag"], y=severe["r_diff"], name="First differences"))
+                    fig.add_trace(go.Bar(x=severe["lag"], y=severe["r_arima"], name="ARIMA pre-whitened"))
+                    fig.update_layout(barmode="group", title="Severe/Extreme MHW → EC50 by lag",
+                                       xaxis_title="Lag (months)", yaxis_title="Spearman r", height=350)
+                    st.plotly_chart(fig, use_container_width=True)
+                    _dl_btn(severe, "robustness_severe_ccf.csv", "⬇ Severe/Extreme CCF (CSV)")
+
+                summer = load_csv("robustness_summer_temp.csv")
+                if not summer.empty:
+                    st.subheader("2. Direct summer-temperature anomaly")
+                    st.caption(
+                        "Bypasses MHW event detection entirely: detrended June–August mean "
+                        "temperature anomaly per year vs. EC50 at increasing lag from "
+                        "mid-summer, the more fundamental thermal-stress hypothesis."
+                    )
+                    fig = px.bar(summer, x="lag", y="r", hover_data=["n", "p"],
+                                 title="Summer temperature anomaly → EC50 by lag",
+                                 labels={"lag": "Lag (months)", "r": "Spearman r"})
+                    fig.update_layout(height=350)
+                    st.plotly_chart(fig, use_container_width=True)
+                    _dl_btn(summer, "robustness_summer_temp.csv", "⬇ Summer temperature CCF (CSV)")
+
+                ml_summary = load_json("robustness_ml_cv_r2.json")
+                imp = load_csv("robustness_ml_importance.csv")
+                if ml_summary:
+                    st.subheader("3. Random Forest / Gradient Boosting (all lags at once)")
+                    st.caption(
+                        "All 26 lagged MHW features (peak intensity + days, lags 0–12) fed "
+                        "to a nonlinear model together, scored out-of-sample with blocked "
+                        "time-series cross-validation — a check for combined/interaction "
+                        "effects a pairwise CCF would miss."
+                    )
+                    c1, c2 = st.columns(2)
+                    c1.metric("Out-of-sample R², trend only",
+                              f"{ml_summary['cv_r2_trend_only_mean']:.3f}")
+                    c2.metric("Out-of-sample R², trend + MHW",
+                              f"{ml_summary['cv_r2_with_mhw_mean']:.3f}",
+                              delta=f"{ml_summary['cv_r2_with_mhw_mean'] - ml_summary['cv_r2_trend_only_mean']:+.3f}")
+                    if ml_summary["mhw_helps_out_of_sample"]:
+                        st.caption("Adding MHW features improves out-of-sample prediction.")
+                    else:
+                        st.caption(
+                            "Adding MHW features does **not** improve — and here makes "
+                            "slightly worse — out-of-sample prediction versus trend alone: "
+                            "the model treats them as noise."
+                        )
+                    if not imp.empty:
+                        fig = px.bar(imp.head(10), x="permutation_importance", y="feature",
+                                     orientation="h", title="Permutation importance (top 10)")
+                        fig.update_layout(height=350, yaxis=dict(autorange="reversed"))
+                        st.plotly_chart(fig, use_container_width=True)
+                    _dl_btn(imp, "robustness_ml_importance.csv", "⬇ Feature importance (CSV)")
+
+                ccm = load_csv("robustness_ccm.csv")
+                if not ccm.empty:
+                    st.subheader("4. Convergent Cross Mapping")
+                    st.caption(
+                        "Nonlinear dynamical-systems causality (Sugihara et al. 2012) — "
+                        "doesn't assume linearity or Granger's precedence logic. For "
+                        "genuine one-directional MHW → EC50 causality, the forward skill "
+                        "(orange) should rise and plateau as library length grows, staying "
+                        "clearly above the reverse direction (blue)."
+                    )
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_ec50_to_mhw"],
+                                              name="EC50 → MHW (reverse)", line=dict(color=OCEAN)))
+                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_mhw_to_ec50"],
+                                              name="MHW → EC50 (hypothesized)", line=dict(color=WARM)))
+                    fig.update_layout(title="CCM cross-mapping skill vs. library length",
+                                       xaxis_title="Library length", yaxis_title="Cross-map skill (ρ)",
+                                       height=350)
+                    st.plotly_chart(fig, use_container_width=True)
+                    _dl_btn(ccm, "robustness_ccm.csv", "⬇ CCM data (CSV)")
+
+                wct = load_json("robustness_wavelet.json")
+                if wct:
+                    st.subheader("5. Wavelet coherence (1–8 month band)")
+                    st.caption(
+                        "Checks for coupling localized in time/frequency that a whole-record "
+                        "linear correlation could average away. Significance from a "
+                        "circular-shift surrogate null (preserves each series' own "
+                        "autocorrelation, destroys the cross-relationship)."
+                    )
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Observed mean coherence", f"{wct['observed_mean_coherence']:.3f}")
+                    c2.metric("Surrogate null mean", f"{wct['null_mean']:.3f} ± {wct['null_sd']:.3f}")
+                    c3.metric("Surrogate p-value", f"{wct['p_value']:.3f}")
+                    if wct["p_value"] >= 0.05:
+                        st.caption("Observed coherence is not distinguishable from the null.")
 
         _SUB_DISPATCH = {
             "Spearman CCF": _sub_ccf_diff,
@@ -2088,7 +2210,8 @@ def _tab_mhw_gametes():
             "Annual trends": _sub_annual_trends,
             "Variance partitioning": _sub_variance_partitioning,
             "Granger causality": _sub_granger_causality,
-            "R analysis (SEA + DLNM)": _sub_r_analysis,
+            "SEA + DLNM (event-based)": _sub_r_analysis,
+            "Robustness battery": _sub_robustness_battery,
         }
         _SUB_DISPATCH[active_sub]()
 

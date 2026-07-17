@@ -33,9 +33,12 @@ To refresh the Copernicus Marine environmental data locally:
 pip install -e ".[acquisition]"
 python scripts/fetch_copernicus_update.py
 python scripts/build_dataset.py
-python scripts/detect_mhw.py
 ccsu-run-pipeline
 ```
+
+`ccsu-run-pipeline` regenerates the MHW event catalogue (`data/mhw_events.csv` and friends) from
+`data/sst_daily.csv` as its first step — there is no separate MHW-detection script to remember
+to run.
 
 ## Code style
 

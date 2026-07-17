@@ -40,7 +40,7 @@ PHYSICAL_BOUNDS = {
 }
 
 MHW_CATEGORIES = {"Moderate", "Strong", "Severe", "Extreme"}
-MHW_MIN_DURATION_DAYS = 5  # Hobday et al. (2016) criterion, hardcoded as MIN_DAYS in scripts/detect_mhw.py
+MHW_MIN_DURATION_DAYS = 5  # Hobday et al. (2016) criterion, hardcoded as MIN_DAYS in mhw_detection.py
 
 
 def _read(fname):
@@ -224,4 +224,47 @@ def test_co2_cross_check_ratio_near_one():
     assert 0.9 <= ratio <= 1.1, (
         f"Copernicus/original CO2 ratio drifted to {ratio:.2f} (expected ~1.0) — "
         "the two series are no longer consistent, see README 'CO2 unit note'"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Provenance cross-check — MHW catalogue must be reproducible from sst_daily.csv
+#
+# data/mhw_events.csv / mhw_monthly.csv / mhw_annual.csv are committed data,
+# not just derived-on-the-fly results, so nothing stopped them from silently
+# drifting out of sync with data/sst_daily.csv if the two were ever updated
+# separately. That happened for months in this project's history (a
+# site-coordinate fix in March 2026 regenerated sst_daily.csv but not the
+# MHW catalogue derived from it, discovered only in July 2026 — see project
+# history / drafts/nuova pubblicazione/refresh_dati_copernicus_2026-07-18.md).
+# mhw_detection.run() is deterministic and is now the first step of
+# ccsu-run-pipeline, so this should never recur, but this test makes the
+# invariant explicit and catches it immediately (rather than months later)
+# if it ever does.
+# ---------------------------------------------------------------------------
+
+def test_mhw_monthly_matches_recomputation_from_sst_daily():
+    from climate_change_on_sea_urchins.mhw_detection import (
+        compute_climatology, detect_events, to_monthly, CLIM_START, CLIM_END,
+    )
+
+    sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
+    clim = compute_climatology(sst, CLIM_START, CLIM_END)
+    _events, daily = detect_events(sst, clim)
+    recomputed = to_monthly(daily).set_index("Datetime")
+
+    committed = _read("mhw_monthly.csv").set_index("Datetime")
+    common_idx = recomputed.index.intersection(committed.index)
+    assert len(common_idx) > 0, "No overlapping months between recomputed and committed mhw_monthly.csv"
+
+    diff = (recomputed.loc[common_idx, "mhw_days"] - committed.loc[common_idx, "mhw_days"]).abs()
+    bad_months = diff[diff > 0]
+    assert bad_months.empty, (
+        f"{len(bad_months)} month(s) where mhw_monthly.csv's mhw_days does not match what "
+        f"mhw_detection.py recomputes from the current data/sst_daily.csv: "
+        f"{[d.strftime('%Y-%m') for d in bad_months.index[:10]]}"
+        f"{' ...' if len(bad_months) > 10 else ''}. "
+        "This means data/mhw_events.csv/mhw_monthly.csv/mhw_annual.csv are stale relative to "
+        "data/sst_daily.csv — run `ccsu-run-pipeline` (which regenerates them first) and commit "
+        "the result."
     )

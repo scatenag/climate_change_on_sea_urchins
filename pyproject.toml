@@ -36,11 +36,13 @@ dependencies = [
     "streamlit>=1.35,<1.57",
     "plotly>=5.18",
     "Pillow>=10.0",
+    "skccm>=0.1",
+    "pycwt>=0.5.0b0",
 ]
 
 [project.optional-dependencies]
 acquisition = ["copernicusmarine", "xarray", "netcdf4", "h5netcdf"]
-notebook = ["jupyter", "pmdarima>=2.0"]
+notebook = ["jupyter", "nbconvert"]
 test = ["pytest>=7.0"]
 
 [project.urls]

@@ -1,5 +1,5 @@
 {
-  "optimal_lag": 12,
+  "optimal_lag": 2,
   "exog_vars": [
     "pH",
     "Temperature",
@@ -7,19 +7,19 @@
   ],
   "scenarios": {
     "bad": {
-      "final_mean": 24.098217510491253,
-      "final_ci_lower": 6.024890782307484,
-      "final_ci_upper": 42.171544238675025
+      "final_mean": 14.260422704895904,
+      "final_ci_lower": 0.0,
+      "final_ci_upper": 32.333749433079674
     },
     "mean": {
-      "final_mean": 26.862501402540346,
-      "final_ci_lower": 8.789174674356577,
-      "final_ci_upper": 44.93582813072412
+      "final_mean": 21.851550135293266,
+      "final_ci_lower": 3.778223407109497,
+      "final_ci_upper": 39.92487686347704
     },
     "good": {
-      "final_mean": 28.200066624438705,
-      "final_ci_lower": 10.126739896254936,
-      "final_ci_upper": 46.27339335262248
+      "final_mean": 25.53269172588098,
+      "final_ci_lower": 7.459364997697211,
+      "final_ci_upper": 43.60601845406475
     }
   }
 }
