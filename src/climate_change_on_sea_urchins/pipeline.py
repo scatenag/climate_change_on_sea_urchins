@@ -2,7 +2,7 @@
 from . import (
     mhw_detection, timeseries, period_split, correlations, stationarity,
     mhw_analysis, mhw_lag_extra, mhw_robustness, cu_speciation, thermal_legacy,
-    regime_shift, forecast,
+    regime_shift, mhw_lag_annual, forecast,
 )
 
 _MODULES = [
@@ -23,6 +23,7 @@ _MODULES = [
     ("cu_speciation", cu_speciation),
     ("thermal_legacy", thermal_legacy),
     ("regime_shift",  regime_shift),
+    ("mhw_lag_annual", mhw_lag_annual),
     ("forecast",      forecast),
 ]
 

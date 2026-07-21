@@ -1,0 +1,22 @@
+{
+  "best_signal": {
+    "predictor": "total_mhw_days",
+    "lag_years": 1,
+    "n": 22,
+    "rho_detrended_spearman": -0.48164878599661215,
+    "p_detrended_spearman": 0.02322568064366436,
+    "p_detrended_fdr_bh": 0.37161089029862976
+  },
+  "robustness": {
+    "pearson_r": -0.28533888038808747,
+    "pearson_p": 0.19802652506330434,
+    "jackknife_p_min": 0.0004260865132646111,
+    "jackknife_p_max": 0.05922578935165214,
+    "jackknife_frac_below_0p05": 0.9545454545454546,
+    "reverse_direction_rho": 0.17334839073969513,
+    "reverse_direction_p": 0.44042031323470754
+  },
+  "event_count_lag1_detrended_p": 0.3134123757420365,
+  "verdict": "exploratory_suggestive",
+  "interpretation": "Exposure DURATION (MHW days) in the previous year predicts EC50 after detrending (Spearman rho=-0.48, p=0.023); event COUNT does not. Robust to jackknife and direction-asymmetric, but Pearson-weak and does not survive FDR \u2014 a suggestive, pre-registration-worthy carry-over hypothesis, not a demonstrated effect. Consistent with a delayed (not acute) mechanism, unlike the 2025 acute-exposure experiment."
+}

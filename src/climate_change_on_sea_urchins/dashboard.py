@@ -2703,6 +2703,39 @@ def _tab_regime_shift():
         if _img.exists():
             st.image(str(_img), use_container_width=True)
 
+        st.divider()
+
+        # ── 4 · the one lagged MHW signal that survives ─────────────────────
+        st.subheader("4 · A residual lagged MHW signal (exploratory)")
+        ml = _json("mhw_lag_annual_summary.json")
+        if ml:
+            bs, rb = ml["best_signal"], ml["robustness"]
+            a, b, c, d = st.columns(4)
+            a.metric("Best predictor", "MHW days (t−1)",
+                     help="exposure DURATION in the previous year; event COUNT shows nothing")
+            b.metric("Detrended ρ", f"{bs['rho_detrended_spearman']:+.2f}",
+                     help=f"Spearman, p={bs['p_detrended_spearman']:.3f}")
+            c.metric("Jackknife robust", f"{rb['jackknife_frac_below_0p05']*100:.0f}%",
+                     help="fraction of leave-one-year-out refits still p<0.05")
+            d.metric("Survives FDR?", "no" if bs["p_detrended_fdr_bh"] >= 0.05 else "yes",
+                     help=f"Benjamini-Hochberg across the 4×4 grid: p_FDR={bs['p_detrended_fdr_bh']:.2f}")
+            st.markdown(
+                "The **duration** of heatwave exposure in the *previous* year predicts EC50 "
+                "even after removing the trend — the only MHW signal that survives detrending. "
+                "The **number** of events does not. Consistent with a ~1-year carry-over onto the "
+                "gametes of the next season (a *delayed* effect — not the acute one an independent "
+                "2025 experiment correctly found absent)."
+            )
+            st.warning(
+                "**Exploratory / hypothesis-generating.** Rank-based only (Pearson "
+                f"p={rb['pearson_p']:.2f}), does **not** survive multiple-testing correction "
+                "(FDR), n≈22. A pre-registration-worthy carry-over hypothesis, not a demonstrated "
+                "effect."
+            )
+        _img = FIGS / "fig_mhw_lag_annual.png"
+        if _img.exists():
+            st.image(str(_img), use_container_width=True)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 9 — About

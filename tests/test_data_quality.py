@@ -375,3 +375,32 @@ def test_regime_shift_summary_sane():
         "MHW exposure regime shift does not precede (or equal) the EC50 collapse — "
         "the accumulation-lag framing needs revisiting."
     )
+
+
+# ---------------------------------------------------------------------------
+# Annual lagged MHW→EC50 — EXPLORATORY. Guards the grid arithmetic and the
+# key qualitative facts (duration not count; verdict honest), NOT a claim.
+# ---------------------------------------------------------------------------
+
+def test_mhw_lag_annual_grid_bounded():
+    g = pd.read_csv(ROOT / "results" / "mhw_lag_annual.csv")
+    for c in ["rho_raw", "rho_detrended"]:
+        assert g[c].between(-1.0001, 1.0001).all(), f"{c} outside [-1,1]"
+    for c in ["p_raw", "p_detrended", "p_detrended_fdr"]:
+        assert g[c].between(-1e-9, 1.0001).all(), f"{c} outside [0,1]"
+
+
+def test_mhw_lag_annual_duration_not_count():
+    s = json.loads((ROOT / "results" / "mhw_lag_annual_summary.json").read_text())
+    assert s["verdict"] in {
+        "confirmatory_survives_fdr", "exploratory_suggestive", "no_signal_beyond_trend",
+    }, f"unexpected verdict: {s['verdict']}"
+    # The qualitative finding: it is exposure DURATION, and event COUNT is not the driver.
+    assert s["best_signal"]["predictor"] == "total_mhw_days", (
+        f"best MHW predictor changed to {s['best_signal']['predictor']} — revisit the "
+        "'duration, not count' framing."
+    )
+    assert s["event_count_lag1_detrended_p"] > 0.05, (
+        "event_count (number of MHW) now shows a detrended signal — the 'duration, not "
+        "number' distinction no longer holds."
+    )

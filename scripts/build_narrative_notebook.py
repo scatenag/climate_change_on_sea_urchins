@@ -43,7 +43,7 @@ import matplotlib.pyplot as plt
 from IPython.display import Image, display
 
 from climate_change_on_sea_urchins import load_data
-from climate_change_on_sea_urchins import cu_speciation, thermal_legacy, regime_shift
+from climate_change_on_sea_urchins import cu_speciation, thermal_legacy, regime_shift, mhw_lag_annual
 
 RESULTS, FIGS = Path("results"), Path("figures")
 def run_fig(script):  # regenerate a figure reproducibly
@@ -148,6 +148,38 @@ The canonical critical-slowing-down early-warning signals (rising variance and a
 """))
 
 cells.append(md(
+"""## Question 4 — is there *any* MHW signal left after the trend? (exploratory)
+
+Everything so far is co-trended. But one fragment survives. Does the **duration** of heatwave
+exposure predict EC50 *beyond* the shared trend, at some lag? We scan predictor × lag on annual data,
+detrend both series, and stress-test the survivor (jackknife, Pearson, FDR, direction).
+"""))
+
+cells.append(code(
+"""mhw_lag_annual.run(); run_fig("make_mhw_lag_annual_figure.py")
+m = json.load(open(RESULTS/"mhw_lag_annual_summary.json"))
+bs, rb = m["best_signal"], m["robustness"]
+print(f"Best predictor:   {bs['predictor']} at lag {bs['lag_years']} yr (exposure DURATION)")
+print(f"Detrended:        rho={bs['rho_detrended_spearman']:+.2f}, p={bs['p_detrended_spearman']:.3f}")
+print(f"Event COUNT lag1: p={m['event_count_lag1_detrended_p']:.2f}  (number of events → nothing)")
+print(f"Jackknife <0.05:  {rb['jackknife_frac_below_0p05']*100:.0f}% of leave-one-year-out refits")
+print(f"Pearson:          r={rb['pearson_r']:+.2f}, p={rb['pearson_p']:.2f}  (rank-driven, not linear)")
+print(f"Reverse (EC50→MHW): rho={rb['reverse_direction_rho']:+.2f}, p={rb['reverse_direction_p']:.2f}")
+print(f"Survives FDR:     {'yes' if bs['p_detrended_fdr_bh']<0.05 else 'no'} (p_FDR={bs['p_detrended_fdr_bh']:.2f})")
+print(f"Verdict:          {m['verdict']}")
+display(Image(str(FIGS/"fig_mhw_lag_annual.png")))"""))
+
+cells.append(md(
+"""**Verdict:** the *duration* of the previous year's heatwaves — not the *number* of events —
+predicts EC50 after detrending (ρ=−0.48, p=0.023), the only MHW signal that survives. It is robust to
+jackknife (95% of leave-one-year-out refits stay significant) and direction-asymmetric (MHW→EC50, not
+the reverse), but Pearson-weak and it does **not** survive multiple-testing correction. This is a
+**delayed ~1-year carry-over** hypothesis — heat stress on one season's gametes surfacing the next —
+distinct from the acute effect the 2025 experiment correctly found absent. **Exploratory: worth
+pre-registering, not a demonstrated effect.**
+"""))
+
+cells.append(md(
 """## Synthesis — inference by exclusion
 
 | Candidate explanation | Test | Outcome |
@@ -157,6 +189,7 @@ cells.append(md(
 | Food / productivity | Chl, phyto, nutrients vs EC50 | null — **excluded** |
 | Temperature alone | cumulative thermal dose vs time | insufficient — **excluded** |
 | **Multifactorial cumulative climate stress** | regime shift + timing + PC1 | **only survivor** |
+| Delayed MHW *duration* carry-over (t−1) | annual lagged, detrended + jackknife | **suggestive** — survives detrending, *not* FDR (exploratory) |
 
 **What we can say:** a wild sentinel population underwent a ~2016 regime shift in contaminant
 tolerance, ~3 years after a coordinated multifactorial change in its environment; every simpler
