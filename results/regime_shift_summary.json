@@ -1,0 +1,29 @@
+{
+  "ec50_regime_shift": {
+    "break": "2016-05-01",
+    "p": 2.2242257914787085e-22,
+    "pre_mean": 46.856924908424915,
+    "post_mean": 26.816119047619043
+  },
+  "mhw_exposure_break_year": 2013,
+  "exposure_precedes_response_years": 3,
+  "multifactorial_stress_index": {
+    "pc1_variance_explained": 0.705999548172166,
+    "pc1_loadings_stress_oriented": {
+      "Temperature": 0.479289760116551,
+      "Salinity": 0.2789376657301005,
+      "CO2": 0.5038000491185198,
+      "O2": 0.4119045123941314,
+      "pH": 0.5186475563058132
+    },
+    "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated climate-change axis. Correlation with EC50 is co-trended, not causal."
+  },
+  "early_warning_signals": {
+    "variance_kendall_tau": -0.5213971778857275,
+    "variance_p": 7.452975720513171e-19,
+    "ar1_kendall_tau": 0.08882720333102011,
+    "ar1_p": 0.13084673535327435
+  },
+  "critical_slowing_down_detected": false,
+  "verdict": "Regime shift in EC50 confirmed ~2016 (Pettitt p=2.2e-22). MHW exposure shifts ~2013, ~3 yr BEFORE the biological collapse \u2014 consistent with multi-year population-scale accumulation, not an acute lag. Environmental stress is multifactorial (PC1 = 71% of T/S/CO2/O2/pH variance). Canonical critical-slowing-down early-warning signals are NOT present (absolute variance falls, AR(1) not rising) \u2014 this is a documented regime shift, not a demonstrated dynamical tipping point."
+}

@@ -350,3 +350,28 @@ def test_thermal_legacy_verdict_and_cotrend():
         "Detrending did NOT weaken the strongest raw correlation — re-examine the "
         "co-trend interpretation in thermal_legacy.py."
     )
+
+
+# ---------------------------------------------------------------------------
+# Regime-shift analysis — integrity guards. Documents a REGIME SHIFT (not a
+# demonstrated tipping point); these checks guard the changepoint arithmetic
+# and the exposure-precedes-response ordering, not a causal claim.
+# ---------------------------------------------------------------------------
+
+def test_regime_shift_changepoints_valid():
+    df = pd.read_csv(ROOT / "results" / "regime_shift_changepoints.csv")
+    assert df["p_value"].between(0.0, 1.0).all(), "Pettitt p-value outside [0,1]"
+    assert df["break_year"].between(2003, 2026).all(), "changepoint year outside record"
+
+
+def test_regime_shift_summary_sane():
+    s = json.loads((ROOT / "results" / "regime_shift_summary.json").read_text())
+    ve = s["multifactorial_stress_index"]["pc1_variance_explained"]
+    assert 0.0 <= ve <= 1.0, f"PC1 variance explained {ve} not a fraction in [0,1]"
+    assert isinstance(s["critical_slowing_down_detected"], bool)
+    # The narrative fact: MHW exposure shifts no later than the EC50 response.
+    ec50_year = int(s["ec50_regime_shift"]["break"][:4])
+    assert s["mhw_exposure_break_year"] <= ec50_year, (
+        "MHW exposure regime shift does not precede (or equal) the EC50 collapse — "
+        "the accumulation-lag framing needs revisiting."
+    )
