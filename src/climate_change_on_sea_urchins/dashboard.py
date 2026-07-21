@@ -1021,6 +1021,7 @@ TAB_LABELS = [
     "Pre / Post split",
     "Correlations",
     "Stationarity",
+    "Regime shift",
     "Forecast EC50",
     "About",
 ]
@@ -2599,6 +2600,111 @@ def _tab_forecast():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# TAB — Regime shift (chemistry-vs-biology, thermal legacy, multifactorial shift)
+# ═══════════════════════════════════════════════════════════════════════════════
+def _tab_regime_shift():
+        st.header("Population regime shift — beyond the raw decline")
+        st.markdown(
+            "The reference-toxicant EC50 (a positive-control **yardstick** for the "
+            "sea-urchin embryo test) fell ~41% over 20 years. These panels ask *why*, "
+            "by excluding alternatives rather than asserting a cause. The urchins are "
+            "**wild-collected**, so their gametes carry the imprint of the in-situ "
+            "environment the adults lived through."
+        )
+        st.caption(
+            "All panels are precomputed by `ccsu-run-pipeline` on the full dataset "
+            "(cu_speciation · thermal_legacy · regime_shift) — they do **not** change "
+            "with the date filter above."
+        )
+
+        def _json(name):
+            try:
+                return json.loads((RESULTS / name).read_text())
+            except Exception:
+                return None
+
+        FIGS = ROOT / "figures"
+
+        # ── 1 · chemistry vs biology ────────────────────────────────────────
+        st.subheader("1 · Is the decline chemistry or biology?")
+        cu = _json("cu_speciation_summary.json")
+        if cu:
+            a, b, c, d = st.columns(4)
+            a.metric("Nominal EC50 decline", f"{cu['ec50_decline_nominal_pct']:.0f}%")
+            b.metric("Explained by OA chemistry", f"~{cu['geochemical_share_literature_pct']:.0f}%",
+                     help="Free-Cu²⁺ speciation shift from the measured pH change (Cu is the "
+                          "ADDED positive control; ambient pH sets its speciation in the natural "
+                          "test seawater).")
+            c.metric("Residual = biology", f"{cu['ec50_decline_corrected_literature_pct']:.0f}%")
+            d.metric("Residual significance", f"p={cu['biological_residual_mannwhitney_p']:.0e}")
+            st.markdown(
+                "The realized site pH change is only ~0.01 units, so copper "
+                "bioavailability (ocean acidification) accounts for at most a few percent "
+                "of the decline — **the sensitization is genuinely biological.**"
+            )
+        _img = FIGS / "fig_cu_speciation_decomposition.png"
+        if _img.exists():
+            st.image(str(_img), use_container_width=True)
+
+        st.divider()
+
+        # ── 2 · temperature alone is not enough ─────────────────────────────
+        st.subheader("2 · Temperature alone doesn't explain it")
+        tl = _json("thermal_legacy_summary.json")
+        if tl:
+            sr = tl["strongest_raw"]
+            a, b, c = st.columns(3)
+            a.metric("Raw correlation", f"ρ={sr['raw_spearman_r']:+.2f}",
+                     help=f"cumulative thermal dose ({sr['window']}) vs EC50; p={sr['raw_p']:.0e}")
+            b.metric("After removing the trend", f"p={tl['same_window_detrended_p']:.2f}",
+                     help="detrended correlation — the signal collapses")
+            c.metric("Added R² over time alone", f"{tl['same_window_delta_r2_over_time']*100:.0f}%")
+            st.markdown(
+                "A strong *raw* correlation, but cumulative heat dose is ~0.7 collinear "
+                "with elapsed time and adds almost nothing over a plain time trend. "
+                "**Temperature as a single linear driver is not enough** — pointing to "
+                "multifactorial cumulative stress."
+            )
+        _img = FIGS / "fig_thermal_legacy.png"
+        if _img.exists():
+            st.image(str(_img), use_container_width=True)
+
+        st.divider()
+
+        # ── 3 · multifactorial regime shift ─────────────────────────────────
+        st.subheader("3 · A multifactorial regime shift")
+        rs = _json("regime_shift_summary.json")
+        if rs:
+            a, b, c, d = st.columns(4)
+            a.metric("EC50 regime shift", rs["ec50_regime_shift"]["break"][:7],
+                     help=f"Pettitt changepoint, p={rs['ec50_regime_shift']['p']:.0e}")
+            b.metric("Environment shifts", str(rs["mhw_exposure_break_year"]),
+                     help="MHW days / cumulative intensity, Temperature, CO₂, pH all break ~here")
+            c.metric("Accumulation lag", f"~{rs['exposure_precedes_response_years']} yr",
+                     help="exposure precedes the biological collapse")
+            d.metric("Stress axis (PC1)",
+                     f"{rs['multifactorial_stress_index']['pc1_variance_explained']*100:.0f}%",
+                     help="one coordinated warming+acidification+deoxygenation axis")
+            st.markdown(
+                "The environment (marine-heatwave exposure, temperature, CO₂, pH) changes "
+                f"state ~{rs['mhw_exposure_break_year']}; the population's copper tolerance "
+                f"collapses ~{rs['ec50_regime_shift']['break'][:4]} — a "
+                f"~{rs['exposure_precedes_response_years']}-year accumulation lag on the "
+                "long-lived wild adults."
+            )
+            if not rs["critical_slowing_down_detected"]:
+                st.info(
+                    "**Honest caveat:** this is a documented *regime shift*, not a "
+                    "demonstrated *tipping point*. The canonical critical-slowing-down "
+                    "early-warning signals (rising variance and autocorrelation) are **not** "
+                    "present, so we do not claim a dynamical critical transition."
+                )
+        _img = FIGS / "fig_regime_shift.png"
+        if _img.exists():
+            st.image(str(_img), use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # TAB 9 — About
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_about():
@@ -2659,6 +2765,7 @@ _TAB_DISPATCH = {
     "Pre / Post split": _tab_pre_post_split,
     "Correlations": _tab_correlations,
     "Stationarity": _tab_stationarity,
+    "Regime shift": _tab_regime_shift,
     "Forecast EC50": _tab_forecast,
     "About": _tab_about,
 }
