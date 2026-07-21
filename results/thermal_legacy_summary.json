@@ -1,0 +1,94 @@
+{
+  "hypothesis": "chronic cumulative heat stress on the wild adult population drives the EC50 decline (copper is the revealer, not the cause)",
+  "verdict": "consistent_but_not_separable_from_trend",
+  "strongest_raw": {
+    "window": "18C/36m",
+    "raw_spearman_r": -0.672918901330556,
+    "raw_p": 1.4149993205768595e-22
+  },
+  "same_window_detrended_p": 0.001382425615356096,
+  "same_window_detrended_r": 0.24999424890729244,
+  "same_window_delta_r2_over_time": 0.04678620592369431,
+  "same_window_dose_time_collinearity": 0.8346546879988722,
+  "per_window": [
+    {
+      "threshold_C": 18.0,
+      "window_months": 12,
+      "raw_spearman_r": -0.5151726551434546,
+      "raw_p": 2.7061146291011388e-12,
+      "detrended_spearman_r": -0.08174890729238556,
+      "detrended_p": 0.3025775563146677,
+      "dose_time_collinearity": 0.6268539388970138,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.47025166484619285,
+      "delta_r2": 0.011989442715717558,
+      "partial_p_dose_given_time": 0.060453741513101414
+    },
+    {
+      "threshold_C": 18.0,
+      "window_months": 24,
+      "raw_spearman_r": -0.6070491632113995,
+      "raw_p": 1.386865904875742e-17,
+      "detrended_spearman_r": 0.02956636760984587,
+      "detrended_p": 0.7096595132335141,
+      "dose_time_collinearity": 0.7363254984886848,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.48250067744362823,
+      "delta_r2": 0.02423845531315294,
+      "partial_p_dose_given_time": 0.007251840520702907
+    },
+    {
+      "threshold_C": 18.0,
+      "window_months": 36,
+      "raw_spearman_r": -0.672918901330556,
+      "raw_p": 1.4149993205768595e-22,
+      "detrended_spearman_r": 0.24999424890729244,
+      "detrended_p": 0.001382425615356096,
+      "dose_time_collinearity": 0.8346546879988722,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.5050484280541696,
+      "delta_r2": 0.04678620592369431,
+      "partial_p_dose_given_time": 0.00016210205400730374
+    },
+    {
+      "threshold_C": 20.0,
+      "window_months": 12,
+      "raw_spearman_r": -0.5056603317374387,
+      "raw_p": 7.825129737269015e-12,
+      "detrended_spearman_r": -0.15092305037957213,
+      "detrended_p": 0.055999617283890656,
+      "dose_time_collinearity": 0.5964464303204944,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.4605619902320267,
+      "delta_r2": 0.0022997681015514138,
+      "partial_p_dose_given_time": 0.4130371825754363
+    },
+    {
+      "threshold_C": 20.0,
+      "window_months": 24,
+      "raw_spearman_r": -0.5830516074306131,
+      "raw_p": 4.854705596264646e-16,
+      "detrended_spearman_r": -0.05896307798481712,
+      "detrended_p": 0.45749694255043105,
+      "dose_time_collinearity": 0.7244535414131255,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.4683811016567957,
+      "delta_r2": 0.010118879526320401,
+      "partial_p_dose_given_time": 0.08483630952064415
+    },
+    {
+      "threshold_C": 20.0,
+      "window_months": 36,
+      "raw_spearman_r": -0.6363252126118347,
+      "raw_p": 1.1812297549990432e-19,
+      "detrended_spearman_r": 0.15606452726017944,
+      "detrended_p": 0.04804866830511789,
+      "dose_time_collinearity": 0.8116177268333308,
+      "r2_time_only": 0.4582622221304753,
+      "r2_time_plus_dose": 0.49208365375347085,
+      "delta_r2": 0.03382143162299556,
+      "partial_p_dose_given_time": 0.0014402660301608679
+    }
+  ],
+  "interpretation": "Thermal dose is strongly correlated with EC50 in raw form but is ~0.83 collinear with elapsed time; it adds only 4.7% R2 over a plain time trend and does not track EC50's off-trend variation. With a single observational co-trending series the chronic-heat hypothesis cannot be causally separated from a shared secular trend \u2014 it is a plausible mechanism supported by physiology and by the exclusion of alternatives (Cu speciation, assay precision, nutrients), not a demonstrated one."
+}

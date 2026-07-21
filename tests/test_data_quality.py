@@ -21,6 +21,7 @@ become available (see project discussion with A. Gaion, 2026-07).
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -313,4 +314,39 @@ def test_cu_speciation_decline_is_mostly_biological():
     assert s["biological_residual_mannwhitney_p"] < 0.01, (
         "Speciation-corrected EC50 no longer declines significantly pre/post-2016; "
         "the biological-sensitization result does not hold on current data."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Thermal-legacy hypothesis test — integrity guards. This module deliberately
+# reports a NEGATIVE/HONEST result (thermal dose does not beat a plain time
+# trend); these checks guard the arithmetic and the "detrending weakens the
+# correlation" co-trend phenomenon, not a scientific claim.
+# ---------------------------------------------------------------------------
+
+def test_thermal_legacy_dose_positive_and_finite():
+    df = pd.read_csv(ROOT / "results" / "thermal_legacy.csv")
+    dose_cols = [c for c in df.columns if c.startswith("dose_")]
+    assert dose_cols, "no thermal-dose columns in thermal_legacy.csv"
+    for c in dose_cols:
+        assert np.isfinite(df[c]).all() and (df[c] >= 0).all(), (
+            f"{c}: thermal dose (degree-days) must be finite and non-negative"
+        )
+
+
+def test_thermal_legacy_verdict_and_cotrend():
+    s = json.loads((ROOT / "results" / "thermal_legacy_summary.json").read_text())
+    assert s["verdict"] in {
+        "supported_after_detrending",
+        "consistent_but_not_separable_from_trend",
+    }, f"unexpected verdict: {s['verdict']}"
+    for row in s["per_window"]:
+        for k in ("raw_spearman_r", "detrended_spearman_r"):
+            assert -1.0001 <= row[k] <= 1.0001, f"{k} outside [-1,1]"
+    # The whole point: removing the time trend weakens the strongest raw
+    # correlation. If this ever fails, the co-trend framing needs revisiting.
+    strongest = min(s["per_window"], key=lambda r: r["raw_p"])
+    assert abs(strongest["detrended_spearman_r"]) < abs(strongest["raw_spearman_r"]), (
+        "Detrending did NOT weaken the strongest raw correlation — re-examine the "
+        "co-trend interpretation in thermal_legacy.py."
     )
