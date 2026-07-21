@@ -1,7 +1,7 @@
 """Run all analysis modules in sequence, populating results/."""
 from . import (
     mhw_detection, timeseries, period_split, correlations, stationarity,
-    mhw_analysis, mhw_lag_extra, mhw_robustness, forecast,
+    mhw_analysis, mhw_lag_extra, mhw_robustness, cu_speciation, forecast,
 )
 
 _MODULES = [
@@ -19,6 +19,7 @@ _MODULES = [
     ("mhw_analysis",  mhw_analysis),
     ("mhw_lag_extra", mhw_lag_extra),
     ("mhw_robustness", mhw_robustness),
+    ("cu_speciation", cu_speciation),
     ("forecast",      forecast),
 ]
 

@@ -268,3 +268,49 @@ def test_mhw_monthly_matches_recomputation_from_sst_daily():
         "data/sst_daily.csv — run `ccsu-run-pipeline` (which regenerates them first) and commit "
         "the result."
     )
+
+
+# ---------------------------------------------------------------------------
+# Copper speciation decomposition — the geochemical (ocean-acidification)
+# correction must stay small, otherwise the "the decline is biological, not a
+# water-chemistry artifact" conclusion silently changes. Also guards the
+# carbonate-system implementation against unit/formula regressions.
+# ---------------------------------------------------------------------------
+
+def test_cu_speciation_carbonate_ion_plausible():
+    df = pd.read_csv(ROOT / "results" / "cu_speciation_decomposition.csv")
+    co3_umol = df["CO3"] * 1e6
+    assert co3_umol.between(150.0, 300.0).all(), (
+        f"Carbonate ion outside plausible NW-Mediterranean surface range "
+        f"[150,300] µmol/kg: min={co3_umol.min():.0f}, max={co3_umol.max():.0f}. "
+        "Check the carbonate-system constants / total-alkalinity estimate in cu_speciation.py."
+    )
+
+
+def test_cu_speciation_correction_is_small():
+    df = pd.read_csv(ROOT / "results" / "cu_speciation_decomposition.csv")
+    # Per-month amplification varies with monthly pH; wide bound catches only
+    # gross bugs (e.g. a factor-of-two error), not real seasonal pH swings.
+    for col in ["fCu_amplification", "fCu_amplification_lit"]:
+        assert df[col].between(0.75, 1.40).all(), (
+            f"{col} outside [0.75,1.40] — implausible free-Cu²⁺ amplification, likely a bug."
+        )
+    # What the decomposition actually uses: the era-mean amplification stays close
+    # to 1 because the realized pH change between eras is only ~0.01 units.
+    s = json.loads((ROOT / "results" / "cu_speciation_summary.json").read_text())
+    for key in ["fCu_amplification_post_carbonate", "fCu_amplification_post_literature"]:
+        assert 0.95 <= s[key] <= 1.10, f"{key}={s[key]:.3f} — era-mean amplification too far from 1."
+
+
+def test_cu_speciation_decline_is_mostly_biological():
+    s = json.loads((ROOT / "results" / "cu_speciation_summary.json").read_text())
+    assert abs(s["geochemical_share_literature_pct"]) < 15.0, (
+        f"Ocean-acidification (Cu speciation) now explains "
+        f"{s['geochemical_share_literature_pct']:.1f}% of the EC50 decline (was ~3%). "
+        "The paper's central claim that the sensitization is genuinely biological "
+        "assumes this share is small — re-examine before shipping."
+    )
+    assert s["biological_residual_mannwhitney_p"] < 0.01, (
+        "Speciation-corrected EC50 no longer declines significantly pre/post-2016; "
+        "the biological-sensitization result does not hold on current data."
+    )
