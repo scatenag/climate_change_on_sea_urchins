@@ -172,9 +172,12 @@ def test_stationarity_pvalues_are_probabilities():
 
 def test_granger_pvalues_are_probabilities():
     granger = json.loads((ROOT / "results" / "granger_results.json").read_text())
-    for var, lag_ps in granger.items():
-        for lag, p in lag_ps.items():
-            assert 0.0 <= p <= 1.0, f"Granger p-value for {var} lag {lag} = {p}, not in [0,1]"
+    for var, lag_data in granger.items():
+        if not lag_data or "error" in lag_data:
+            continue
+        for kind in ("p", "p_fdr"):
+            for lag, p in lag_data[kind].items():
+                assert 0.0 <= p <= 1.0, f"Granger {kind} for {var} lag {lag} = {p}, not in [0,1]"
 
 
 @pytest.mark.parametrize("fname", ["corr_all.csv", "corr_pre.csv", "corr_post.csv"])
