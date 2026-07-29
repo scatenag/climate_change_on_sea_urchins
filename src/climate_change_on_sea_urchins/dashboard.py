@@ -40,6 +40,7 @@ from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
 )
+from statsmodels.stats.multitest import multipletests
 
 # ── Page config ───────────────────────────────────────────────────────────────
 # page_icon is a plain emoji, not Image.open(...): Streamlit Cloud's debug
@@ -737,12 +738,38 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
     merged["had_mhw"] = merged["MHW_lag2"] > 0
     grp = merged.groupby("had_mhw")["EC50"].agg(["mean", "std", "count"]).reset_index()
     grp["label"] = grp["had_mhw"].map({False: "No MHW (lag=2)", True: "MHW present (lag=2)"})
+    # Two-sided: no prior direction is assumed (the raw comparison below is not
+    # detrended, so a one-sided test picked to match the hypothesis after
+    # looking at the means would be direction-shopping).
     u_stat, p_mw = stats.mannwhitneyu(
         merged[merged["had_mhw"]]["EC50"],
         merged[~merged["had_mhw"]]["EC50"],
-        alternative="greater",
+        alternative="two-sided",
     )
     out["dose_response"] = {"grp": grp, "mw_p": float(p_mw), "n": len(merged)}
+
+    # Detrended robustness check (same first-difference convention as the
+    # cumulative-stress check below): EC50 trends downward over the whole
+    # record, so MHW/non-MHW months landing in different eras of that trend
+    # can produce a mean gap with no causal content. Differencing EC50 first
+    # removes that shared trend before comparing groups.
+    df2_ec_diff = df2.copy()
+    df2_ec_diff["EC50_diff"] = df2_ec_diff["EC50"].diff()
+    df2_ec_diff.loc[df2["EC50_imputed"].values, "EC50_diff"] = np.nan
+    merged_diff = df2_ec_diff[["Datetime", "MHW_lag2", "EC50_diff"]].dropna(
+        subset=["MHW_lag2", "EC50_diff"]
+    )
+    merged_diff["had_mhw"] = merged_diff["MHW_lag2"] > 0
+    grp_diff = merged_diff.groupby("had_mhw")["EC50_diff"].agg(["mean", "std", "count"]).reset_index()
+    if grp_diff["had_mhw"].nunique() == 2 and (grp_diff["count"] >= 5).all():
+        u_stat_d, p_mw_d = stats.mannwhitneyu(
+            merged_diff[merged_diff["had_mhw"]]["EC50_diff"],
+            merged_diff[~merged_diff["had_mhw"]]["EC50_diff"],
+            alternative="two-sided",
+        )
+        out["dose_response"]["mw_p_diff"] = float(p_mw_d)
+        out["dose_response"]["grp_diff"] = grp_diff
+        out["dose_response"]["n_diff"] = len(merged_diff)
 
     # Tertile split (MHW months only)
     mhw_only = merged[merged["MHW_lag2"] > 0].copy()
@@ -756,6 +783,28 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
         ).reset_index()
         out["dose_response"]["tertile"] = tert_grp
 
+        # Continuous dose-response (raw): does EC50 scale with MHW intensity
+        # within MHW months? Formal test behind the tertile bars above.
+        r_dr, p_dr = stats.spearmanr(mhw_only["MHW_lag2"], mhw_only["EC50"])
+        out["dose_response"]["tertile_r"] = float(r_dr)
+        out["dose_response"]["tertile_p"] = float(p_dr)
+        out["dose_response"]["tertile_n"] = len(mhw_only)
+
+        # Detrended robustness check (Method C convention): both the dose
+        # (MHW intensity, itself trending up over the record) and the
+        # response (EC50) are first-differenced before correlating, keeping
+        # only months flagged as "MHW active" under the RAW (undifferenced)
+        # definition.
+        df2_dr_diff = difference_series(df2, ["mhw_peak_intensity", "EC50"])
+        df2_dr_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
+        df2_dr_diff["MHW_lag2_diff"] = df2_dr_diff["mhw_peak_intensity"].shift(2)
+        dr_diff_sub = df2_dr_diff[df2["MHW_lag2"] > 0].dropna(subset=["MHW_lag2_diff", "EC50"])
+        if len(dr_diff_sub) >= 10:
+            r_dr_d, p_dr_d = stats.spearmanr(dr_diff_sub["MHW_lag2_diff"], dr_diff_sub["EC50"])
+            out["dose_response"]["tertile_r_diff"] = float(r_dr_d)
+            out["dose_response"]["tertile_p_diff"] = float(p_dr_d)
+            out["dose_response"]["tertile_n_diff"] = len(dr_diff_sub)
+
     # ── Cumulative stress ─────────────────────────────────────────────────────
     df2["cumMHW_12m"] = df2["mhw_peak_intensity"].rolling(12, min_periods=6).sum()
     cum_rows = []
@@ -768,6 +817,31 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
             r, p = stats.spearmanr(mrg["x"], mrg["EC50"])
             cum_rows.append({"lag": lag, "r": r, "p": p, "n": len(mrg)})
     out["cumulative"] = pd.DataFrame(cum_rows)
+
+    # Detrended robustness check (Method C convention, see
+    # mhw_analysis.difference_series): first-difference cumMHW_12m and EC50
+    # on the full continuous series before correlating, so the shared trend
+    # both series ride on cannot inflate r, then BH-FDR correct the 13 lag
+    # p-values since they are non-independent tests of the same hypothesis.
+    df2_diff = difference_series(df2, ["cumMHW_12m", "EC50"])
+    df2_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
+    cum_diff_rows = []
+    for lag in range(0, 13):
+        x = df2_diff["cumMHW_12m"].shift(lag).values
+        y = df2_diff["EC50"].values
+        mask = ~(np.isnan(x) | np.isnan(y))
+        if mask.sum() >= 10:
+            r, p = stats.spearmanr(x[mask], y[mask])
+        else:
+            r, p = np.nan, np.nan
+        cum_diff_rows.append({"lag": lag, "r": r, "p": p, "n": int(mask.sum())})
+    cum_diff_df = pd.DataFrame(cum_diff_rows)
+    valid = cum_diff_df["p"].notna()
+    if valid.any():
+        cum_diff_df.loc[valid, "p_fdr"] = multipletests(
+            cum_diff_df.loc[valid, "p"], method="fdr_bh"
+        )[1]
+    out["cumulative_diff"] = cum_diff_df
 
     # ── Seasonal pattern ──────────────────────────────────────────────────────
     merged["Month"]  = merged["Datetime"].dt.month
@@ -788,6 +862,35 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
                          "mean_ec50": sub["EC50"].mean()})
     out["seasonal"] = pd.DataFrame(sea_rows)
 
+    # Detrended robustness check (Method C convention): both MHW intensity
+    # and EC50 trend over the record, so difference each before recomputing
+    # the per-season correlation, then BH-FDR correct across the 4 seasons
+    # (non-independent tests of the same hypothesis).
+    df2_sea_diff = difference_series(df2, ["mhw_peak_intensity", "EC50"])
+    df2_sea_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
+    df2_sea_diff["MHW_lag2_diff"] = df2_sea_diff["mhw_peak_intensity"].shift(2)
+    df2_sea_diff["Season"] = df2["Datetime"].dt.month.map({
+        12: "Winter", 1: "Winter",  2: "Winter",
+        3:  "Spring", 4: "Spring",  5: "Spring",
+        6:  "Summer", 7: "Summer",  8: "Summer",
+        9:  "Autumn", 10: "Autumn", 11: "Autumn",
+    })
+    sea_diff_rows = []
+    for season in ["Winter", "Spring", "Summer", "Autumn"]:
+        sub = df2_sea_diff[df2_sea_diff["Season"] == season].dropna(subset=["MHW_lag2_diff", "EC50"])
+        if len(sub) >= 8:
+            r, p = stats.spearmanr(sub["MHW_lag2_diff"], sub["EC50"])
+        else:
+            r, p = np.nan, np.nan
+        sea_diff_rows.append({"season": season, "r": r, "p": p, "n": len(sub)})
+    sea_diff_df = pd.DataFrame(sea_diff_rows)
+    valid_sea = sea_diff_df["p"].notna()
+    if valid_sea.any():
+        sea_diff_df.loc[valid_sea, "p_fdr"] = multipletests(
+            sea_diff_df.loc[valid_sea, "p"], method="fdr_bh"
+        )[1]
+    out["seasonal_diff"] = sea_diff_df
+
     # Summer MHW → autumn EC50 (same year)
     summer_mhw = df[df["Datetime"].dt.month.isin([6, 7, 8])].copy()
     summer_mhw["Year"] = summer_mhw["Datetime"].dt.year
@@ -797,12 +900,26 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
     autumn_ec50["Year"] = autumn_ec50["Datetime"].dt.year
     a_ann = autumn_ec50.groupby("Year")["EC50"].mean().reset_index()
     a_ann.columns = ["Year", "EC50_autumn"]
-    summer_vs_autumn = s_ann.merge(a_ann, on="Year", how="inner").dropna()
+    summer_vs_autumn = s_ann.merge(a_ann, on="Year", how="inner").dropna().sort_values("Year").reset_index(drop=True)
     if len(summer_vs_autumn) >= 8:
         r_sa, p_sa = stats.spearmanr(summer_vs_autumn["Summer_peak"], summer_vs_autumn["EC50_autumn"])
     else:
         r_sa, p_sa = np.nan, np.nan
     out["summer_autumn"] = {"df": summer_vs_autumn, "r": r_sa, "p": p_sa}
+
+    # Detrended (year-over-year Δ) check — same convention as the Annual
+    # trends tab: both series trend monotonically over the record.
+    sa_diff = summer_vs_autumn.assign(
+        Summer_peak_diff=summer_vs_autumn["Summer_peak"].diff(),
+        EC50_autumn_diff=summer_vs_autumn["EC50_autumn"].diff(),
+    ).dropna(subset=["Summer_peak_diff", "EC50_autumn_diff"])
+    if len(sa_diff) >= 5:
+        r_sa_d, p_sa_d = stats.spearmanr(sa_diff["Summer_peak_diff"], sa_diff["EC50_autumn_diff"])
+    else:
+        r_sa_d, p_sa_d = np.nan, np.nan
+    out["summer_autumn"]["r_diff"] = r_sa_d
+    out["summer_autumn"]["p_diff"] = p_sa_d
+    out["summer_autumn"]["n_diff"] = len(sa_diff)
 
     # ── Annual cumulative MHW vs EC50 ─────────────────────────────────────────
     # Only full (12-month) years: the current calendar year is still in progress,
@@ -903,6 +1020,37 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
         ]
         out["variance_part"] = {"df": pd.DataFrame(vp_rows), "n": len(vp_merged),
                                  "R2_full": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)}
+
+        # Detrended robustness check (Method C convention): cumMHW6 and EC50
+        # were already shown (Cumulative-stress tab) to share a trend strong
+        # enough to fully explain their raw correlation, so a large raw
+        # "unique" R² here could likewise be trend, not a distinct driver.
+        # First-difference every column before repeating the decomposition.
+        df_vp_diff = difference_series(df_vp, ["MHW_lag2", "cumMHW6", "Temperature", "pH", "EC50"])
+        df_vp_diff.loc[df_vp["EC50_imputed"].values, "EC50"] = np.nan
+        vp_merged_diff = df_vp_diff[
+            ["Datetime", "MHW_lag2", "cumMHW6", "Temperature", "pH", "EC50"]
+        ].dropna()
+        if len(vp_merged_diff) >= 20:
+            y_d = vp_merged_diff["EC50"].values
+            vp_rows_diff = [
+                {"predictor": "cumMHW (12m, lag=6)",  "R2_alone": _r2(["cumMHW6"], y_d, vp_merged_diff),
+                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
+                            - _r2(["Temperature","pH"], y_d, vp_merged_diff)},
+                {"predictor": "MHW acute (lag=2)",     "R2_alone": _r2(["MHW_lag2"], y_d, vp_merged_diff),
+                 "R2_unique": _r2(["MHW_lag2","Temperature","pH"], y_d, vp_merged_diff)
+                            - _r2(["Temperature","pH"], y_d, vp_merged_diff)},
+                {"predictor": "Temperature",           "R2_alone": _r2(["Temperature"], y_d, vp_merged_diff),
+                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
+                            - _r2(["cumMHW6","pH"], y_d, vp_merged_diff)},
+                {"predictor": "pH",                    "R2_alone": _r2(["pH"], y_d, vp_merged_diff),
+                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
+                            - _r2(["cumMHW6","Temperature"], y_d, vp_merged_diff)},
+            ]
+            out["variance_part"]["diff"] = {
+                "df": pd.DataFrame(vp_rows_diff), "n": len(vp_merged_diff),
+                "R2_full": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff),
+            }
 
     return out
 
@@ -1516,7 +1664,12 @@ def _tab_mhw_gametes():
                 if "EC50" in ccf_df["variable"].unique() else 0,
                 key=f"ccf_var_sel_{key_suffix}",
             )
-            sub_ccf = ccf_df[ccf_df["variable"] == var_sel]
+            sub_ccf = ccf_df[ccf_df["variable"] == var_sel].copy()
+            _valid_p = sub_ccf["p_value"].notna()
+            if _valid_p.any():
+                sub_ccf.loc[_valid_p, "p_fdr"] = multipletests(
+                    sub_ccf.loc[_valid_p, "p_value"], method="fdr_bh"
+                )[1]
             colors  = [WARM if p < 0.05 else OCEAN for p in sub_ccf["p_value"]]
             fig_ccf = go.Figure(go.Bar(
                 x=sub_ccf["lag"], y=sub_ccf["spearman_r"],
@@ -1532,23 +1685,30 @@ def _tab_mhw_gametes():
             )
             st.plotly_chart(fig_ccf, use_container_width=True)
             _dl_btn(sub_ccf, f"ccf_{key_suffix}_{var_sel}_{_yr_start}_{_yr_end}.csv", "⬇ CCF data (CSV)")
+            st.caption(
+                "Bar color: raw p<0.05 (uncorrected). 13 lags are tested for this variable, so "
+                "some crossing 0.05 by chance alone is expected — see the BH-FDR-corrected "
+                "verdict below before treating any single lag as a finding."
+            )
 
-            sig = sub_ccf[sub_ccf["p_value"] < 0.05]
-            if not sig.empty:
-                peak_lag = int(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "lag"])
-                peak_r   = float(sub_ccf.loc[sub_ccf["spearman_r"].abs().idxmax(), "spearman_r"])
+            sig_fdr = sub_ccf.dropna(subset=["p_fdr"]) if "p_fdr" in sub_ccf else pd.DataFrame()
+            sig_fdr = sig_fdr[sig_fdr["p_fdr"] < 0.05] if not sig_fdr.empty else sig_fdr
+            if not sig_fdr.empty:
+                best = sig_fdr.loc[sig_fdr["p_fdr"].idxmin()]
                 st.success(
-                    f"Significant lags (p<0.05): {sig['lag'].tolist()}  |  "
-                    f"Peak lag: **{peak_lag} months** (r = {peak_r:+.3f})"
+                    f"BH-FDR-corrected significant lags: {sorted(int(l) for l in sig_fdr['lag'])}  |  "
+                    f"Best lag: **{int(best['lag'])} months** (r = {best['spearman_r']:+.3f}, "
+                    f"BH-FDR p = {best['p_fdr']:.2e})"
                 )
-                if len(sig) <= 2:
+                if len(sig_fdr) <= 2:
                     st.info(
-                        f"Signal isolated to lag {peak_lag} once the shared non-stationary "
-                        "trend is removed — consistent with a specific, localized effect "
-                        "rather than a broad, confounded pattern."
+                        f"Signal isolated to lag {int(best['lag'])} once both the shared "
+                        "non-stationary trend is removed and multiple lags are corrected for "
+                        "— consistent with a specific, localized effect rather than a broad, "
+                        "confounded pattern."
                     )
             else:
-                st.info("No significant lag at p<0.05")
+                st.info("No lag survives BH-FDR correction across the 13 lags tested.")
 
             st.subheader("Lag heatmap — all variables")
             pivot = ccf_df.pivot(index="variable", columns="lag", values="spearman_r")
@@ -1644,7 +1804,34 @@ def _tab_mhw_gametes():
                     c1.metric("EC50 — no MHW", f"{no_mhw_mean:.1f} mg/L")
                     c2.metric("EC50 — MHW present", f"{mhw_mean:.1f} mg/L",
                               delta=f"{mhw_mean - no_mhw_mean:.1f} mg/L")
-                    c3.metric("Mann-Whitney p", f"{dr['mw_p']:.2e}")
+                    c3.metric("Mann-Whitney p (two-sided)", f"{dr['mw_p']:.2e}")
+                    st.caption(
+                        "Raw levels, uncorrected — EC50 trends downward over the whole record, so "
+                        "MHW/non-MHW months landing in different eras of that trend can produce this "
+                        "gap without a causal link. See the detrended check below."
+                    )
+
+                    if "mw_p_diff" in dr:
+                        gd = dr["grp_diff"]
+                        no_mhw_d = float(gd[~gd["had_mhw"]]["mean"].values[0])
+                        mhw_d    = float(gd[gd["had_mhw"]]["mean"].values[0])
+                        if dr["mw_p_diff"] < 0.05:
+                            st.success(
+                                f"Detrended (first-differenced EC50) check: still significant "
+                                f"(Mann-Whitney two-sided p = {dr['mw_p_diff']:.2e}, n = {dr['n_diff']}) — "
+                                f"mean month-over-month EC50 change is {mhw_d:+.1f} mg/L in MHW months "
+                                f"vs {no_mhw_d:+.1f} mg/L otherwise."
+                            )
+                        else:
+                            st.warning(
+                                f"Does **not** survive detrending: on first-differenced EC50, the same "
+                                f"comparison gives Mann-Whitney two-sided p = {dr['mw_p_diff']:.2e} "
+                                f"(n = {dr['n_diff']}, ≥0.05). The raw gap above ({no_mhw_mean:.1f} → "
+                                f"{mhw_mean:.1f} mg/L) is consistent with a shared trend, not a MHW effect — "
+                                f"treat it as exploratory, not a finding."
+                            )
+                    else:
+                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
                 st.subheader("Dose-response by MHW intensity tertile (MHW months only)")
                 tert = dr.get("tertile")
@@ -1661,16 +1848,39 @@ def _tab_mhw_gametes():
                             textposition="outside",
                             name=str(row["tertile"]),
                         ))
+                    _tert_r, _tert_p = dr.get("tertile_r"), dr.get("tertile_p")
                     fig_tert.update_layout(
-                        title="EC50 by MHW intensity tertile (lag=2) — monotonic dose-response",
+                        title="EC50 by MHW intensity tertile (lag=2)<br>"
+                              f"<sub>Continuous dose-response (raw): Spearman r = {_tert_r:+.3f}, "
+                              f"p = {_tert_p:.2e}, n = {dr.get('tertile_n')}</sub>",
                         yaxis_title="EC50 (mg/L)", height=380, showlegend=False,
                     )
                     st.plotly_chart(fig_tert, use_container_width=True)
                     _dl_btn(tert, f"dose_response_tertile_{_yr_start}_{_yr_end}.csv", "⬇ Tertile data (CSV)")
                     st.caption(
                         "Low / Medium / High = tertiles of MHW peak intensity in months with an active MHW. "
-                        "The monotonic dose-response excludes a spurious-correlation explanation."
+                        "Raw levels, uncorrected — both MHW intensity and EC50 trend over the record, so "
+                        "this pattern alone does not exclude a spurious-correlation explanation. "
+                        "See the detrended check below."
                     )
+
+                    if "tertile_p_diff" in dr:
+                        if dr["tertile_p_diff"] < 0.05:
+                            st.success(
+                                f"Detrended (first-differenced dose and response) check: still significant "
+                                f"(Spearman r = {dr['tertile_r_diff']:+.3f}, p = {dr['tertile_p_diff']:.2e}, "
+                                f"n = {dr['tertile_n_diff']}) — a genuine dose-response, not just a shared trend."
+                            )
+                        else:
+                            st.warning(
+                                f"Does **not** survive detrending: on first-differenced MHW intensity and "
+                                f"EC50, the dose-response is r = {dr['tertile_r_diff']:+.3f}, "
+                                f"p = {dr['tertile_p_diff']:.2e} (n = {dr['tertile_n_diff']}, ≥0.05). "
+                                f"The raw tertile pattern above is consistent with a shared trend, not a "
+                                f"MHW dose-response — treat it as exploratory, not a finding."
+                            )
+                    else:
+                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
             # ── 3. Cumulative stress ──────────────────────────────────────────────────
 
@@ -1705,13 +1915,36 @@ def _tab_mhw_gametes():
                     )
                     st.plotly_chart(fig_cum, use_container_width=True)
                     _dl_btn(cum_df, f"cumulative_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Cumulative MHW data (CSV)")
+                    st.caption(
+                        "Raw levels, uncorrected for the 13 lags tested here — cumMHW and EC50 "
+                        "share the same long-term trend, which alone can produce this pattern. "
+                        "See the detrended + FDR-corrected check below before treating any bar as significant."
+                    )
 
                     best_cum = cum_df.loc[cum_df["r"].abs().idxmax()]
-                    st.success(
-                        f"Best cumulative predictor: lag = **{int(best_cum['lag'])} months** "
-                        f"(r = {best_cum['r']:+.3f}, p = {best_cum['p']:.2e})  |  "
-                        f"Stronger than acute event (r = {best_acute_r:+.3f})"
-                    )
+                    cum_diff_df = deep.get("cumulative_diff", pd.DataFrame())
+                    diff_valid = cum_diff_df.dropna(subset=["p_fdr"]) if not cum_diff_df.empty else cum_diff_df
+                    if not diff_valid.empty:
+                        best_diff = diff_valid.loc[diff_valid["p_fdr"].idxmin()]
+                        if best_diff["p_fdr"] < 0.05:
+                            st.success(
+                                f"Detrended + FDR-corrected: still significant at lag = "
+                                f"**{int(best_diff['lag'])} months** "
+                                f"(r = {best_diff['r']:+.3f}, BH-FDR p = {best_diff['p_fdr']:.2e})  |  "
+                                f"raw/uncorrected best was lag={int(best_cum['lag'])} r={best_cum['r']:+.3f} "
+                                f"(p={best_cum['p']:.2e}, not FDR-corrected)."
+                            )
+                        else:
+                            st.warning(
+                                f"Does **not** survive detrending + BH-FDR correction: best detrended lag "
+                                f"({int(best_diff['lag'])} months, r={best_diff['r']:+.3f}) has BH-FDR "
+                                f"p = {best_diff['p_fdr']:.2e} (≥0.05). The raw/uncorrected pattern above "
+                                f"(lag={int(best_cum['lag'])}, r={best_cum['r']:+.3f}, p={best_cum['p']:.2e}) "
+                                f"is consistent with a shared trend, not a chronic-stress-debt effect — "
+                                f"treat it as exploratory, not a finding."
+                            )
+                    else:
+                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
                 # Scatter: cumulative MHW vs EC50
                 st.subheader("Scatter: cumulative 12m MHW (lag=6) vs EC50")
@@ -1736,6 +1969,27 @@ def _tab_mhw_gametes():
                     unit="mg/L EC50", n=len(sc_merged), per="°C·day of cumulative MHW",
                 ))
                 _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
+
+                # Same raw-vs-shared-trend caveat as the bar chart above, applied
+                # to this specific lag (=6) rather than the best-of-13 lag.
+                _diff_all = deep.get("cumulative_diff", pd.DataFrame())
+                _diff_lag6 = _diff_all[_diff_all["lag"] == 6] if not _diff_all.empty else _diff_all
+                if not _diff_lag6.empty and _diff_lag6.iloc[0][["r", "p_fdr"]].notna().all():
+                    _d6 = _diff_lag6.iloc[0]
+                    if _d6["p_fdr"] < 0.05:
+                        st.caption(
+                            f"Detrended + BH-FDR check at lag=6: r = {_d6['r']:+.3f}, "
+                            f"p = {_d6['p_fdr']:.2e} — survives detrending."
+                        )
+                    else:
+                        st.caption(
+                            f"⚠️ Raw levels, uncorrected: this regression shares the same long-term trend as "
+                            f"the bar chart above. After first-differencing, lag=6 is r = {_d6['r']:+.3f}, "
+                            f"BH-FDR p = {_d6['p_fdr']:.2e} (not significant) — treat the fitted line as "
+                            f"exploratory, not evidence of a chronic-stress-debt effect."
+                        )
+                else:
+                    st.caption("Detrended robustness check unavailable at this lag for this date range.")
                 st.caption(
                     "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
                     "Above this threshold, each additional unit of cumulative stress depresses EC50 further."
@@ -1771,12 +2025,31 @@ def _tab_mhw_gametes():
                     )
                     st.plotly_chart(fig_sea2, use_container_width=True)
                     _dl_btn(sea_data, f"seasonal_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Seasonal data (CSV)")
-                    st.markdown(
-                        "**Interpretation**: The strongest signal appears in **Autumn** (Sep–Nov) "
-                        "and **Spring** (Mar–May), the two main spawning periods of *P. lividus*. "
-                        "Autumn EC50 reflects the quality of gonads developed during summer — "
-                        "exactly when MHW events are most frequent and intense."
+                    st.caption(
+                        "Raw levels, uncorrected for the 4 seasons tested here — both MHW intensity "
+                        "and EC50 trend over the record, which alone can produce season-to-season "
+                        "differences. See the detrended + FDR-corrected check below."
                     )
+
+                    sea_diff_df = deep.get("seasonal_diff", pd.DataFrame())
+                    sea_diff_valid = sea_diff_df.dropna(subset=["p_fdr"]) if not sea_diff_df.empty else sea_diff_df
+                    if not sea_diff_valid.empty:
+                        best_sea_diff = sea_diff_valid.loc[sea_diff_valid["p_fdr"].idxmin()]
+                        if best_sea_diff["p_fdr"] < 0.05:
+                            st.success(
+                                f"Detrended + FDR-corrected: **{best_sea_diff['season']}** remains significant "
+                                f"(r = {best_sea_diff['r']:+.3f}, BH-FDR p = {best_sea_diff['p_fdr']:.2e})."
+                            )
+                        else:
+                            st.warning(
+                                f"Does **not** survive detrending + BH-FDR correction: best season "
+                                f"({best_sea_diff['season']}, r = {best_sea_diff['r']:+.3f}) has BH-FDR "
+                                f"p = {best_sea_diff['p_fdr']:.2e} (≥0.05). The raw seasonal pattern above "
+                                f"is consistent with the shared trend, not a season-specific MHW effect — "
+                                f"treat it as exploratory, not a finding."
+                            )
+                    else:
+                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
                 # Summer MHW → Autumn EC50
                 sa = deep.get("summer_autumn", {})
@@ -1802,10 +2075,26 @@ def _tab_mhw_gametes():
                     ))
                     _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
                     st.caption(
-                        "Years with intense summer MHWs (e.g. 2022–2025) show systematically lower "
-                        "autumn EC50, consistent with gonadal damage accumulating during the "
-                        "summer gametogenic window."
+                        "Raw annual levels, uncorrected — both series trend monotonically over the "
+                        "23-year record. See the year-over-year (detrended) check below."
                     )
+                    if pd.notna(sa.get("p_diff")):
+                        if sa["p_diff"] < 0.05:
+                            st.success(
+                                f"Year-over-year Δ check: still significant (r = {sa['r_diff']:+.3f}, "
+                                f"p = {sa['p_diff']:.3f}, n = {sa['n_diff']}) — a genuine year-to-year "
+                                f"relationship, not just the shared trend."
+                            )
+                        else:
+                            st.warning(
+                                f"Does **not** survive detrending: year-over-year Δ gives r = "
+                                f"{sa['r_diff']:+.3f}, p = {sa['p_diff']:.3f} (n = {sa['n_diff']}, ≥0.05). "
+                                f"The raw pattern above is consistent with both series' shared multi-decadal "
+                                f"trend, not evidence that a hotter summer specifically damages that "
+                                f"year's autumn gametes — treat it as exploratory, not a finding."
+                            )
+                    else:
+                        st.warning("Year-over-year robustness check unavailable for this date range (insufficient data).")
 
             # ── 5. Annual trends ──────────────────────────────────────────────────────
 
@@ -1957,12 +2246,62 @@ def _tab_mhw_gametes():
                         hide_index=True, use_container_width=True,
                     )
                     st.info(
-                        f"**Cumulative MHW** (12m rolling, lag=6) is by far the strongest unique "
-                        f"predictor (R²={vp_df.iloc[0]['R2_unique']:.3f}), explaining "
+                        f"Raw levels, uncorrected: **cumulative MHW** (12m rolling, lag=6) is by far the "
+                        f"strongest unique predictor (R²={vp_df.iloc[0]['R2_unique']:.3f}), explaining "
                         f"{vp_df.iloc[0]['R2_unique']/vp['R2_full']*100:.0f}% of the full model variance. "
-                        "Temperature and pH together add modest additional variance, consistent with "
-                        "multi-stressor synergy rather than independent additive effects."
+                        "Temperature and pH together add modest additional variance. See the detrended "
+                        "check below before treating this as multi-stressor synergy rather than a "
+                        "shared-trend artifact."
                     )
+
+                    vp_diff = vp.get("diff", {})
+                    vp_diff_df = vp_diff.get("df", pd.DataFrame())
+                    if not vp_diff_df.empty:
+                        st.subheader("Detrended (first-differenced): same decomposition")
+                        fig_vp_d = go.Figure()
+                        for idx, (_, row) in enumerate(vp_diff_df.iterrows()):
+                            fig_vp_d.add_trace(go.Bar(
+                                x=[row["predictor"]],
+                                y=[row["R2_unique"]],
+                                marker_color=bar_colors[idx],
+                                text=[f"R²={row['R2_unique']:.3f}"],
+                                textposition="outside",
+                                name=row["predictor"],
+                            ))
+                        fig_vp_d.update_layout(
+                            title=f"Unique semi-partial R² for ΔEC50  |  Full model R² = "
+                                  f"{vp_diff['R2_full']:.3f}  |  n = {vp_diff['n']}",
+                            yaxis_title="Semi-partial R²", height=420, showlegend=False,
+                        )
+                        st.plotly_chart(fig_vp_d, use_container_width=True)
+                        _dl_btn(vp_diff_df, f"variance_partitioning_diff_{_yr_start}_{_yr_end}.csv",
+                                "⬇ Detrended variance data (CSV)")
+                        st.dataframe(
+                            vp_diff_df.rename(columns={
+                                "predictor": "Driver",
+                                "R2_alone": "R² (alone)",
+                                "R2_unique": "R² (unique, after controlling others)",
+                            }).round(3),
+                            hide_index=True, use_container_width=True,
+                        )
+                        raw_top_r2  = float(vp_df.iloc[0]["R2_unique"])
+                        diff_top_r2 = float(vp_diff_df.iloc[0]["R2_unique"])
+                        if diff_top_r2 < 0.3 * raw_top_r2:
+                            st.warning(
+                                f"Cumulative MHW's raw unique R² ({raw_top_r2:.3f}) drops to "
+                                f"{diff_top_r2:.3f} after first-differencing — most of its apparent "
+                                f"explanatory power above is the shared long-term trend, not a distinct "
+                                f"physiological effect. Treat the raw decomposition and the "
+                                f"'multi-stressor synergy' framing as exploratory, not established."
+                            )
+                        else:
+                            st.success(
+                                f"Cumulative MHW's unique R² remains substantial after "
+                                f"first-differencing (raw {raw_top_r2:.3f} → detrended {diff_top_r2:.3f}), "
+                                f"supporting a genuine unique contribution beyond the shared trend."
+                            )
+                    else:
+                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
             # ── 7. Granger causality ──────────────────────────────────────────────────
 
@@ -1975,10 +2314,15 @@ def _tab_mhw_gametes():
                 granger = load_json("granger_results.json")
                 if granger:
                     rows = []
-                    for var, lag_ps in granger.items():
-                        if isinstance(lag_ps, dict) and lag_ps and "error" not in lag_ps:
-                            for lag, p in lag_ps.items():
-                                rows.append(dict(variable=var, lag=int(lag), p_value=float(p)))
+                    for var, lag_data in granger.items():
+                        if isinstance(lag_data, dict) and lag_data and "error" not in lag_data:
+                            p_raw = lag_data.get("p", {})
+                            p_fdr = lag_data.get("p_fdr", {})
+                            for lag, p in p_raw.items():
+                                rows.append(dict(
+                                    variable=var, lag=int(lag), p_value=float(p),
+                                    p_fdr=float(p_fdr[lag]) if lag in p_fdr else np.nan,
+                                ))
                     gdf = pd.DataFrame(rows)
                     if not gdf.empty:
                         pivot = gdf.pivot(index="variable", columns="lag", values="p_value")
@@ -1993,12 +2337,29 @@ def _tab_mhw_gametes():
                         st.plotly_chart(fig_gr, use_container_width=True)
                         _dl_btn(gdf, "granger_causality_results.csv", "⬇ Granger data (CSV)")
                         st.caption(
-                            "Green = significant (p<0.05 → log₁₀ < −1.30). "
-                            "EC50 shows non-significant Granger p-values because EC50 operates "
-                            "through multiple lag pathways simultaneously, diluting the linear "
-                            "time-series signal. Environmental variables (Temperature, CO₂, pH) "
-                            "show strong Granger causality at lags 2–4."
+                            "Raw p-values (uncorrected), heatmap for visual pattern only — green = "
+                            "p<0.05 → log₁₀ < −1.30. 12 lags are tested per variable, so cells below "
+                            "0.05 by chance alone are expected. See the BH-FDR-corrected verdict "
+                            "below before treating any lag/variable as a finding."
                         )
+
+                        sig_fdr = gdf.dropna(subset=["p_fdr"])
+                        sig_fdr = sig_fdr[sig_fdr["p_fdr"] < 0.05]
+                        if not sig_fdr.empty:
+                            parts = []
+                            for var, sub in sig_fdr.groupby("variable"):
+                                best = sub.loc[sub["p_fdr"].idxmin()]
+                                parts.append(f"**{var}** (lag {int(best['lag'])}, BH-FDR p={best['p_fdr']:.2e})")
+                            st.success(
+                                "BH-FDR-corrected significant MHW→variable Granger lags: "
+                                + "; ".join(parts)
+                            )
+                        else:
+                            st.warning(
+                                "No variable/lag survives BH-FDR correction across the 12 lags "
+                                "tested per variable — none of the raw green cells above hold up "
+                                "as an independent finding once corrected for multiple comparisons."
+                            )
                 else:
                     st.warning("Run `python analysis/run_all.py` first")
 

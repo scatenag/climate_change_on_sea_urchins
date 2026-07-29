@@ -22,6 +22,7 @@ from statsmodels.tsa.stattools import ccf as sm_ccf, grangercausalitytests
 from statsmodels.tsa.ardl import ARDL
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
+from statsmodels.stats.multitest import multipletests
 from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
 
 
@@ -164,8 +165,11 @@ def _print_best_lags(ccf_df: pd.DataFrame, label: str) -> None:
 def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
     """
     Granger test: does driver Granger-cause target?
-    Returns dict of {variable: {lag: p_value}} for lags 1..TAU_MAX.
-    Uses first-differenced series for non-stationary variables.
+    Returns dict of {variable: {"p": {lag: p_value}, "p_fdr": {lag: p_fdr}}}
+    for lags 1..TAU_MAX. Uses first-differenced series for non-stationary
+    variables. BH-FDR correction is applied within each variable's own family
+    of TAU_MAX lag tests (non-independent tests of the same hypothesis) —
+    same principle as the CCF panels' lag-family correction.
     """
     results = {}
     x = df[driver].ffill().bfill()
@@ -182,10 +186,10 @@ def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 gc = grangercausalitytests(data[["y", "x"]], maxlag=TAU_MAX, verbose=False)
-            results[target] = {
-                lag: float(gc[lag][0]["ssr_ftest"][1])
-                for lag in range(1, TAU_MAX + 1)
-            }
+            p_raw = {lag: float(gc[lag][0]["ssr_ftest"][1]) for lag in range(1, TAU_MAX + 1)}
+            p_fdr_arr = multipletests(list(p_raw.values()), method="fdr_bh")[1]
+            p_fdr = {lag: float(p) for lag, p in zip(p_raw.keys(), p_fdr_arr)}
+            results[target] = {"p": p_raw, "p_fdr": p_fdr}
         except Exception as e:
             results[target] = {"error": str(e)}
 
@@ -309,12 +313,13 @@ def run():
     granger = compute_granger(df, driver, targets)
     (RESULTS / "granger_results.json").write_text(json.dumps(granger, indent=2))
     print(f"\n✓ Granger causality saved for {len(granger)} variables")
-    for var, lag_ps in granger.items():
-        if isinstance(lag_ps, dict) and lag_ps and "error" not in lag_ps:
-            min_p = min(lag_ps.values())
-            best_lag = min(lag_ps, key=lag_ps.get)
+    for var, lag_data in granger.items():
+        if isinstance(lag_data, dict) and lag_data and "error" not in lag_data:
+            p_fdr = lag_data["p_fdr"]
+            min_p = min(p_fdr.values())
+            best_lag = min(p_fdr, key=p_fdr.get)
             sig = "***" if min_p < 0.001 else "**" if min_p < 0.01 else "*" if min_p < 0.05 else "n.s."
-            print(f"  MHW → {var:20s}  best lag={best_lag}  min_p={min_p:.4f}  {sig}")
+            print(f"  MHW → {var:20s}  best lag={best_lag}  min_p_fdr={min_p:.4f}  {sig}")
 
     # 3. ARDL
     ardl_df = compute_ardl(df_real, df)
