@@ -3009,23 +3009,50 @@ def _tab_regime_shift():
 
         st.divider()
 
-        # ── 2 · temperature alone is not enough ─────────────────────────────
-        st.subheader("2 · Temperature alone doesn't explain it")
+        # ── 2 · chronic heat dose: real but time-limited ────────────────────
+        st.subheader("2 · Chronic heat dose above 24°C: real, but time-limited")
         tl = _json("thermal_legacy_summary.json")
         if tl:
-            sr = tl["strongest_raw"]
+            per_win = {row["window_months"]: row for row in tl["per_window"]}
+            survive_bonf = tl["windows_surviving_bonferroni"]
+            survive_fdr = tl["windows_surviving_fdr_only"]
+            not_surviving = tl["windows_not_surviving"]
+            surviving = sorted(survive_bonf + survive_fdr)
+            best_w = min(surviving, key=lambda w: per_win[w]["p_bonferroni"]) if surviving \
+                     else min(per_win, key=lambda w: per_win[w]["detrended_p"])
+            best = per_win[best_w]
+
             a, b, c = st.columns(3)
-            a.metric("Raw correlation", f"ρ={sr['raw_spearman_r']:+.2f}",
-                     help=f"cumulative thermal dose ({sr['window']}) vs EC50; p={sr['raw_p']:.0e}")
-            b.metric("After removing the trend", f"p={tl['same_window_detrended_p']:.2f}",
-                     help="detrended correlation — the signal collapses")
-            c.metric("Added R² over time alone", f"{tl['same_window_delta_r2_over_time']*100:.0f}%")
-            st.markdown(
-                "A strong *raw* correlation, but cumulative heat dose is ~0.7 collinear "
-                "with elapsed time and adds almost nothing over a plain time trend. "
-                "**Temperature as a single linear driver is not enough** — pointing to "
-                "multifactorial cumulative stress."
-            )
+            a.metric(f"Best window: {best_w} months",
+                     f"ρ={best['detrended_spearman_r']:+.2f}",
+                     help=f"detrended correlation, threshold={tl['threshold_C']:.0f}°C")
+            b.metric("BH-FDR / Bonferroni p", f"{best['p_fdr']:.1e} / {best['p_bonferroni']:.1e}")
+            c.metric("Windows not surviving", ", ".join(f"{w}m" for w in not_surviving) or "none")
+
+            if surviving:
+                st.markdown(
+                    f"Cumulative heat dose above **{tl['threshold_C']:.0f}°C** (the chronic "
+                    "gametogenesis-blocking threshold for *P. lividus*, Amato et al. 2025; "
+                    "corroborated by acute heat-stress biomarker/egg-viability effects from "
+                    "23°C in Gallo et al. 2023) predicts EC50 **beyond the shared trend** at "
+                    f"{', '.join(f'{w}-month' for w in surviving)} windows (survives "
+                    f"{'Bonferroni' if survive_bonf else 'BH-FDR'} correction across all 5 "
+                    f"windows tested), but **not** at "
+                    f"{', '.join(f'{w}-month' for w in not_surviving)} windows, where "
+                    "dose-time collinearity is high enough that the detrended residuals are "
+                    "mostly noise. **Temperature is a genuine short-to-medium-term "
+                    "contributor, not a sole or unlimited-lag explanation** — consistent with "
+                    "multifactorial cumulative stress rather than excluding temperature "
+                    "altogether."
+                )
+            else:
+                st.markdown(
+                    f"Cumulative heat dose above {tl['threshold_C']:.0f}°C is strongly "
+                    "correlated with EC50 in raw form but collinear enough with elapsed time "
+                    "that no window survives detrending + correction. **Temperature as a "
+                    "single driver is not separable from the shared trend** at any tested "
+                    "window."
+                )
         _img = FIGS / "fig_thermal_legacy.png"
         if _img.exists():
             st.image(str(_img), use_container_width=True)

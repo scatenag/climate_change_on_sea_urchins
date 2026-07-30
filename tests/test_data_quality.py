@@ -340,12 +340,15 @@ def test_thermal_legacy_dose_positive_and_finite():
 def test_thermal_legacy_verdict_and_cotrend():
     s = json.loads((ROOT / "results" / "thermal_legacy_summary.json").read_text())
     assert s["verdict"] in {
-        "supported_after_detrending",
+        "supported_after_detrending_all_windows",
+        "supported_short_term_not_long_term",
         "consistent_but_not_separable_from_trend",
     }, f"unexpected verdict: {s['verdict']}"
     for row in s["per_window"]:
         for k in ("raw_spearman_r", "detrended_spearman_r"):
             assert -1.0001 <= row[k] <= 1.0001, f"{k} outside [-1,1]"
+        for k in ("detrended_p", "p_fdr", "p_bonferroni"):
+            assert 0.0 <= row[k] <= 1.0001, f"{k} outside [0,1]"
     # The whole point: removing the time trend weakens the strongest raw
     # correlation. If this ever fails, the co-trend framing needs revisiting.
     strongest = min(s["per_window"], key=lambda r: r["raw_p"])
@@ -353,6 +356,11 @@ def test_thermal_legacy_verdict_and_cotrend():
         "Detrending did NOT weaken the strongest raw correlation — re-examine the "
         "co-trend interpretation in thermal_legacy.py."
     )
+    # Bonferroni is always at least as strict as BH-FDR for the same p-values.
+    for row in s["per_window"]:
+        assert row["p_fdr"] <= row["p_bonferroni"] + 1e-9, (
+            f"window {row['window_months']}m: p_fdr should never exceed p_bonferroni"
+        )
 
 
 # ---------------------------------------------------------------------------
