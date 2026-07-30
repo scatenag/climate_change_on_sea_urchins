@@ -340,14 +340,25 @@ def test_thermal_legacy_dose_positive_and_finite():
 def test_thermal_legacy_verdict_and_cotrend():
     s = json.loads((ROOT / "results" / "thermal_legacy_summary.json").read_text())
     assert s["verdict"] in {
-        "supported_after_detrending_all_windows",
-        "supported_short_term_not_long_term",
+        "supported_all_windows",
+        "supported_narrow_window",
+        "suggestive_not_cross_validated",
         "consistent_but_not_separable_from_trend",
     }, f"unexpected verdict: {s['verdict']}"
+    # windows_robust / windows_suggestive_rank_only / windows_not_surviving must
+    # exactly partition the tested windows (every window in exactly one bucket).
+    all_windows = {row["window_months"] for row in s["per_window"]}
+    buckets = [set(s["windows_robust"]), set(s["windows_suggestive_rank_only"]),
+               set(s["windows_not_surviving"])]
+    assert set().union(*buckets) == all_windows, "buckets don't cover all windows"
+    for a, b in [(0, 1), (0, 2), (1, 2)]:
+        assert not (buckets[a] & buckets[b]), "a window appears in more than one bucket"
+
     for row in s["per_window"]:
         for k in ("raw_spearman_r", "detrended_spearman_r"):
             assert -1.0001 <= row[k] <= 1.0001, f"{k} outside [-1,1]"
-        for k in ("detrended_p", "p_fdr", "p_bonferroni"):
+        for k in ("detrended_p", "p_fdr", "p_bonferroni",
+                  "partial_p_dose_given_time", "partial_p_fdr", "partial_p_bonferroni"):
             assert 0.0 <= row[k] <= 1.0001, f"{k} outside [0,1]"
     # The whole point: removing the time trend weakens the strongest raw
     # correlation. If this ever fails, the co-trend framing needs revisiting.
@@ -356,10 +367,14 @@ def test_thermal_legacy_verdict_and_cotrend():
         "Detrending did NOT weaken the strongest raw correlation — re-examine the "
         "co-trend interpretation in thermal_legacy.py."
     )
-    # Bonferroni is always at least as strict as BH-FDR for the same p-values.
+    # Bonferroni is always at least as strict as BH-FDR for the same p-values,
+    # for both the rank test and the parametric partial test.
     for row in s["per_window"]:
         assert row["p_fdr"] <= row["p_bonferroni"] + 1e-9, (
             f"window {row['window_months']}m: p_fdr should never exceed p_bonferroni"
+        )
+        assert row["partial_p_fdr"] <= row["partial_p_bonferroni"] + 1e-9, (
+            f"window {row['window_months']}m: partial_p_fdr should never exceed partial_p_bonferroni"
         )
 
 

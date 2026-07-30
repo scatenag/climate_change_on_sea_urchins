@@ -3009,53 +3009,90 @@ def _tab_regime_shift():
 
         st.divider()
 
-        # ── 2 · chronic heat dose: real but time-limited ────────────────────
-        st.subheader("2 · Chronic heat dose above 24°C: real, but time-limited")
+        # ── 2 · chronic heat dose: two tests, shown side by side ────────────
+        st.subheader("2 · Chronic heat dose above 24°C: two tests, side by side")
         tl = _json("thermal_legacy_summary.json")
         if tl:
-            per_win = {row["window_months"]: row for row in tl["per_window"]}
-            survive_bonf = tl["windows_surviving_bonferroni"]
-            survive_fdr = tl["windows_surviving_fdr_only"]
-            not_surviving = tl["windows_not_surviving"]
-            surviving = sorted(survive_bonf + survive_fdr)
-            best_w = min(surviving, key=lambda w: per_win[w]["p_bonferroni"]) if surviving \
-                     else min(per_win, key=lambda w: per_win[w]["detrended_p"])
-            best = per_win[best_w]
+            robust = set(tl["windows_robust"])
+            suggestive = set(tl["windows_suggestive_rank_only"])
+            not_surviving = set(tl["windows_not_surviving"])
+            df_tl = pd.DataFrame(tl["per_window"]).sort_values("window_months")
 
-            a, b, c = st.columns(3)
-            a.metric(f"Best window: {best_w} months",
-                     f"ρ={best['detrended_spearman_r']:+.2f}",
-                     help=f"detrended correlation, threshold={tl['threshold_C']:.0f}°C")
-            b.metric("BH-FDR / Bonferroni p", f"{best['p_fdr']:.1e} / {best['p_bonferroni']:.1e}")
-            c.metric("Windows not surviving", ", ".join(f"{w}m" for w in not_surviving) or "none")
+            st.markdown(
+                f"Cumulative heat dose above **{tl['threshold_C']:.0f}°C** (the chronic "
+                "gametogenesis-blocking threshold for *P. lividus*, Amato et al. 2025; "
+                "corroborated — at a different temperature/duration — by acute heat-stress "
+                "biomarker and egg-viability effects from 23°C in Gallo et al. 2023) is "
+                "tested against EC50 with **two different tests**, both corrected for the "
+                "5 windows tested:"
+            )
+            st.markdown(
+                "- **Rank test**: Spearman correlation between dose and EC50 after each is "
+                "detrended (linear time trend removed) — robust to outliers and to "
+                "non-linear shape, but based on ranks only.\n"
+                "- **Parametric test**: partial p-value of dose in a nested OLS "
+                "(EC50 ~ time  vs.  EC50 ~ time + dose) — assumes a linear relationship "
+                "and is more sensitive to a few influential points.\n\n"
+                "The two do not always agree, so both are shown for every window rather "
+                "than reporting whichever looks better."
+            )
 
-            if surviving:
-                st.markdown(
-                    f"Cumulative heat dose above **{tl['threshold_C']:.0f}°C** (the chronic "
-                    "gametogenesis-blocking threshold for *P. lividus*, Amato et al. 2025; "
-                    "corroborated by acute heat-stress biomarker/egg-viability effects from "
-                    "23°C in Gallo et al. 2023) predicts EC50 **beyond the shared trend** at "
-                    f"{', '.join(f'{w}-month' for w in surviving)} windows (survives "
-                    f"{'Bonferroni' if survive_bonf else 'BH-FDR'} correction across all 5 "
-                    f"windows tested), but **not** at "
-                    f"{', '.join(f'{w}-month' for w in not_surviving)} windows, where "
-                    "dose-time collinearity is high enough that the detrended residuals are "
-                    "mostly noise. **Temperature is a genuine short-to-medium-term "
-                    "contributor, not a sole or unlimited-lag explanation** — consistent with "
-                    "multifactorial cumulative stress rather than excluding temperature "
-                    "altogether."
-                )
-            else:
-                st.markdown(
-                    f"Cumulative heat dose above {tl['threshold_C']:.0f}°C is strongly "
-                    "correlated with EC50 in raw form but collinear enough with elapsed time "
-                    "that no window survives detrending + correction. **Temperature as a "
-                    "single driver is not separable from the shared trend** at any tested "
-                    "window."
-                )
+            status_map = {}
+            for w in df_tl["window_months"]:
+                if w in robust:
+                    status_map[w] = "✅ both tests"
+                elif w in suggestive:
+                    status_map[w] = "⚠️ rank only"
+                else:
+                    status_map[w] = "— neither"
+
+            disp = df_tl[[
+                "window_months", "detrended_spearman_r", "detrended_p", "p_fdr", "p_bonferroni",
+                "delta_r2", "partial_p_dose_given_time", "partial_p_fdr", "partial_p_bonferroni",
+                "dose_time_collinearity",
+            ]].copy()
+            disp.insert(1, "status", [status_map[w] for w in df_tl["window_months"]])
+            disp.columns = [
+                "Window (months)", "Status", "Rank ρ (detrended)", "Rank p (raw)",
+                "Rank p (BH-FDR)", "Rank p (Bonferroni)", "ΔR² (dose over time)",
+                "OLS partial p (raw)", "OLS partial p (BH-FDR)", "OLS partial p (Bonferroni)",
+                "Dose–time collinearity",
+            ]
+            st.dataframe(
+                disp.style.format({
+                    "Rank ρ (detrended)": "{:+.3f}",
+                    "Rank p (raw)": "{:.4f}", "Rank p (BH-FDR)": "{:.4f}", "Rank p (Bonferroni)": "{:.4f}",
+                    "ΔR² (dose over time)": "{:.1%}",
+                    "OLS partial p (raw)": "{:.4f}", "OLS partial p (BH-FDR)": "{:.4f}",
+                    "OLS partial p (Bonferroni)": "{:.4f}",
+                    "Dose–time collinearity": "{:.2f}",
+                }),
+                hide_index=True, use_container_width=True,
+            )
+            _dl_btn(disp, "thermal_legacy_windows.csv", "⬇ Full per-window table (CSV)")
+
+            def _span(ws):
+                return ", ".join(f"{w}-month" for w in sorted(ws)) if ws else "none"
+
+            st.markdown(
+                f"**Reading the table**: only the **{_span(robust)}** window clears "
+                "Bonferroni on *both* tests — the one place this dashboard calls it a "
+                f"cross-validated signal. The **{_span(suggestive)}** window(s) clear the "
+                "rank test but not the parametric one: a real correlation in the data, but "
+                "fragile and method-dependent — report as suggestive, not established, if "
+                f"at all. The **{_span(not_surviving)}** window(s) clear neither test; "
+                "dose-time collinearity there is high enough that the detrended residuals "
+                "are mostly noise. **Temperature is at most a short-window contributor, "
+                "not a sole or unlimited-lag explanation.**"
+            )
         _img = FIGS / "fig_thermal_legacy.png"
         if _img.exists():
             st.image(str(_img), use_container_width=True)
+            st.caption(
+                "Bar color: green = robust (both tests survive Bonferroni), amber = "
+                "rank-only (not cross-validated), grey = neither. Each bar is annotated "
+                "with both tests' Bonferroni-corrected p-values."
+            )
 
         st.divider()
 

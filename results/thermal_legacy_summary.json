@@ -8,13 +8,14 @@
     48,
     60
   ],
-  "verdict": "supported_short_term_not_long_term",
-  "windows_surviving_bonferroni": [
+  "verdict": "supported_narrow_window",
+  "windows_robust": [
+    24
+  ],
+  "windows_suggestive_rank_only": [
     12,
-    24,
     36
   ],
-  "windows_surviving_fdr_only": [],
   "windows_not_surviving": [
     48,
     60
@@ -30,9 +31,12 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.47478704790547244,
       "delta_r2": 0.016678461201218298,
+      "dose_coef_given_time": -0.028568304297078045,
       "partial_p_dose_given_time": 0.025548373471830414,
       "p_fdr": 0.011219285709551077,
-      "p_bonferroni": 0.022438571419102153
+      "p_bonferroni": 0.022438571419102153,
+      "partial_p_fdr": 0.06387093367957603,
+      "partial_p_bonferroni": 0.12774186735915208
     },
     {
       "window_months": 24,
@@ -44,9 +48,12 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.4854591622260168,
       "delta_r2": 0.027350575521762677,
+      "dose_coef_given_time": -0.05123232699688128,
       "partial_p_dose_given_time": 0.004051092483536682,
       "p_fdr": 0.004388920119913793,
-      "p_bonferroni": 0.0043889201199137935
+      "p_bonferroni": 0.0043889201199137935,
+      "partial_p_fdr": 0.02025546241768341,
+      "partial_p_bonferroni": 0.02025546241768341
     },
     {
       "window_months": 36,
@@ -58,9 +65,12 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.4689986416177747,
       "delta_r2": 0.010890054913520575,
+      "dose_coef_given_time": -0.03968188459944348,
       "partial_p_dose_given_time": 0.07194614520213734,
       "p_fdr": 0.015153299680253838,
-      "p_bonferroni": 0.04545989904076151
+      "p_bonferroni": 0.04545989904076151,
+      "partial_p_fdr": 0.11991024200356223,
+      "partial_p_bonferroni": 0.3597307260106867
     },
     {
       "window_months": 48,
@@ -72,9 +82,12 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.46179575425667896,
       "delta_r2": 0.0036871675524248193,
+      "dose_coef_given_time": -0.02789962585941008,
       "partial_p_dose_given_time": 0.296693966404462,
       "p_fdr": 0.25432037161502913,
-      "p_bonferroni": 1.0
+      "p_bonferroni": 1.0,
+      "partial_p_fdr": 0.37086745800557747,
+      "partial_p_bonferroni": 1.0
     },
     {
       "window_months": 60,
@@ -86,10 +99,13 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.4583762945850923,
       "delta_r2": 0.0002677078808381861,
+      "dose_coef_given_time": -0.009334906011715355,
       "partial_p_dose_given_time": 0.7789072303607,
       "p_fdr": 0.49224413538940914,
-      "p_bonferroni": 1.0
+      "p_bonferroni": 1.0,
+      "partial_p_fdr": 0.7789072303607,
+      "partial_p_bonferroni": 1.0
     }
   ],
-  "interpretation": "Windows surviving Bonferroni (12m, 24m, 36m) and/or BH-FDR only (none) correction, in the biologically expected (negative) direction, indicate a genuine short-to-medium-term effect of chronic heat dose on EC50 beyond the shared trend. Windows that do not survive either correction (48m, 60m) have dose-time collinearity high enough that the detrended residuals are mostly noise, not an independent signal. This is the expected signature of a real but time-limited physiological effect (chronic heat stress integrated over 1-3 years) rather than an artifact of the shared multi-decadal trend, which would not show this decay with window length."
+  "interpretation": "Windows robust to BOTH the rank-based (Spearman, detrended) and the parametric (OLS partial) Bonferroni-corrected test, in the biologically expected (negative) direction (24m): a genuine, cross-validated effect of chronic heat dose on EC50 beyond the shared trend. Windows significant on the rank test alone but NOT corroborated by the parametric partial test (12m, 36m) are fragile/method-dependent and should be treated as suggestive, not established. Windows surviving neither test (48m, 60m) have dose-time collinearity high enough that the detrended residuals are mostly noise. Only claim the robust window(s) as a finding; report the suggestive ones, if any, explicitly as unconfirmed by the cross-check."
 }

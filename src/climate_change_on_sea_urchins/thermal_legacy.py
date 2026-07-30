@@ -33,20 +33,24 @@ This module therefore reports, alongside the raw correlation:
   * a nested OLS (EC50 ~ time  vs  EC50 ~ time + dose): delta-R2 and the partial
     p-value of dose given time;
   * the dose~time collinearity, which caps how much independent signal can exist;
-  * BH-FDR and Bonferroni correction of the 5 windows' detrended p-values —
-    non-independent tests of the same hypothesis, so a single best-looking
-    window is not enough (same principle as the CCF/Granger lag-family
-    corrections elsewhere in this pipeline).
+  * BH-FDR and Bonferroni correction of the 5 windows, applied to BOTH the
+    rank-based (Spearman) and the parametric (OLS partial) test — a window is
+    only "robust" if it survives Bonferroni on both; surviving on the rank
+    test alone is a fragile, method-dependent result, not a cross-validated
+    one (same lag-family-correction principle as the CCF/Granger panels
+    elsewhere in this pipeline, extended with a second, independent test).
 
 Honest verdict: with a single observational co-trending series, a raw
 correlation cannot distinguish chronic-heat causation from spurious co-trend.
 This module makes that explicit rather than reporting the (impressive) raw number
 alone — the failure mode the manuscript was criticised for. Verified against our
-own data (2026-07-30): short (12/24-month) windows survive Bonferroni, the
-36-month window survives BH-FDR only, and 48/60-month windows survive neither —
-dose-time collinearity climbs monotonically with window length (0.54->0.80),
-the expected signature of a real short-to-medium-term effect being progressively
-swamped by shared trend at longer windows, not an arbitrary cutoff.
+own data (2026-07-30, re-checked the same day after an initial Spearman-only pass
+overstated the 36-month window — see git history): only the 24-month window is
+robust to both the rank and the parametric test; 12- and 36-month windows clear
+the rank test but fail the parametric one (fragile, not cross-validated); 48/60
+month windows clear neither. Dose-time collinearity climbs monotonically with
+window length (0.54->0.80), consistent with a real, narrow-window effect being
+progressively swamped by shared trend, not an arbitrary cutoff.
 
 Outputs:
     results/thermal_legacy.csv          — per-assay EC50 + thermal dose per window
@@ -116,33 +120,42 @@ def run():
             "r2_time_only": float(r2_t),
             "r2_time_plus_dose": float(fit_td.rsquared),
             "delta_r2": float(fit_td.rsquared - r2_t),
+            "dose_coef_given_time": float(fit_td.params[2]),
             "partial_p_dose_given_time": float(fit_td.pvalues[2]),
         })
 
     out.to_csv(RESULTS / "thermal_legacy.csv", index=False)
     res = pd.DataFrame(rows)
 
-    # BH-FDR and Bonferroni correction across the 5 windows' detrended p-values —
-    # non-independent tests of the same hypothesis, so no single best-looking
-    # window can be reported alone (same principle as the CCF/Granger lag-family
-    # corrections elsewhere in this pipeline).
+    # BH-FDR and Bonferroni correction across the 5 windows — non-independent
+    # tests of the same hypothesis, so no single best-looking window can be
+    # reported alone (same principle as the CCF/Granger lag-family corrections
+    # elsewhere in this pipeline). Applied to BOTH the rank-based detrended
+    # Spearman correlation AND the parametric OLS partial p-value: a window
+    # that only clears the rank test but not the parametric one (or vice
+    # versa) is a fragile, method-dependent result, not a cross-validated one
+    # (caught 2026-07-30 when the initial Spearman-only 36-month "survivor"
+    # turned out to fail the OLS partial test even uncorrected, p=0.072).
     res["p_fdr"] = multipletests(res["detrended_p"], method="fdr_bh")[1]
     res["p_bonferroni"] = multipletests(res["detrended_p"], method="bonferroni")[1]
+    res["partial_p_fdr"] = multipletests(res["partial_p_dose_given_time"], method="fdr_bh")[1]
+    res["partial_p_bonferroni"] = multipletests(res["partial_p_dose_given_time"], method="bonferroni")[1]
     rows = res.to_dict("records")
 
-    correct_sign = res["detrended_spearman_r"] < 0
-    survive_bonf = sorted(int(w) for w in res.loc[correct_sign & (res["p_bonferroni"] < 0.05), "window_months"])
-    survive_fdr_only = sorted(int(w) for w in res.loc[
-        correct_sign & (res["p_fdr"] < 0.05) & (res["p_bonferroni"] >= 0.05), "window_months"
-    ])
-    not_surviving = sorted(int(w) for w in res["window_months"] if w not in survive_bonf and w not in survive_fdr_only)
+    correct_sign = (res["detrended_spearman_r"] < 0) & (res["dose_coef_given_time"] < 0)
+    rank_survives = correct_sign & (res["p_bonferroni"] < 0.05)
+    ols_survives = correct_sign & (res["partial_p_bonferroni"] < 0.05)
 
-    if not survive_bonf and not survive_fdr_only:
-        verdict = "consistent_but_not_separable_from_trend"
-    elif not_surviving:
-        verdict = "supported_short_term_not_long_term"
+    robust = sorted(int(w) for w in res.loc[rank_survives & ols_survives, "window_months"])
+    suggestive = sorted(int(w) for w in res.loc[rank_survives & ~ols_survives, "window_months"])
+    not_surviving = sorted(int(w) for w in res["window_months"] if w not in robust and w not in suggestive)
+
+    if robust:
+        verdict = "supported_all_windows" if not (suggestive or not_surviving) else "supported_narrow_window"
+    elif suggestive:
+        verdict = "suggestive_not_cross_validated"
     else:
-        verdict = "supported_after_detrending_all_windows"
+        verdict = "consistent_but_not_separable_from_trend"
 
     def _fmt(ws):
         return ", ".join(f"{w}m" for w in ws) if ws else "none"
@@ -155,28 +168,29 @@ def run():
         "threshold_C": THRESHOLD_C,
         "windows_months": WINDOWS,
         "verdict": verdict,
-        "windows_surviving_bonferroni": survive_bonf,
-        "windows_surviving_fdr_only": survive_fdr_only,
+        "windows_robust": robust,
+        "windows_suggestive_rank_only": suggestive,
         "windows_not_surviving": not_surviving,
         "per_window": rows,
         "interpretation": (
-            f"Windows surviving Bonferroni ({_fmt(survive_bonf)}) and/or BH-FDR only "
-            f"({_fmt(survive_fdr_only)}) correction, in the biologically expected "
-            f"(negative) direction, indicate a genuine short-to-medium-term effect of "
-            f"chronic heat dose on EC50 beyond the shared trend. Windows that do not "
-            f"survive either correction ({_fmt(not_surviving)}) have dose-time "
-            "collinearity high enough that the detrended residuals are mostly noise, "
-            "not an independent signal. This is the expected signature of a real but "
-            "time-limited physiological effect (chronic heat stress integrated over "
-            "1-3 years) rather than an artifact of the shared multi-decadal trend, "
-            "which would not show this decay with window length."
+            f"Windows robust to BOTH the rank-based (Spearman, detrended) and the "
+            f"parametric (OLS partial) Bonferroni-corrected test, in the biologically "
+            f"expected (negative) direction ({_fmt(robust)}): a genuine, "
+            f"cross-validated effect of chronic heat dose on EC50 beyond the shared "
+            f"trend. Windows significant on the rank test alone but NOT corroborated "
+            f"by the parametric partial test ({_fmt(suggestive)}) are fragile/"
+            f"method-dependent and should be treated as suggestive, not established. "
+            f"Windows surviving neither test ({_fmt(not_surviving)}) have dose-time "
+            "collinearity high enough that the detrended residuals are mostly noise. "
+            "Only claim the robust window(s) as a finding; report the suggestive ones, "
+            "if any, explicitly as unconfirmed by the cross-check."
         ),
     }
     with (RESULTS / "thermal_legacy_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ thermal_legacy (24C threshold, {len(WINDOWS)} windows): "
-          f"Bonferroni-surviving={_fmt(survive_bonf)}  FDR-only={_fmt(survive_fdr_only)}  "
+          f"robust(both tests)={_fmt(robust)}  suggestive(rank-only)={_fmt(suggestive)}  "
           f"not-surviving={_fmt(not_surviving)} → {verdict}")
 
 
