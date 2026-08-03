@@ -717,13 +717,10 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
     """
     Extended MHW→EC50 analyses:
       - dose_response: EC50 by MHW presence/intensity tertile at lag=2
-      - cumulative: 12-month rolling cumMHW vs EC50 at lags 0-12
       - seasonal: MHW(lag=2)→EC50 by season
       - annual: annual cumulative MHW vs mean EC50 (same year and year+1)
       - decline: EC50 trend pre/post 2016
-      - variance_part: semi-partial R² decomposition
     """
-    from numpy.linalg import lstsq
 
     out = {}
     df_real = df[df["EC50_imputed"] == False].copy()
@@ -804,44 +801,6 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
             out["dose_response"]["tertile_r_diff"] = float(r_dr_d)
             out["dose_response"]["tertile_p_diff"] = float(p_dr_d)
             out["dose_response"]["tertile_n_diff"] = len(dr_diff_sub)
-
-    # ── Cumulative stress ─────────────────────────────────────────────────────
-    df2["cumMHW_12m"] = df2["mhw_peak_intensity"].rolling(12, min_periods=6).sum()
-    cum_rows = []
-    for lag in range(0, 13):
-        shifted = df2["cumMHW_12m"].shift(lag)
-        mrg = df2[["Datetime"]].assign(x=shifted).merge(
-            df_real[["Datetime", "EC50"]], on="Datetime", how="inner"
-        ).dropna(subset=["x", "EC50"])
-        if len(mrg) >= 10:
-            r, p = stats.spearmanr(mrg["x"], mrg["EC50"])
-            cum_rows.append({"lag": lag, "r": r, "p": p, "n": len(mrg)})
-    out["cumulative"] = pd.DataFrame(cum_rows)
-
-    # Detrended robustness check (Method C convention, see
-    # mhw_analysis.difference_series): first-difference cumMHW_12m and EC50
-    # on the full continuous series before correlating, so the shared trend
-    # both series ride on cannot inflate r, then BH-FDR correct the 13 lag
-    # p-values since they are non-independent tests of the same hypothesis.
-    df2_diff = difference_series(df2, ["cumMHW_12m", "EC50"])
-    df2_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
-    cum_diff_rows = []
-    for lag in range(0, 13):
-        x = df2_diff["cumMHW_12m"].shift(lag).values
-        y = df2_diff["EC50"].values
-        mask = ~(np.isnan(x) | np.isnan(y))
-        if mask.sum() >= 10:
-            r, p = stats.spearmanr(x[mask], y[mask])
-        else:
-            r, p = np.nan, np.nan
-        cum_diff_rows.append({"lag": lag, "r": r, "p": p, "n": int(mask.sum())})
-    cum_diff_df = pd.DataFrame(cum_diff_rows)
-    valid = cum_diff_df["p"].notna()
-    if valid.any():
-        cum_diff_df.loc[valid, "p_fdr"] = multipletests(
-            cum_diff_df.loc[valid, "p"], method="fdr_bh"
-        )[1]
-    out["cumulative_diff"] = cum_diff_df
 
     # ── Seasonal pattern ──────────────────────────────────────────────────────
     merged["Month"]  = merged["Datetime"].dt.month
@@ -986,70 +945,6 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
                 "slope_yr": slope * 365, "r": r_val, "p": p_val, "n": len(sub),
                 "df": sub[["Datetime", "EC50", "t"]].copy(),
                 "intercept": intercept,
-            }
-
-    # ── Variance partitioning ─────────────────────────────────────────────────
-    df_vp = df.copy()
-    df_vp["MHW_lag2"] = df_vp["mhw_peak_intensity"].shift(2)
-    df_vp["cumMHW6"]  = df_vp["mhw_peak_intensity"].rolling(12, min_periods=6).sum().shift(6)
-    vp_merged = df_vp[["Datetime", "MHW_lag2", "cumMHW6", "Temperature", "pH"]].merge(
-        df_real[["Datetime", "EC50"]], on="Datetime", how="inner"
-    ).dropna()
-
-    def _r2(X_cols, y_arr, df_sub):
-        X = np.column_stack([np.ones(len(df_sub))] + [df_sub[c].values for c in X_cols])
-        c, _, _, _ = lstsq(X, y_arr, rcond=None)
-        res = y_arr - X @ c
-        return 1 - np.sum(res**2) / np.sum((y_arr - y_arr.mean())**2)
-
-    if len(vp_merged) >= 20:
-        y = vp_merged["EC50"].values
-        vp_rows = [
-            {"predictor": "cumMHW (12m, lag=6)",  "R2_alone": _r2(["cumMHW6"], y, vp_merged),
-             "R2_unique": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)
-                        - _r2(["Temperature","pH"], y, vp_merged)},
-            {"predictor": "MHW acute (lag=2)",     "R2_alone": _r2(["MHW_lag2"], y, vp_merged),
-             "R2_unique": _r2(["MHW_lag2","Temperature","pH"], y, vp_merged)
-                        - _r2(["Temperature","pH"], y, vp_merged)},
-            {"predictor": "Temperature",           "R2_alone": _r2(["Temperature"], y, vp_merged),
-             "R2_unique": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)
-                        - _r2(["cumMHW6","pH"], y, vp_merged)},
-            {"predictor": "pH",                    "R2_alone": _r2(["pH"], y, vp_merged),
-             "R2_unique": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)
-                        - _r2(["cumMHW6","Temperature"], y, vp_merged)},
-        ]
-        out["variance_part"] = {"df": pd.DataFrame(vp_rows), "n": len(vp_merged),
-                                 "R2_full": _r2(["cumMHW6","Temperature","pH"], y, vp_merged)}
-
-        # Detrended robustness check (Method C convention): cumMHW6 and EC50
-        # were already shown (Cumulative-stress tab) to share a trend strong
-        # enough to fully explain their raw correlation, so a large raw
-        # "unique" R² here could likewise be trend, not a distinct driver.
-        # First-difference every column before repeating the decomposition.
-        df_vp_diff = difference_series(df_vp, ["MHW_lag2", "cumMHW6", "Temperature", "pH", "EC50"])
-        df_vp_diff.loc[df_vp["EC50_imputed"].values, "EC50"] = np.nan
-        vp_merged_diff = df_vp_diff[
-            ["Datetime", "MHW_lag2", "cumMHW6", "Temperature", "pH", "EC50"]
-        ].dropna()
-        if len(vp_merged_diff) >= 20:
-            y_d = vp_merged_diff["EC50"].values
-            vp_rows_diff = [
-                {"predictor": "cumMHW (12m, lag=6)",  "R2_alone": _r2(["cumMHW6"], y_d, vp_merged_diff),
-                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
-                            - _r2(["Temperature","pH"], y_d, vp_merged_diff)},
-                {"predictor": "MHW acute (lag=2)",     "R2_alone": _r2(["MHW_lag2"], y_d, vp_merged_diff),
-                 "R2_unique": _r2(["MHW_lag2","Temperature","pH"], y_d, vp_merged_diff)
-                            - _r2(["Temperature","pH"], y_d, vp_merged_diff)},
-                {"predictor": "Temperature",           "R2_alone": _r2(["Temperature"], y_d, vp_merged_diff),
-                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
-                            - _r2(["cumMHW6","pH"], y_d, vp_merged_diff)},
-                {"predictor": "pH",                    "R2_alone": _r2(["pH"], y_d, vp_merged_diff),
-                 "R2_unique": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff)
-                            - _r2(["cumMHW6","Temperature"], y_d, vp_merged_diff)},
-            ]
-            out["variance_part"]["diff"] = {
-                "df": pd.DataFrame(vp_rows_diff), "n": len(vp_merged_diff),
-                "R2_full": _r2(["cumMHW6","Temperature","pH"], y_d, vp_merged_diff),
             }
 
     return out
@@ -1633,10 +1528,8 @@ def _tab_mhw_gametes():
             "Spearman CCF",
             "ARIMA pre-whitening",
             "Dose-response",
-            "Cumulative stress",
             "Seasonal pattern",
             "Annual trends",
-            "Variance partitioning",
             "Granger causality",
             "SEA + DLNM (event-based)",
             "Robustness battery",
@@ -1882,120 +1775,7 @@ def _tab_mhw_gametes():
                     else:
                         st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
 
-            # ── 3. Cumulative stress ──────────────────────────────────────────────────
-
-        def _sub_cumulative_stress():
-                st.subheader("12-month cumulative MHW exposure → EC50")
-                st.markdown(
-                    "Hypothesis: each MHW depletes physiological reserves. The 12-month "
-                    "rolling sum of MHW intensity captures this **chronic stress debt**."
-                )
-                cum_df = deep.get("cumulative", pd.DataFrame())
-                if not cum_df.empty:
-                    colors_c = [WARM if p < 0.05 else OCEAN for p in cum_df["p"]]
-                    fig_cum = go.Figure(go.Bar(
-                        x=cum_df["lag"], y=cum_df["r"],
-                        marker_color=colors_c,
-                        text=[f"r={r:+.2f}" for r in cum_df["r"]],
-                        textposition="outside",
-                    ))
-                    fig_cum.add_hline(y=0, line_color="black", line_width=0.8)
-
-                    # Reference line: best acute lag
-                    best_acute_r = -0.388
-                    fig_cum.add_hline(y=best_acute_r, line_dash="dot", line_color=WARM,
-                                      annotation_text="acute lag=2 r=−0.39",
-                                      annotation_position="bottom right")
-                    fig_cum.update_layout(
-                        title="Spearman r: cumulative 12m MHW(t−k) → EC50(t)  |  Red = p<0.05<br>"
-                              "<sub>Compared with dashed line = best single-event (acute) correlation</sub>",
-                        xaxis_title="Additional lag k on top of 12m window (months)",
-                        yaxis_title="Spearman r",
-                        height=420,
-                    )
-                    st.plotly_chart(fig_cum, use_container_width=True)
-                    _dl_btn(cum_df, f"cumulative_mhw_{_yr_start}_{_yr_end}.csv", "⬇ Cumulative MHW data (CSV)")
-                    st.caption(
-                        "Raw levels, uncorrected for the 13 lags tested here — cumMHW and EC50 "
-                        "share the same long-term trend, which alone can produce this pattern. "
-                        "See the detrended + FDR-corrected check below before treating any bar as significant."
-                    )
-
-                    best_cum = cum_df.loc[cum_df["r"].abs().idxmax()]
-                    cum_diff_df = deep.get("cumulative_diff", pd.DataFrame())
-                    diff_valid = cum_diff_df.dropna(subset=["p_fdr"]) if not cum_diff_df.empty else cum_diff_df
-                    if not diff_valid.empty:
-                        best_diff = diff_valid.loc[diff_valid["p_fdr"].idxmin()]
-                        if best_diff["p_fdr"] < 0.05:
-                            st.success(
-                                f"Detrended + FDR-corrected: still significant at lag = "
-                                f"**{int(best_diff['lag'])} months** "
-                                f"(r = {best_diff['r']:+.3f}, BH-FDR p = {best_diff['p_fdr']:.2e})  |  "
-                                f"raw/uncorrected best was lag={int(best_cum['lag'])} r={best_cum['r']:+.3f} "
-                                f"(p={best_cum['p']:.2e}, not FDR-corrected)."
-                            )
-                        else:
-                            st.warning(
-                                f"Does **not** survive detrending + BH-FDR correction: best detrended lag "
-                                f"({int(best_diff['lag'])} months, r={best_diff['r']:+.3f}) has BH-FDR "
-                                f"p = {best_diff['p_fdr']:.2e} (≥0.05). The raw/uncorrected pattern above "
-                                f"(lag={int(best_cum['lag'])}, r={best_cum['r']:+.3f}, p={best_cum['p']:.2e}) "
-                                f"is consistent with a shared trend, not a chronic-stress-debt effect — "
-                                f"treat it as exploratory, not a finding."
-                            )
-                    else:
-                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
-
-                # Scatter: cumulative MHW vs EC50
-                st.subheader("Scatter: cumulative 12m MHW (lag=6) vs EC50")
-                df_s = df.copy()
-                df_s["cumMHW"] = df_s["mhw_peak_intensity"].rolling(12, min_periods=6).sum().shift(6)
-                df_real_s = df[df["EC50_imputed"] == False].copy()
-                sc_merged = df_s[["Datetime", "cumMHW"]].merge(
-                    df_real_s[["Datetime", "EC50"]], on="Datetime", how="inner"
-                ).dropna()
-                fig_sc = px.scatter(
-                    sc_merged, x="cumMHW", y="EC50",
-                    trendline="ols",
-                    color_discrete_sequence=[OCEAN],
-                    labels={"cumMHW": "Cumulative 12m MHW (°C·days, lag=6)", "EC50": "EC50 (mg/L)"},
-                    title="EC50 vs cumulative MHW exposure  (n={})".format(len(sc_merged)),
-                )
-                fig_sc.update_layout(height=380)
-                st.plotly_chart(fig_sc, use_container_width=True)
-                _sc_fit = px.get_trendline_results(fig_sc).iloc[0]["px_fit_results"]
-                st.caption(_regression_caption(
-                    _sc_fit.params[1], _sc_fit.params[0], np.sqrt(_sc_fit.rsquared), _sc_fit.pvalues[1],
-                    unit="mg/L EC50", n=len(sc_merged), per="°C·day of cumulative MHW",
-                ))
-                _dl_btn(sc_merged, f"cumulative_scatter_{_yr_start}_{_yr_end}.csv", "⬇ Scatter data (CSV)")
-
-                # Same raw-vs-shared-trend caveat as the bar chart above, applied
-                # to this specific lag (=6) rather than the best-of-13 lag.
-                _diff_all = deep.get("cumulative_diff", pd.DataFrame())
-                _diff_lag6 = _diff_all[_diff_all["lag"] == 6] if not _diff_all.empty else _diff_all
-                if not _diff_lag6.empty and _diff_lag6.iloc[0][["r", "p_fdr"]].notna().all():
-                    _d6 = _diff_lag6.iloc[0]
-                    if _d6["p_fdr"] < 0.05:
-                        st.caption(
-                            f"Detrended + BH-FDR check at lag=6: r = {_d6['r']:+.3f}, "
-                            f"p = {_d6['p_fdr']:.2e} — survives detrending."
-                        )
-                    else:
-                        st.caption(
-                            f"⚠️ Raw levels, uncorrected: this regression shares the same long-term trend as "
-                            f"the bar chart above. After first-differencing, lag=6 is r = {_d6['r']:+.3f}, "
-                            f"BH-FDR p = {_d6['p_fdr']:.2e} (not significant) — treat the fitted line as "
-                            f"exploratory, not evidence of a chronic-stress-debt effect."
-                        )
-                else:
-                    st.caption("Detrended robustness check unavailable at this lag for this date range.")
-                st.caption(
-                    "Below cumMHW ≈ 2 °C·days (Q1), correlation is near zero — the organism recovers. "
-                    "Above this threshold, each additional unit of cumulative stress depresses EC50 further."
-                )
-
-            # ── 4. Seasonal pattern ───────────────────────────────────────────────────
+            # ── 3. Seasonal pattern ───────────────────────────────────────────────────
 
         def _sub_seasonal_pattern():
                 st.subheader("Season-specific MHW→EC50 correlation (lag=2)")
@@ -2096,7 +1876,7 @@ def _tab_mhw_gametes():
                     else:
                         st.warning("Year-over-year robustness check unavailable for this date range (insufficient data).")
 
-            # ── 5. Annual trends ──────────────────────────────────────────────────────
+            # ── 4. Annual trends ──────────────────────────────────────────────────────
 
         def _sub_annual_trends():
                 ann_data = deep.get("annual", {})
@@ -2205,105 +1985,7 @@ def _tab_mhw_gametes():
                     accel = abs(t_post["slope_yr"]) / max(abs(t_pre["slope_yr"]), 0.01)
                     col3.metric("Acceleration factor", f"{accel:.1f}×")
 
-            # ── 6. Variance partitioning ──────────────────────────────────────────────
-
-        def _sub_variance_partitioning():
-                st.subheader("Variance partitioning: unique EC50 variance explained by each driver")
-                st.markdown(
-                    "Semi-partial R² — how much EC50 variance does each driver explain "
-                    "*uniquely*, after controlling for the others?"
-                )
-                vp = deep.get("variance_part", {})
-                vp_df = vp.get("df", pd.DataFrame())
-                if not vp_df.empty:
-                    fig_vp = go.Figure()
-                    bar_colors = [WARM, "#f4a261", OCEAN, COOL]
-                    for idx, (_, row) in enumerate(vp_df.iterrows()):
-                        fig_vp.add_trace(go.Bar(
-                            x=[row["predictor"]],
-                            y=[row["R2_unique"]],
-                            marker_color=bar_colors[idx],
-                            text=[f"R²={row['R2_unique']:.3f}"],
-                            textposition="outside",
-                            name=row["predictor"],
-                        ))
-                    fig_vp.update_layout(
-                        title=f"Unique semi-partial R² for EC50  |  Full model R² = {vp['R2_full']:.3f}  "
-                              f"|  n = {vp['n']}",
-                        yaxis_title="Semi-partial R²",
-                        height=420, showlegend=False,
-                    )
-                    st.plotly_chart(fig_vp, use_container_width=True)
-                    _dl_btn(vp_df, f"variance_partitioning_{_yr_start}_{_yr_end}.csv", "⬇ Variance data (CSV)")
-
-                    # Table
-                    st.dataframe(
-                        vp_df.rename(columns={
-                            "predictor": "Driver",
-                            "R2_alone": "R² (alone)",
-                            "R2_unique": "R² (unique, after controlling others)",
-                        }).round(3),
-                        hide_index=True, use_container_width=True,
-                    )
-                    st.info(
-                        f"Raw levels, uncorrected: **cumulative MHW** (12m rolling, lag=6) is by far the "
-                        f"strongest unique predictor (R²={vp_df.iloc[0]['R2_unique']:.3f}), explaining "
-                        f"{vp_df.iloc[0]['R2_unique']/vp['R2_full']*100:.0f}% of the full model variance. "
-                        "Temperature and pH together add modest additional variance. See the detrended "
-                        "check below before treating this as multi-stressor synergy rather than a "
-                        "shared-trend artifact."
-                    )
-
-                    vp_diff = vp.get("diff", {})
-                    vp_diff_df = vp_diff.get("df", pd.DataFrame())
-                    if not vp_diff_df.empty:
-                        st.subheader("Detrended (first-differenced): same decomposition")
-                        fig_vp_d = go.Figure()
-                        for idx, (_, row) in enumerate(vp_diff_df.iterrows()):
-                            fig_vp_d.add_trace(go.Bar(
-                                x=[row["predictor"]],
-                                y=[row["R2_unique"]],
-                                marker_color=bar_colors[idx],
-                                text=[f"R²={row['R2_unique']:.3f}"],
-                                textposition="outside",
-                                name=row["predictor"],
-                            ))
-                        fig_vp_d.update_layout(
-                            title=f"Unique semi-partial R² for ΔEC50  |  Full model R² = "
-                                  f"{vp_diff['R2_full']:.3f}  |  n = {vp_diff['n']}",
-                            yaxis_title="Semi-partial R²", height=420, showlegend=False,
-                        )
-                        st.plotly_chart(fig_vp_d, use_container_width=True)
-                        _dl_btn(vp_diff_df, f"variance_partitioning_diff_{_yr_start}_{_yr_end}.csv",
-                                "⬇ Detrended variance data (CSV)")
-                        st.dataframe(
-                            vp_diff_df.rename(columns={
-                                "predictor": "Driver",
-                                "R2_alone": "R² (alone)",
-                                "R2_unique": "R² (unique, after controlling others)",
-                            }).round(3),
-                            hide_index=True, use_container_width=True,
-                        )
-                        raw_top_r2  = float(vp_df.iloc[0]["R2_unique"])
-                        diff_top_r2 = float(vp_diff_df.iloc[0]["R2_unique"])
-                        if diff_top_r2 < 0.3 * raw_top_r2:
-                            st.warning(
-                                f"Cumulative MHW's raw unique R² ({raw_top_r2:.3f}) drops to "
-                                f"{diff_top_r2:.3f} after first-differencing — most of its apparent "
-                                f"explanatory power above is the shared long-term trend, not a distinct "
-                                f"physiological effect. Treat the raw decomposition and the "
-                                f"'multi-stressor synergy' framing as exploratory, not established."
-                            )
-                        else:
-                            st.success(
-                                f"Cumulative MHW's unique R² remains substantial after "
-                                f"first-differencing (raw {raw_top_r2:.3f} → detrended {diff_top_r2:.3f}), "
-                                f"supporting a genuine unique contribution beyond the shared trend."
-                            )
-                    else:
-                        st.warning("Detrended robustness check unavailable for this date range (insufficient data).")
-
-            # ── 7. Granger causality ──────────────────────────────────────────────────
+            # ── 5. Granger causality ──────────────────────────────────────────────────
 
         def _sub_granger_causality():
                 st.error(
@@ -2363,7 +2045,7 @@ def _tab_mhw_gametes():
                 else:
                     st.warning("Run `python analysis/run_all.py` first")
 
-            # ── 8. R analysis (SEA + DLNM) ───────────────────────────────────────────
+            # ── 6. R analysis (SEA + DLNM) ───────────────────────────────────────────
 
         def _sub_r_analysis():
                 st.error(
@@ -2446,7 +2128,7 @@ def _tab_mhw_gametes():
                     st.info("Run `ccsu-run-pipeline` (SEA, mixed-effects) and "
                             "`Rscript scripts/mhw_lag_analysis.R` (DLNM) to generate results.")
 
-            # ── 9. Robustness battery ────────────────────────────────────────────────
+            # ── 7. Robustness battery ────────────────────────────────────────────────
 
         def _sub_robustness_battery():
                 st.error(
@@ -2567,10 +2249,8 @@ def _tab_mhw_gametes():
             "Spearman CCF": _sub_ccf_diff,
             "ARIMA pre-whitening": _sub_ccf_arima,
             "Dose-response": _sub_dose_response,
-            "Cumulative stress": _sub_cumulative_stress,
             "Seasonal pattern": _sub_seasonal_pattern,
             "Annual trends": _sub_annual_trends,
-            "Variance partitioning": _sub_variance_partitioning,
             "Granger causality": _sub_granger_causality,
             "SEA + DLNM (event-based)": _sub_r_analysis,
             "Robustness battery": _sub_robustness_battery,
@@ -3187,7 +2867,7 @@ Measures embryo sensitivity to a standard toxicant.
 **MHW → EC50 causal analysis**:
 - Spearman cross-correlation at lags 0–12 months
 - Granger causality (statsmodels)
-- SEA — Superposed Epoch Analysis with bootstrap n=999 (R)
+- SEA — Superposed Epoch Analysis with bootstrap n=999 (Python, statsmodels)
 - DLNM — Distributed Lag Non-Linear Model, R package `dlnm` (Gasparrini 2011)
 
 **Forecast**: SARIMAX(1,0,1)(1,0,1,12) with three exogenous regressors — pH, Temperature, and
