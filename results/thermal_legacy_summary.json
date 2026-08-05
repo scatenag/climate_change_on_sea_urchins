@@ -29,14 +29,14 @@
       "detrended_p": 0.004487714283820431,
       "dose_time_collinearity": 0.5402759619570188,
       "r2_time_only": 0.45810858670425414,
-      "r2_time_plus_dose": 0.47478704790547244,
-      "delta_r2": 0.016678461201218298,
-      "dose_coef_given_time": -0.028568304297078045,
-      "partial_p_dose_given_time": 0.025548373471830414,
+      "r2_time_plus_dose": 0.4747870479054723,
+      "delta_r2": 0.016678461201218187,
+      "dose_coef_given_time": -0.02856830429707808,
+      "partial_p_dose_given_time": 0.02554837347183019,
       "p_fdr": 0.011219285709551077,
       "p_bonferroni": 0.022438571419102153,
-      "partial_p_fdr": 0.06387093367957603,
-      "partial_p_bonferroni": 0.12774186735915208
+      "partial_p_fdr": 0.06387093367957547,
+      "partial_p_bonferroni": 0.12774186735915094
     },
     {
       "window_months": 24,
@@ -46,14 +46,14 @@
       "detrended_p": 0.0008777840239827586,
       "dose_time_collinearity": 0.6212099562784462,
       "r2_time_only": 0.45810858670425414,
-      "r2_time_plus_dose": 0.4854591622260168,
-      "delta_r2": 0.027350575521762677,
-      "dose_coef_given_time": -0.05123232699688128,
-      "partial_p_dose_given_time": 0.004051092483536682,
+      "r2_time_plus_dose": 0.4854591622260167,
+      "delta_r2": 0.027350575521762566,
+      "dose_coef_given_time": -0.051232326996881426,
+      "partial_p_dose_given_time": 0.004051092483536535,
       "p_fdr": 0.004388920119913793,
       "p_bonferroni": 0.0043889201199137935,
-      "partial_p_fdr": 0.02025546241768341,
-      "partial_p_bonferroni": 0.02025546241768341
+      "partial_p_fdr": 0.02025546241768267,
+      "partial_p_bonferroni": 0.020255462417682675
     },
     {
       "window_months": 36,
@@ -65,12 +65,12 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.4689986416177747,
       "delta_r2": 0.010890054913520575,
-      "dose_coef_given_time": -0.03968188459944348,
-      "partial_p_dose_given_time": 0.07194614520213734,
+      "dose_coef_given_time": -0.03968188459944356,
+      "partial_p_dose_given_time": 0.07194614520213687,
       "p_fdr": 0.015153299680253838,
       "p_bonferroni": 0.04545989904076151,
-      "partial_p_fdr": 0.11991024200356223,
-      "partial_p_bonferroni": 0.3597307260106867
+      "partial_p_fdr": 0.11991024200356144,
+      "partial_p_bonferroni": 0.35973072601068434
     },
     {
       "window_months": 48,
@@ -80,13 +80,13 @@
       "detrended_p": 0.2034562972920233,
       "dose_time_collinearity": 0.7525365119039001,
       "r2_time_only": 0.45810858670425414,
-      "r2_time_plus_dose": 0.46179575425667896,
-      "delta_r2": 0.0036871675524248193,
-      "dose_coef_given_time": -0.02789962585941008,
-      "partial_p_dose_given_time": 0.296693966404462,
+      "r2_time_plus_dose": 0.46179575425667907,
+      "delta_r2": 0.0036871675524249303,
+      "dose_coef_given_time": -0.027899625859410256,
+      "partial_p_dose_given_time": 0.2966939664044588,
       "p_fdr": 0.25432037161502913,
       "p_bonferroni": 1.0,
-      "partial_p_fdr": 0.37086745800557747,
+      "partial_p_fdr": 0.37086745800557347,
       "partial_p_bonferroni": 1.0
     },
     {
@@ -99,11 +99,11 @@
       "r2_time_only": 0.45810858670425414,
       "r2_time_plus_dose": 0.4583762945850923,
       "delta_r2": 0.0002677078808381861,
-      "dose_coef_given_time": -0.009334906011715355,
-      "partial_p_dose_given_time": 0.7789072303607,
+      "dose_coef_given_time": -0.00933490601171541,
+      "partial_p_dose_given_time": 0.7789072303606986,
       "p_fdr": 0.49224413538940914,
       "p_bonferroni": 1.0,
-      "partial_p_fdr": 0.7789072303607,
+      "partial_p_fdr": 0.7789072303606986,
       "partial_p_bonferroni": 1.0
     }
   ],
