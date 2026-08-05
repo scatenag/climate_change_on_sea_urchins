@@ -120,7 +120,9 @@ def main():
         print("No new data fetched.")
         return
 
-    new_df = pd.concat(new_series, axis=1).reset_index().rename(columns={"index": "Datetime"})
+    new_df = pd.concat(new_series, axis=1)
+    new_df.index.name = "Datetime"
+    new_df = new_df.reset_index()
     # Ensure all expected columns exist
     for cfg in DATASETS:
         if cfg["column"] not in new_df.columns:

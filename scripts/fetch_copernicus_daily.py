@@ -15,6 +15,7 @@ Dataset: cmems_mod_med_phy-temp_my_4.2km_P1D-m (daily temperature)
 Fallback: cmems_mod_med_phy-temp_anfc_4.2km_P1D-m
 """
 
+import os
 import sys
 import copernicusmarine
 import xarray as xr
@@ -43,6 +44,16 @@ def download():
         print(f"Daily SST file already exists: {RAW_FILE}. Skipping download.")
         return
 
+    if not (
+        os.environ.get("COPERNICUSMARINE_SERVICE_USERNAME")
+        and os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD")
+    ):
+        raise RuntimeError(
+            "COPERNICUSMARINE_SERVICE_USERNAME / COPERNICUSMARINE_SERVICE_PASSWORD "
+            "not set. Without them copernicusmarine falls back to an interactive "
+            "prompt that hangs/aborts on a non-interactive shell (e.g. CI)."
+        )
+
     for dataset_id in [DATASET_ID, DATASET_ID_FALLBACK]:
         try:
             print(f"Downloading daily SST from {dataset_id} ...")
@@ -61,6 +72,8 @@ def download():
                 output_directory=str(RAW_DIR),
                 force_download=False,
             )
+            if not RAW_FILE.exists():
+                raise RuntimeError(f"subset() returned but {RAW_FILE} was not created")
             print(f"Saved to {RAW_FILE}")
             return
         except Exception as e:
