@@ -6,18 +6,18 @@ import json
 import numpy as np
 import pandas as pd
 from scipy import stats
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_DATE
 
 def run():
     df, df_real, events, _ = load_data()
     df = df.dropna(subset=ALL_COLS)
 
-    pre  = df[df["Datetime"] <  SPLIT_YEAR + "-01-01"]
-    post = df[df["Datetime"] >= SPLIT_YEAR + "-01-01"]
+    pre  = df[df["Datetime"] <  SPLIT_DATE]
+    post = df[df["Datetime"] >= SPLIT_DATE]
 
     # Use real EC50 only for EC50 tests; full series for env vars
-    pre_ec50  = df_real[df_real["Datetime"] <  SPLIT_YEAR + "-01-01"]["EC50"]
-    post_ec50 = df_real[df_real["Datetime"] >= SPLIT_YEAR + "-01-01"]["EC50"]
+    pre_ec50  = df_real[df_real["Datetime"] <  SPLIT_DATE]["EC50"]
+    post_ec50 = df_real[df_real["Datetime"] >= SPLIT_DATE]["EC50"]
 
     results = {}
     for col in ALL_COLS:
@@ -60,8 +60,9 @@ def run():
     for col in ALL_COLS:
         src = df_real if col == "EC50" else df
         out = src[["Datetime", col]].copy()
-        out["period"] = np.where(out["Datetime"] < SPLIT_YEAR + "-01-01",
-                                 f"2003–{int(SPLIT_YEAR)-1}", f"{SPLIT_YEAR}–2025")
+        pre_label  = f"2003–{(SPLIT_DATE - pd.Timedelta(days=1)):%Y-%m}"
+        post_label = f"{SPLIT_DATE:%Y-%m}–2025"
+        out["period"] = np.where(out["Datetime"] < SPLIT_DATE, pre_label, post_label)
         out.to_csv(RESULTS / f"dist_{col}.csv", index=False)
 
     print(f"✓ period_split: stats saved for {len(ALL_COLS)} variables")

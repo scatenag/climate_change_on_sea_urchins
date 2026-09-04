@@ -44,7 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, SPLIT_YEAR
+from .common import load_data, RESULTS, SPLIT_DATE
 
 # Representative NW-Mediterranean surface total alkalinity (mol/kg-SW), scaled by
 # salinity. The decomposition uses only the RELATIVE carbonate-ion ratio, which is
@@ -111,7 +111,7 @@ def run():
     # Carbonate ion the embryos experienced each assay month
     d["CO3"] = carbonate_ion(d["pH"].values, d["Temperature"].values, d["Salinity"].values)
 
-    split = pd.Timestamp(SPLIT_YEAR + "-01-01")
+    split = SPLIT_DATE
     pre_mask = d["Datetime"] < split
     post_mask = ~pre_mask
 
@@ -149,9 +149,14 @@ def run():
     dec_bio_carb, share_carb = geochem_share("EC50_bio")
     dec_bio_lit, share_lit = geochem_share("EC50_bio_lit")
 
-    # Robustness of the residual biological decline (Mann-Whitney on corrected EC50)
-    u, p_bio = stats.mannwhitneyu(d.loc[pre_mask, "EC50_bio"],
-                                  d.loc[post_mask, "EC50_bio"], alternative="greater")
+    # Robustness of the residual biological decline (Mann-Whitney on each
+    # corrected EC50 series -- carbonate-based and literature-based give
+    # slightly different corrections, so both are tested independently
+    # rather than reporting only one).
+    u_carb, p_bio_carb = stats.mannwhitneyu(d.loc[pre_mask, "EC50_bio"],
+                                            d.loc[post_mask, "EC50_bio"], alternative="greater")
+    u_lit, p_bio_lit = stats.mannwhitneyu(d.loc[pre_mask, "EC50_bio_lit"],
+                                          d.loc[post_mask, "EC50_bio_lit"], alternative="greater")
 
     summary = {
         "n_pre": int(pre_mask.sum()),
@@ -168,14 +173,16 @@ def run():
         "ec50_decline_corrected_literature_pct": float(dec_bio_lit),
         "geochemical_share_carbonate_pct": float(share_carb),
         "geochemical_share_literature_pct": float(share_lit),
-        "biological_residual_mannwhitney_p": float(p_bio),
+        "biological_residual_mannwhitney_p": float(p_bio_carb),
+        "biological_residual_mannwhitney_p_literature": float(p_bio_lit),
     }
     with (RESULTS / "cu_speciation_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ cu_speciation: nominal EC50 decline {dec_nom:.1f}% | "
           f"geochemical share {share_lit:.0f}% (lit) / {share_carb:.0f}% (carbonate); "
-          f"residual biological decline {dec_bio_lit:.1f}% (p={p_bio:.1e})")
+          f"residual biological decline {dec_bio_lit:.1f}% "
+          f"(p={p_bio_lit:.1e} lit, p={p_bio_carb:.1e} carbonate)")
 
 
 if __name__ == "__main__":

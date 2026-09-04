@@ -1,4 +1,6 @@
 """Shared data loading for all analysis modules."""
+import re
+import warnings
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -7,7 +9,28 @@ ROOT    = Path(__file__).resolve().parent.parent.parent
 RESULTS = ROOT / "results"
 RESULTS.mkdir(exist_ok=True)
 
-SPLIT_YEAR = "2016"
+# EC50 pre/post regime-shift boundary. Full date, not just a year: the
+# manuscript's changepoint (QLR/AR(1), see changepoint.py) lands mid-year,
+# not on January 1st, so every module below needs the exact date, not the
+# implicit "1 Jan of this year" that an earlier, year-only version of this
+# constant produced.
+_SPLIT_CONFIG = "2016-06-01"
+
+
+def _parse_split_date(value):
+    if re.fullmatch(r"\d{4}", str(value)):
+        warnings.warn(
+            "SPLIT_YEAR/split configuration given as a bare year is "
+            "deprecated; use a full date (e.g. '2016-06-01'). Falling back "
+            "to January 1st of that year.",
+            DeprecationWarning, stacklevel=3,
+        )
+        return pd.Timestamp(f"{value}-01-01")
+    return pd.Timestamp(value)
+
+
+SPLIT_DATE = _parse_split_date(_SPLIT_CONFIG)
+SPLIT_YEAR = str(SPLIT_DATE.year)  # kept for callers that only need the year (e.g. axis labels)
 TAU_MAX    = 12
 
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:

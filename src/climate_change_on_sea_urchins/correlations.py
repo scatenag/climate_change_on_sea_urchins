@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_DATE
 
 
 def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.DataFrame:
@@ -81,8 +81,8 @@ def run():
         window=12, min_periods=1, center=True
     ).mean()
 
-    pre_mask  = df_work.index <  pd.Timestamp(SPLIT_YEAR + "-01-01")
-    post_mask = df_work.index >= pd.Timestamp(SPLIT_YEAR + "-01-01")
+    pre_mask  = df_work.index <  SPLIT_DATE
+    post_mask = df_work.index >= SPLIT_DATE
 
     env_cols = ALL_COLS   # O2, CO2, Temperature, Salinity, pH, EC50
     mhw_cols = MHW_COLS   # mhw_peak_intensity, mhw_days

@@ -23,7 +23,7 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not in the installed package
 
 from climate_change_on_sea_urchins.common import (
-    load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_YEAR, TAU_MAX,
+    load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_DATE, SPLIT_YEAR, TAU_MAX,
 )
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 
@@ -42,6 +42,33 @@ def _load_module(path: Path):
 
 def test_split_year():
     assert SPLIT_YEAR == "2016"
+
+
+def test_split_date():
+    # The manuscript's changepoint (QLR/AR(1), changepoint.py) lands
+    # mid-year, not on January 1st -- SPLIT_DATE must carry that, not just
+    # the year (SPLIT_YEAR, kept only for callers that legitimately want a
+    # bare year, e.g. axis labels).
+    assert SPLIT_DATE == pd.Timestamp("2016-06-01")
+
+
+def test_period_split_uses_configured_split_date():
+    # Guards against a hardcoded "SPLIT_YEAR + '-01-01'"-style cutoff being
+    # reintroduced anywhere pre/post masks are built: re-derive n_pre/n_post
+    # for EC50 directly from SPLIT_DATE and compare against period_split's
+    # own precomputed output.
+    import json
+    stats_path = ROOT / "results" / "kruskal_stats.json"
+    if not stats_path.exists():
+        pytest.skip("results/kruskal_stats.json not generated yet")
+    ec50_stats = json.loads(stats_path.read_text())["EC50"]
+
+    _, df_real, _, _ = load_data()
+    n_pre  = int((df_real["Datetime"] <  SPLIT_DATE).sum())
+    n_post = int((df_real["Datetime"] >= SPLIT_DATE).sum())
+
+    assert ec50_stats["n_pre"] == n_pre
+    assert ec50_stats["n_post"] == n_post
 
 
 def test_tau_max():
@@ -149,6 +176,7 @@ def test_monthly_dataframe_has_mhw_cols():
     "forecast_good.csv",
     "stationarity_results.json",
     "granger_results.json",
+    "changepoint_ec50.json",
 ])
 def test_results_files_exist(fname):
     path = ROOT / "results" / fname

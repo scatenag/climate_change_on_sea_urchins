@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import pairwise_distances
-from .common import load_data, RESULTS, ALL_COLS, SPLIT_YEAR
+from .common import load_data, RESULTS, ALL_COLS, SPLIT_DATE
 
 def decompose_series(df, col):
     s = df.set_index("Datetime")[col].dropna()
@@ -33,8 +33,8 @@ def run():
     trend_df.to_csv(RESULTS / "trends_all.csv", index=False)
 
     # ── Pre/Post split decompositions ──────────────────────────────────────
-    for label, mask in [("pre", df["Datetime"] < SPLIT_YEAR + "-01-01"),
-                        ("post", df["Datetime"] >= SPLIT_YEAR + "-01-01")]:
+    for label, mask in [("pre", df["Datetime"] < SPLIT_DATE),
+                        ("post", df["Datetime"] >= SPLIT_DATE)]:
         sub = df[mask].dropna(subset=ALL_COLS)
         rows = []
         for col in ALL_COLS:

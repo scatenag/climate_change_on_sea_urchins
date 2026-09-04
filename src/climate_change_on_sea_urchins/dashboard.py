@@ -36,6 +36,7 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
+from .common import SPLIT_DATE
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
@@ -66,7 +67,6 @@ WARM    = "#e76f51"
 COOL    = "#2a9d8f"
 NEUTRAL = "#457b9d"
 
-SPLIT_YEAR = 2016
 SITE = dict(lat=SITE_LAT, lon=SITE_LON, name=SITE_NAME)
 
 
@@ -595,9 +595,8 @@ def compute_correlations(df: pd.DataFrame) -> dict:
     df_work.loc[df_work["EC50_imputed"] == True, "EC50"] = np.nan
     df_work["EC50"] = df_work["EC50"].rolling(window=12, min_periods=1, center=True).mean()
 
-    split     = pd.Timestamp("2016-01-01")
-    pre_mask  = df_work.index < split
-    post_mask = df_work.index >= split
+    pre_mask  = df_work.index < SPLIT_DATE
+    post_mask = df_work.index >= SPLIT_DATE
 
     def _extract_trends(subset):
         trend = pd.DataFrame(index=subset.index)
@@ -934,9 +933,9 @@ def compute_mhw_deep(df: pd.DataFrame) -> dict:
         "r_lag_raw": r_lag_raw, "p_lag_raw": p_lag_raw,
     }
 
-    # ── EC50 decline rate pre/post 2016 ───────────────────────────────────────
-    for label, mask in [("pre", df_real["Datetime"].dt.year < 2016),
-                        ("post", df_real["Datetime"].dt.year >= 2016)]:
+    # ── EC50 decline rate pre/post SPLIT_DATE ─────────────────────────────────
+    for label, mask in [("pre", df_real["Datetime"] < SPLIT_DATE),
+                        ("post", df_real["Datetime"] >= SPLIT_DATE)]:
         sub = df_real[mask].copy()
         sub["t"] = (sub["Datetime"] - pd.Timestamp("2003-01-01")).dt.days
         if len(sub) >= 5:
@@ -1371,11 +1370,12 @@ def _tab_timeseries():
                         fillcolor="rgba(231,111,81,0.10)", line_width=0,
                     )
 
-            # 2016 split line — use add_shape (not add_vline, which breaks on
+            # SPLIT_DATE line — use add_shape (not add_vline, which breaks on
             # subplots with string x); one shape spanning the whole figure.
+            _split_str = f"{SPLIT_DATE:%Y-%m-%d}"
             fig.add_shape(
                 type="line",
-                x0="2016-01-01", x1="2016-01-01", y0=0, y1=1,
+                x0=_split_str, x1=_split_str, y0=0, y1=1,
                 xref="x", yref="paper",
                 line=dict(dash="dash", color="grey", width=1),
             )
@@ -1903,11 +1903,12 @@ def _tab_mhw_gametes():
                         mode="lines+markers", name="Mean EC50",
                         line=dict(color=OCEAN, width=2),
                     ), row=2, col=1)
-                    # 2016 line
+                    # SPLIT_DATE line — this chart is annual-resolution (x is
+                    # a bare year), so only the year survives here.
                     for row_i in [1, 2]:
                         yref = "y domain" if row_i == 1 else "y2 domain"
                         fig_ann.add_shape(
-                            type="line", x0=2016, x1=2016, y0=0, y1=1,
+                            type="line", x0=SPLIT_DATE.year, x1=SPLIT_DATE.year, y0=0, y1=1,
                             xref="x", yref=yref,
                             line=dict(dash="dash", color="grey", width=1),
                         )
@@ -1948,7 +1949,8 @@ def _tab_mhw_gametes():
                         )
 
                 # EC50 decline rate
-                st.subheader("EC50 decline rate: acceleration since 2016")
+                _split_lbl = f"{SPLIT_DATE:%b %Y}"
+                st.subheader(f"EC50 decline rate: acceleration since {_split_lbl}")
                 t_pre  = deep.get("trend_pre", {})
                 t_post = deep.get("trend_post", {})
                 if t_pre and t_post:
@@ -1959,7 +1961,7 @@ def _tab_mhw_gametes():
                         mode="markers", name="EC50 (real)",
                         marker=dict(color=OCEAN, size=5, opacity=0.5),
                     ))
-                    for label, td, color in [("Pre-2016", t_pre, COOL), ("Post-2016", t_post, WARM)]:
+                    for label, td, color in [(f"Pre-{_split_lbl}", t_pre, COOL), (f"Post-{_split_lbl}", t_post, WARM)]:
                         sub2 = td["df"]
                         x0, x1 = sub2["Datetime"].min(), sub2["Datetime"].max()
                         y0 = td["intercept"] + td["slope_yr"] / 365 * (x0 - pd.Timestamp("2003-01-01")).days
@@ -1971,9 +1973,9 @@ def _tab_mhw_gametes():
                             name=f"{label}: {slope_sign}{td['slope_yr']:.2f} mg/L/yr (p={td['p']:.4f})",
                             line=dict(color=color, width=3),
                         ))
-                    fig_trend.add_vline(x="2016-01-01", line_dash="dash", line_color="grey")
+                    fig_trend.add_vline(x=f"{SPLIT_DATE:%Y-%m-%d}", line_dash="dash", line_color="grey")
                     fig_trend.update_layout(
-                        title="EC50 trend: stable pre-2016 → rapid decline post-2016",
+                        title=f"EC50 trend: stable pre-{_split_lbl} → rapid decline post-{_split_lbl}",
                         xaxis_title="Year", yaxis_title="EC50 (mg/L)",
                         height=420,
                         legend=dict(orientation="h", yanchor="bottom", y=1.01),
@@ -1982,9 +1984,9 @@ def _tab_mhw_gametes():
                     _dl_btn(real_ec50[["Datetime", "EC50"]], f"ec50_trend_{_yr_start}_{_yr_end}.csv", "⬇ EC50 trend data (CSV)")
 
                     col1, col2, col3 = st.columns(3)
-                    col1.metric("Pre-2016 rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
+                    col1.metric(f"Pre-{_split_lbl} rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
                                 delta="p = {:.4f}".format(t_pre["p"]))
-                    col2.metric("Post-2016 rate", f"{t_post['slope_yr']:+.2f} mg/L/yr",
+                    col2.metric(f"Post-{_split_lbl} rate", f"{t_post['slope_yr']:+.2f} mg/L/yr",
                                 delta="p = {:.4f}".format(t_post["p"]))
                     accel = abs(t_post["slope_yr"]) / max(abs(t_pre["slope_yr"]), 0.01)
                     col3.metric("Acceleration factor", f"{accel:.1f}×")
@@ -2343,8 +2345,10 @@ def _tab_pre_post_split():
 def _tab_correlations():
         st.header("Spearman Correlation Matrices")
 
-        period_tab = st.radio("Period", ["All", "Pre-2016", "Post-2016"], horizontal=True)
-        label_map  = {"All": "all", "Pre-2016": "pre", "Post-2016": "post"}
+        _split_lbl = f"{SPLIT_DATE:%b %Y}"
+        pre_opt, post_opt = f"Pre-{_split_lbl}", f"Post-{_split_lbl}"
+        period_tab = st.radio("Period", ["All", pre_opt, post_opt], horizontal=True)
+        label_map  = {"All": "all", pre_opt: "pre", post_opt: "post"}
         lbl        = label_map[period_tab]
 
         corr_data = compute_correlations(df)
@@ -2733,14 +2737,14 @@ def _tab_regime_shift():
             disp = df_tl[[
                 "window_months", "detrended_spearman_r", "detrended_p", "p_fdr", "p_bonferroni",
                 "delta_r2", "partial_p_dose_given_time", "partial_p_fdr", "partial_p_bonferroni",
-                "dose_time_collinearity",
+                "dose_time_collinearity", "vif",
             ]].copy()
             disp.insert(1, "status", [status_map[w] for w in df_tl["window_months"]])
             disp.columns = [
                 "Window (months)", "Status", "Rank ρ (detrended)", "Rank p (raw)",
                 "Rank p (BH-FDR)", "Rank p (Bonferroni)", "ΔR² (dose over time)",
                 "OLS partial p (raw)", "OLS partial p (BH-FDR)", "OLS partial p (Bonferroni)",
-                "Dose–time collinearity",
+                "Dose–time collinearity", "VIF",
             ]
             st.dataframe(
                 disp.style.format({
@@ -2749,7 +2753,7 @@ def _tab_regime_shift():
                     "ΔR² (dose over time)": "{:.1%}",
                     "OLS partial p (raw)": "{:.4f}", "OLS partial p (BH-FDR)": "{:.4f}",
                     "OLS partial p (Bonferroni)": "{:.4f}",
-                    "Dose–time collinearity": "{:.2f}",
+                    "Dose–time collinearity": "{:.2f}", "VIF": "{:.2f}",
                 }),
                 hide_index=True, use_container_width=True,
             )

@@ -23,6 +23,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
+from climate_change_on_sea_urchins.common import SPLIT_DATE
+
 ROOT = Path(__file__).resolve().parent.parent
 RESULTS = ROOT / "results"
 
@@ -49,9 +51,9 @@ for col, c in [("EC50", C_NOM), ("EC50_bio_lit", C_BIO)]:
     m, b = np.polyfit(xt, d[col].values, 1)
     ax1.plot(d["Datetime"], m * xt + b, color=c, lw=2, zorder=4)
 
-ax1.axvline(pd.Timestamp("2016-01-01"), color="grey", ls="--", lw=1)
-ax1.text(pd.Timestamp("2016-02-01"), ax1.get_ylim()[1] * 0.96, "2016",
-         color="grey", fontsize=8, va="top")
+ax1.axvline(SPLIT_DATE, color="grey", ls="--", lw=1)
+ax1.text(SPLIT_DATE + pd.DateOffset(months=1), ax1.get_ylim()[1] * 0.96,
+         f"{SPLIT_DATE:%Y}", color="grey", fontsize=8, va="top")
 ax1.set_ylabel("Copper EC50 (µg L⁻¹)")
 ax1.set_xlabel("Year")
 ax1.set_title("(a) Correcting for Cu speciation barely shifts the decline",

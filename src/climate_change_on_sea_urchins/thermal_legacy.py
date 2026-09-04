@@ -106,6 +106,11 @@ def run():
         raw_r, raw_p = stats.spearmanr(dose, y)
         det_r, det_p = _detrended_corr(dose, y, t)
         collin = float(stats.spearmanr(dose, t)[0])
+        # Variance inflation factor for a two-predictor (time, dose) model:
+        # exact from the collinearity above, VIF = 1/(1-r^2) -- do not
+        # recompute r with a different "time" (e.g. row index instead of
+        # date), which shifts VIF materially.
+        vif = float(1.0 / (1.0 - collin ** 2))
 
         X_t = sm.add_constant(t)
         X_td = sm.add_constant(np.column_stack([t, dose]))
@@ -117,6 +122,7 @@ def run():
             "raw_spearman_r": float(raw_r), "raw_p": float(raw_p),
             "detrended_spearman_r": det_r, "detrended_p": det_p,
             "dose_time_collinearity": collin,
+            "vif": vif,
             "r2_time_only": float(r2_t),
             "r2_time_plus_dose": float(fit_td.rsquared),
             "delta_r2": float(fit_td.rsquared - r2_t),

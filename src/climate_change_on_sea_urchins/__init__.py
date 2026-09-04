@@ -23,12 +23,13 @@ equivalently, after installing the package, from the command line::
 """
 import threading
 
-from .common import load_data, SPLIT_YEAR, TAU_MAX, ENV_COLS, ALL_COLS, MHW_COLS
+from .common import load_data, SPLIT_DATE, SPLIT_YEAR, TAU_MAX, ENV_COLS, ALL_COLS, MHW_COLS
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 __all__ = [
     "load_data",
+    "SPLIT_DATE",
     "SPLIT_YEAR",
     "TAU_MAX",
     "ENV_COLS",
