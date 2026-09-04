@@ -1123,15 +1123,19 @@ def _tab_overview():
         c5.metric("Months with MHW", int((df["mhw_days"] > 0).sum()))
 
         # Map
-        fig_map = go.Figure(go.Scattermapbox(
+        # Scattermap/layout.map (not the legacy Scattermapbox/layout.mapbox):
+        # plotly 7.0 removed the old Mapbox-branded traces entirely, and
+        # requirements.txt pins no upper bound, so Streamlit Cloud picks up
+        # new plotly releases automatically.
+        fig_map = go.Figure(go.Scattermap(
             lat=[SITE["lat"]], lon=[SITE["lon"]],
             mode="markers+text",
             marker=dict(size=14, color=OCEAN),
             text=[SITE["name"]], textposition="top right",
         ))
         fig_map.update_layout(
-            mapbox=dict(style="carto-positron", zoom=7,
-                        center=dict(lat=SITE["lat"], lon=SITE["lon"])),
+            map=dict(style="carto-positron", zoom=7,
+                     center=dict(lat=SITE["lat"], lon=SITE["lon"])),
             height=350, margin=dict(l=0, r=0, t=0, b=0),
         )
         st.plotly_chart(fig_map, use_container_width=True)
