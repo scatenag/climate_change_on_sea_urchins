@@ -35,12 +35,28 @@ besides EC50 here, it is meant for reuse on the negative-control series and
 on the annual MHW metric.
 
 Applied here to the two EC50 representations cited in the manuscript: the
-full-resolution ordinal sequence of individual bioassay determinations
-(data/ec50_raw.csv) and the monthly regularised series (data/ec50_sheets.csv,
-163 months with >=1 real determination). The two agree on the YEAR of the
-break (2016) but not the MONTH (June vs September) -- this is the reported
-finding, not a discrepancy to reconcile; do not tune parameters to force
-agreement.
+monthly regularised series (data/ec50_sheets.csv, 163 months with >=1 real
+determination) and the full-resolution ordinal sequence of individual
+bioassay determinations (data/ec50_raw.csv). The manuscript treats the
+monthly series as the primary changepoint analysis (fully reproducible: its
+163 dates are unique, so its order is unambiguous) and the ordinal sequence
+as a secondary check that does not resolve the month.
+
+The ordinal sequence is NOT a well-defined object on its own: many
+determinations record only the month, so ~110 of the 295 rows share a
+Datetime with at least one other row, and their relative order is not
+implied by the data. Sorting by Datetime alone leaves that order to
+whatever the sort implementation does with ties -- which is not guaranteed
+stable across pandas versions, and differs from one arbitrary choice to
+another rather than converging on a single "true" order (verified: phi
+ranged 0.246-0.315 and the winning break-month split 65/35 between
+September and June across 300 random within-date permutations). This
+module therefore requires data/ec50_raw.csv to be sorted by (Datetime, ID)
+-- ID being the source sheet's own row order, the only tiebreaker available
+that isn't itself arbitrary -- and fails loudly if it isn't (see run()).
+This fixes reproducibility (same input -> same output, always) but does
+NOT make the resulting break-month meaningful on its own; only the YEAR is
+treated as a finding here, consistently with the manuscript.
 
 regime_shift.py is untouched: its own Pettitt break stays where it is, and
 uses its own (0-indexed) convention, unrelated to the internal auxiliary
@@ -200,7 +216,7 @@ def qlr_ar1_changepoint(y, trim=TRIM, B=DEFAULT_B, seed=DEFAULT_SEED):
     }
 
 
-def _apply_to_dated_series(dates, values, B, seed):
+def _apply_to_dated_series(dates, values, B, seed, ordering=None):
     dates = pd.to_datetime(pd.Series(dates)).reset_index(drop=True)
     res = qlr_ar1_changepoint(values, B=B, seed=seed)
 
@@ -208,7 +224,7 @@ def _apply_to_dated_series(dates, values, B, seed):
         idx = min(max(idx, 0), len(dates) - 1)
         return dates.iloc[idx].date().isoformat()
 
-    return {
+    out = {
         "n": res["n"],
         "phi": res["phi"],
         "F_max": res["F_max"],
@@ -220,24 +236,45 @@ def _apply_to_dated_series(dates, values, B, seed):
         "B": res["B"],
         "seed": res["seed"],
     }
+    if ordering is not None:
+        out["ordering"] = ordering
+    return out
 
 
 def run(B=DEFAULT_B, seed=DEFAULT_SEED):
-    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"]) \
-            .sort_values("Datetime").reset_index(drop=True)
+    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
+    if "ID" not in raw.columns:
+        raise ValueError(
+            "data/ec50_raw.csv is missing the ID column -- re-run "
+            "scripts/fetch_ec50.py. Many determinations share a Datetime "
+            "(month-only dates), so ID (the source sheet's row order) is "
+            "required to give the ordinal sequence a reproducible order; "
+            "sorting by Datetime alone is not enough (see module docstring)."
+        )
+    # (Datetime, ID), not Datetime alone -- see module docstring: ~110 of
+    # 295 rows tie on Datetime, and that tie order changes phi/F/the winning
+    # break by enough to matter (measured: phi 0.246-0.315, break split
+    # 65/35 between September/June across 300 random within-date orderings).
+    raw = raw.sort_values(["Datetime", "ID"]).reset_index(drop=True)
     monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"]) \
-                .sort_values("Datetime").reset_index(drop=True)
+                .sort_values("Datetime").reset_index(drop=True)  # months are unique, no tie issue
 
     summary = {
-        "ordinal_sequence": _apply_to_dated_series(raw["Datetime"], raw["EC50"].values, B, seed),
+        "ordinal_sequence": _apply_to_dated_series(
+            raw["Datetime"], raw["EC50"].values, B, seed, ordering="Datetime, then ID"),
         "monthly_series": _apply_to_dated_series(monthly["Datetime"], monthly["EC50"].values, B, seed),
         "note": (
-            "Two representations of the same EC50 series. They agree on the "
-            "YEAR of the break (2016) but not necessarily the MONTH -- the "
-            "F-statistic profile is nearly flat across several months around "
-            "the true break, so the exact winning candidate is sensitive to "
-            "which representation is used. This is a reported property of "
-            "the data, not an error to reconcile between the two rows."
+            "The monthly series is the primary changepoint analysis: its 163 "
+            "dates are unique, so its order (and therefore phi/F/break) is "
+            "unambiguous and fully reproducible. The ordinal (full-resolution) "
+            "sequence is a secondary check only: ~110 of its 295 rows share a "
+            "Datetime (many determinations record only the month), so its "
+            "order is not implied by the data and requires the explicit "
+            "(Datetime, ID) tiebreak above to even be reproducible -- with "
+            "that fixed, it still does not resolve the break-MONTH (it is "
+            "sensitive to which of many equally-valid tie orders is chosen; "
+            "see module docstring), only the YEAR (2016) is a stable finding "
+            "across representations and orderings tested."
         ),
     }
 

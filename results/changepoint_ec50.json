@@ -1,15 +1,16 @@
 {
   "ordinal_sequence": {
     "n": 295,
-    "phi": 0.2876265181601812,
-    "F_max": 347.3566273664323,
+    "phi": 0.30960402015152966,
+    "F_max": 329.45677815386165,
     "break_index": 177,
     "break_date": "2016-09-01",
     "p_value": 0.0003332222592469177,
-    "ci90_lo_date": "2016-06-01",
+    "ci90_lo_date": "2016-05-01",
     "ci90_hi_date": "2016-10-01",
     "B": 3000,
-    "seed": 0
+    "seed": 0,
+    "ordering": "Datetime, then ID"
   },
   "monthly_series": {
     "n": 163,
@@ -23,5 +24,5 @@
     "B": 3000,
     "seed": 0
   },
-  "note": "Two representations of the same EC50 series. They agree on the YEAR of the break (2016) but not necessarily the MONTH -- the F-statistic profile is nearly flat across several months around the true break, so the exact winning candidate is sensitive to which representation is used. This is a reported property of the data, not an error to reconcile between the two rows."
+  "note": "The monthly series is the primary changepoint analysis: its 163 dates are unique, so its order (and therefore phi/F/break) is unambiguous and fully reproducible. The ordinal (full-resolution) sequence is a secondary check only: ~110 of its 295 rows share a Datetime (many determinations record only the month), so its order is not implied by the data and requires the explicit (Datetime, ID) tiebreak above to even be reproducible -- with that fixed, it still does not resolve the break-MONTH (it is sensitive to which of many equally-valid tie orders is chosen; see module docstring), only the YEAR (2016) is a stable finding across representations and orderings tested."
 }

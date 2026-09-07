@@ -7,9 +7,14 @@ Input:  Google Sheets (public export URL)
 Output: data/ec50_sheets.csv
         Columns: Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n
         data/ec50_raw.csv
-        Columns: Datetime, EC50 — one row per bioassay determination
+        Columns: Datetime, ID, EC50 — one row per bioassay determination
         (full resolution, not aggregated to month), used by changepoint.py's
-        ordinal-sequence representation.
+        ordinal-sequence representation. Only the MONTH is recorded for many
+        determinations, so a large fraction of rows share a Datetime; ID
+        (the sheet's own row order) is kept specifically to give that
+        ordinal sequence a well-defined, reproducible order -- sort by
+        (Datetime, ID), never by Datetime alone (ties would otherwise
+        resolve arbitrarily, and differently across pandas versions/runs).
 """
 
 import sys
@@ -89,9 +94,14 @@ def main():
     # Full-resolution per-determination cache (one row per bioassay, real
     # DATE not normalized to first-of-month) — same fetch, no extra network
     # call, kept in sync automatically since this script already runs daily.
+    # Sorted by (Datetime, ID): many rows share a Datetime (month-only
+    # dates), so ID (the sheet's own row order) is the tiebreaker that
+    # makes this order reproducible -- sorting by Datetime alone leaves
+    # same-date rows in an order that depends on pandas' sort implementation
+    # and is not guaranteed stable across versions.
     per_assay = raw.copy()
     per_assay["Datetime"] = pd.to_datetime(per_assay["DATE"], dayfirst=False)
-    per_assay = per_assay[["Datetime", "EC50"]].sort_values("Datetime").reset_index(drop=True)
+    per_assay = per_assay[["Datetime", "ID", "EC50"]].sort_values(["Datetime", "ID"]).reset_index(drop=True)
     per_assay.to_csv(RAW_OUT_PATH, index=False)
     print(f"Saved {len(per_assay)} per-determination rows to {RAW_OUT_PATH}")
 
