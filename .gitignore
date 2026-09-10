@@ -27,6 +27,7 @@ trend_*.csv
 
 # Claude Code IDE config
 .claude/
+CLAUDE.local.md
 
 # Local drafts (papers, notes) — not for public repo
 drafts/
