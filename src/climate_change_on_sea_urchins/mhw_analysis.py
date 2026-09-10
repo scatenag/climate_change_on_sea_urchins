@@ -185,7 +185,9 @@ def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                gc = grangercausalitytests(data[["y", "x"]], maxlag=TAU_MAX, verbose=False)
+                # No verbose= kwarg: removed in recent statsmodels, and passing
+                # it there raises TypeError instead of a deprecation warning.
+                gc = grangercausalitytests(data[["y", "x"]], maxlag=TAU_MAX)
             p_raw = {lag: float(gc[lag][0]["ssr_ftest"][1]) for lag in range(1, TAU_MAX + 1)}
             p_fdr_arr = multipletests(list(p_raw.values()), method="fdr_bh")[1]
             p_fdr = {lag: float(p) for lag, p in zip(p_raw.keys(), p_fdr_arr)}
