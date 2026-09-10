@@ -19,6 +19,7 @@ call out PHYSICAL_BOUNDS explicitly if/when literature-sourced bounds
 become available (see project discussion with A. Gaion, 2026-07).
 """
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -26,6 +27,8 @@ import pandas as pd
 import pytest
 
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
+from config import CO2_PA_TO_UATM
 
 # (min, max) — generous margin around the observed 2003-2025 range, wide
 # enough to tolerate genuine future extremes (continued warming, a record
@@ -36,7 +39,7 @@ PHYSICAL_BOUNDS = {
     "Salinity":    (36.5, 39.5),     # PSU
     "pH":          (7.6, 8.3),       # total scale
     "O2":          (190.0, 290.0),   # dissolved oxygen, model units
-    "CO2":         (15.0, 80.0),     # model units
+    "CO2":         (250.0, 700.0),   # uatm; monthly values incl. seasonal cycle (observed 303.5-581.5)
     "EC50":        (1.0, 100.0),     # mg/L, sea urchin fertilization bioassay
 }
 
@@ -208,6 +211,11 @@ def test_ccf_results_bounded(fname):
 # refresh that silently breaks this consistency (e.g. a Copernicus product
 # change) fails CI instead of only being visible to whoever happens to
 # re-run build_dataset.py locally and read its stdout.
+#
+# data/env_copernicus.csv's CO2 is already in uatm (converted at ingestion,
+# see config.CO2_PA_TO_UATM); data/data.csv's original CO2 column turned out
+# to be in the same raw Pa unit, so the same conversion is applied to it here
+# too, in memory only — data/data.csv itself is never modified on disk.
 # ---------------------------------------------------------------------------
 
 def test_co2_cross_check_ratio_near_one():
@@ -216,6 +224,7 @@ def test_co2_cross_check_ratio_near_one():
     orig.columns = orig.columns.str.strip()
     orig = orig.rename(columns={"CO2_Con": "CO2"})
     orig["Datetime"] = pd.to_datetime(orig["date"], dayfirst=True)
+    orig["CO2"] = orig["CO2"] * CO2_PA_TO_UATM
 
     merged = pd.merge(
         env[["Datetime", "CO2"]],
@@ -229,6 +238,37 @@ def test_co2_cross_check_ratio_near_one():
         f"Copernicus/original CO2 ratio drifted to {ratio:.2f} (expected ~1.0) — "
         "the two series are no longer consistent, see README 'CO2 unit note'"
     )
+
+
+# ---------------------------------------------------------------------------
+# CO2 annual-mean sanity check — actually verifies the *unit*, not just
+# physical plausibility.
+#
+# PHYSICAL_BOUNDS["CO2"] above (250-700 uatm) has to tolerate the ~280 uatm
+# seasonal swing visible in monthly values, which is too wide a window to
+# catch some real unit bugs. Annual means smooth that swing out: a genuine
+# Mediterranean surface pCO2 series averages ~370-450 uatm per year with a
+# mild upward trend (rising atmospheric/surface-ocean CO2 over 2003-2025).
+# This is also, concretely, the guard against the Pa->uatm factor being
+# applied twice by a future edit (env_copernicus.csv already converted, plus
+# a second pass in fetch_copernicus.py or build_dataset.py): that mistake
+# would put annual means around ~4000 uatm, comfortably outside [370, 450]
+# but potentially still inside the wider monthly PHYSICAL_BOUNDS range.
+# ---------------------------------------------------------------------------
+
+def test_co2_annual_mean_in_range_with_positive_trend():
+    df = _read("data_extended.csv")
+    annual = df.set_index("Datetime")["CO2"].resample("YS").mean().dropna()
+    assert len(annual) > 5, "not enough annual CO2 means to check a trend"
+
+    out_of_range = annual[(annual < 370.0) | (annual > 450.0)]
+    assert out_of_range.empty, (
+        f"CO2 annual mean(s) outside [370, 450] uatm: {out_of_range.round(1).to_dict()} — "
+        "likely a unit-conversion bug (e.g. Pa->uatm applied twice would give ~4000 uatm)"
+    )
+
+    slope, _ = np.polyfit(annual.index.year.values.astype(float), annual.values, 1)
+    assert slope > 0, f"CO2 annual mean trend is not positive (slope={slope:.3f} uatm/yr)"
 
 
 # ---------------------------------------------------------------------------

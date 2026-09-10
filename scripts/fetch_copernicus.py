@@ -29,11 +29,11 @@ Fallback datasets (MEDSEA_ANALYSISFORECAST) for months not yet in multiyear:
     CO2:         cmems_mod_med_bgc-co2_anfc_4.2km_P1M-m
 
 NOTE on CO2 units:
-    The original data.csv CO2 column has values ~33–58 (unit unknown).
-    Copernicus provides surface pCO2 (spco2) in µatm; Mediterranean values
-    are typically ~380–450 µatm. These are likely DIFFERENT quantities.
-    A cross-check against the original data overlap period is MANDATORY
-    before using this column. See build_dataset.py for the check.
+    Copernicus's spco2 is actually delivered in Pascal, not the µatm its CF
+    metadata implies (confirmed via cross-check against the original data.csv
+    overlap period, once the same conversion is applied to both — see
+    build_dataset.py::cross_check_co2). Converted to µatm at ingestion here
+    using config.CO2_PA_TO_UATM.
 """
 
 import sys
@@ -44,7 +44,7 @@ import numpy as np
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import SITE_LAT, SITE_LON, BBOX_DELTA
+from config import SITE_LAT, SITE_LON, BBOX_DELTA, CO2_PA_TO_UATM
 
 # ── Acquisition window (site itself is configured in config.py) ───────────────
 DEPTH_MIN = 0.0
@@ -179,13 +179,15 @@ def build_env_dataframe() -> pd.DataFrame:
         "so": "Salinity",
         "o2": "O2",
         "ph": "pH",
-        "spco2": "CO2",   # ⚠️ unit: µatm — cross-check against original data.csv required
+        "spco2": "CO2",   # Pa, not µatm — converted right below
     }
     df = df.rename(columns=rename_map)
 
-    # Add a note column for CO2 unit tracking
-    print("\n⚠️  CO2 (spco2) unit: µatm. Original data.csv CO2 values are ~33–58 (unit unknown).")
-    print("    Cross-check required before using CO2 column. See build_dataset.py.\n")
+    # Copernicus's spco2 is delivered in Pascal — convert to µatm (see the
+    # module docstring's NOTE on CO2 units).
+    df["CO2"] = df["CO2"] * CO2_PA_TO_UATM
+    print(f"\nCO2: converted Pa → µatm (×{CO2_PA_TO_UATM:.4f}), "
+          f"range now {df['CO2'].min():.1f}–{df['CO2'].max():.1f} µatm.\n")
 
     return df
 

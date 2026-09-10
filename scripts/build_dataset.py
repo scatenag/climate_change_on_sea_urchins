@@ -14,9 +14,13 @@ Run AFTER:
     python scripts/fetch_copernicus.py
 """
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import CO2_PA_TO_UATM
 
 ROOT = Path(__file__).parent.parent
 ENV_PATH  = ROOT / "data" / "env_copernicus.csv"
@@ -40,9 +44,17 @@ def load_inputs():
 
 def cross_check_co2(env: pd.DataFrame, orig: pd.DataFrame):
     """
-    Compare CO2 values in the overlap period between Copernicus and original data.
-    Prints statistics to help decide whether the CO2 columns are compatible.
+    Compare CO2 values in the overlap period between Copernicus (already in
+    µatm, converted at ingestion — see scripts/fetch_copernicus.py) and the
+    original data.csv (Sartori et al. 2023), whose CO2 column turned out to
+    be in the same Pa unit as Copernicus's raw spco2. Applied here in memory
+    only — data/data.csv itself is kept as the untouched original reference.
+    Prints statistics to help confirm the two series agree once both are in
+    µatm.
     """
+    orig = orig.copy()
+    orig["CO2"] = orig["CO2"] * CO2_PA_TO_UATM
+
     merged = pd.merge(
         env[["Datetime", "CO2"]],
         orig[["Datetime", "CO2"]].rename(columns={"CO2": "CO2_orig"}),
@@ -55,19 +67,17 @@ def cross_check_co2(env: pd.DataFrame, orig: pd.DataFrame):
         return
 
     ratio = merged["CO2"] / merged["CO2_orig"]
-    print("\n── CO2 Cross-Check (Copernicus spco2 µatm vs original) ──────────────")
+    print("\n── CO2 Cross-Check (Copernicus vs original, both converted Pa → µatm) ──")
     print(f"  Overlap period: {merged['Datetime'].min().date()} → {merged['Datetime'].max().date()}")
     print(f"  Copernicus CO2 (µatm): mean={merged['CO2'].mean():.1f}, range=[{merged['CO2'].min():.1f}, {merged['CO2'].max():.1f}]")
-    print(f"  Original CO2:          mean={merged['CO2_orig'].mean():.1f}, range=[{merged['CO2_orig'].min():.1f}, {merged['CO2_orig'].max():.1f}]")
+    print(f"  Original CO2 (µatm):   mean={merged['CO2_orig'].mean():.1f}, range=[{merged['CO2_orig'].min():.1f}, {merged['CO2_orig'].max():.1f}]")
     print(f"  Ratio (Cop/Orig):      mean={ratio.mean():.2f}, std={ratio.std():.2f}")
     print("─" * 67)
 
     if abs(ratio.mean() - 1.0) < 0.05:
         print("  ✓ Units appear compatible (ratio ≈ 1).")
-    elif abs(ratio.mean() - 10.0) < 2.0:
-        print("  ⚠️  Ratio ≈ 10. Copernicus CO2 may need to be divided by 10.")
     else:
-        print(f"  ⚠️  Ratio = {ratio.mean():.1f}. Manual unit inspection required.")
+        print(f"  ⚠️  Ratio = {ratio.mean():.1f}, expected ≈ 1. Manual unit inspection required.")
     print()
 
 

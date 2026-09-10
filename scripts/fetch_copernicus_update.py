@@ -25,11 +25,19 @@ import pandas as pd
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import SITE_LAT, SITE_LON, BBOX_DELTA
+from config import SITE_LAT, SITE_LON, BBOX_DELTA, CO2_PA_TO_UATM
 
 # ── Acquisition window (site itself is configured in config.py) ───────────────
 DEPTH_MIN  = 0.0
 DEPTH_MAX  = 10.0
+
+# Physical plausibility range in µatm, post-conversion — mirrors
+# tests/test_data_quality.py's PHYSICAL_BOUNDS["CO2"]. This is the script
+# that runs unattended every month; a value outside this range means the
+# conversion (or the upstream product) is broken and must not reach
+# data/env_copernicus.csv silently — the same unattended, hard-to-notice
+# pattern let a wrong-site SST bug propagate for months (commit 09b928a).
+CO2_PHYSICAL_RANGE_UATM = (250.0, 700.0)
 
 OUT_PATH = Path(__file__).parent.parent / "data" / "env_copernicus.csv"
 
@@ -80,6 +88,15 @@ def fetch_variable(cfg: dict, start: str, end: str) -> pd.Series:
                 s = da.to_series()
                 s.index = pd.to_datetime(s.index).to_period("M").to_timestamp()
                 s.name = cfg["column"]
+                if cfg["variable"] == "spco2":
+                    s = s * CO2_PA_TO_UATM   # Pa -> µatm, see config.CO2_PA_TO_UATM
+                    if not s.between(*CO2_PHYSICAL_RANGE_UATM).all():
+                        raise ValueError(
+                            f"CO2 out of physical range after Pa→µatm conversion "
+                            f"({s.min():.1f}–{s.max():.1f} µatm, expected "
+                            f"{CO2_PHYSICAL_RANGE_UATM}) — aborting before writing to "
+                            f"{OUT_PATH.name}"
+                        )
                 print(f"  [{cfg['name']}] {dataset_id}: {len(s)} months fetched")
                 return s.sort_index()
         except Exception as e:

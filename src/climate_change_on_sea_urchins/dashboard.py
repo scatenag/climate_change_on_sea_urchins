@@ -1167,15 +1167,16 @@ def _tab_overview():
                 "equivalent MEDSEA_ANALYSISFORECAST near-real-time product (same variables)."
             )
             st.info(
-                "CO₂ unit note: an automated cross-check (`scripts/build_dataset.py::"
-                "cross_check_co2`, also enforced in `tests/test_data_quality.py`) confirms the "
-                "Copernicus-derived CO₂ series and the original 2003–2022 series (Sartori et al. "
-                "2023) agree closely over their 19-year overlap (ratio 0.99 ± 0.01) — internally "
-                "consistent. The absolute unit inherited from Copernicus's `spco2` variable "
-                "(nominally µatm) is not independently verified beyond this consistency check, "
-                "since both series read ~31–58 rather than the ~380–450 µatm typical of "
-                "Mediterranean surface pCO₂; treat the CO₂ series as a reliable internal signal "
-                "(trends, correlations) rather than an absolute reference value."
+                "CO₂ unit note: Copernicus's `spco2` is delivered in Pascal, not the µatm its "
+                "CF metadata implies — confirmed by an automated cross-check "
+                "(`scripts/build_dataset.py::cross_check_co2`, also enforced in "
+                "`tests/test_data_quality.py`) against the original 2003–2022 series (Sartori "
+                "et al. 2023), whose CO₂ column turned out to be in the same raw unit. Both are "
+                "converted to µatm (factor 1e6/101325, see `config.CO2_PA_TO_UATM`) — "
+                "Copernicus at ingestion, the original series only in memory for the "
+                "cross-check. Post-conversion the two agree closely over their 19-year overlap "
+                "(ratio 0.99 ± 0.01) and read ~370–450 µatm, in line with typical Mediterranean "
+                "surface pCO₂."
             )
             st.markdown(
                 "**Marine heatwave detection**: Hobday et al. (2016) method — 90th-percentile "
