@@ -2003,6 +2003,7 @@ def _tab_mhw_gametes():
                 granger = load_json("granger_results.json")
                 if granger:
                     rows = []
+                    failed = []
                     for var, lag_data in granger.items():
                         if isinstance(lag_data, dict) and lag_data and "error" not in lag_data:
                             p_raw = lag_data.get("p", {})
@@ -2012,6 +2013,14 @@ def _tab_mhw_gametes():
                                     variable=var, lag=int(lag), p_value=float(p),
                                     p_fdr=float(p_fdr[lag]) if lag in p_fdr else np.nan,
                                 ))
+                        elif isinstance(lag_data, dict) and "error" in lag_data:
+                            failed.append((var, lag_data["error"]))
+                    if failed:
+                        st.warning(
+                            "Granger causality failed for " +
+                            ", ".join(f"**{v}** ({e})" for v, e in failed) +
+                            " — results/granger_results.json needs regenerating."
+                        )
                     gdf = pd.DataFrame(rows)
                     if not gdf.empty:
                         pivot = gdf.pivot(index="variable", columns="lag", values="p_value")
