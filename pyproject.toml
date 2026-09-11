@@ -10,9 +10,9 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Guido Scatena", email = "guido.scatena@unipi.it" },
-    { name = "Andrea Gaion" },
-    { name = "Davide Sartori" },
+    { name = "Guido Scatena", email = "guido.scatena@isprambiente.it" },
+    { name = "Andrea Gaion" , email = "andrea.gaion@isprambiente.it" },
+    { name = "Davide Sartori" , email = "davide.scartori@isprambiente.it" },
 ]
 keywords = [
     "marine heatwaves",
