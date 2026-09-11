@@ -61,7 +61,7 @@ df_full, df_real, events, monthly = load_data()
 | File / Folder | Description |
 |---|---|
 | [`pyproject.toml`](pyproject.toml) | Package metadata, dependencies, console-script entry points |
-| [`src/climate_change_on_sea_urchins/`](src/climate_change_on_sea_urchins/) | The installable package: `mhw_detection`, `timeseries`, `period_split`, `correlations`, `stationarity`, `mhw_analysis`, `mhw_lag_extra` (SEA + mixed-effects, Python port of the former R analyses), `mhw_robustness` (5-method robustness battery), `forecast` + `common.py` (shared data loading) + `pipeline.py` (orchestrates all of the above) + `dashboard.py` (the Streamlit app) |
+| [`src/climate_change_on_sea_urchins/`](src/climate_change_on_sea_urchins/) | The installable package: `mhw_detection`, `timeseries`, `period_split`, `correlations`, `stationarity`, `mhw_analysis`, `mhw_lag_extra` (SEA + mixed-effects, Python port of the former R analyses), `mhw_robustness` (5-method robustness battery), `thermal_legacy` (+ its threshold sensitivity sweep, Table S2), `changepoint` (QLR/AR(1) breakpoint), `negative_control` (assay QC-series check), `mhw_lag_annual`, `mhw_annual_changepoint` (exploratory, currently unresolved — see below), `forecast` + `common.py` (shared data loading) + `pipeline.py` (orchestrates all of the above) + `dashboard.py` (the Streamlit app) |
 | [`config.py`](config.py) | Single source of truth for site coordinates and the EC50 data-source URL — edit this to adapt the framework (see [`docs/ADAPTING.md`](docs/ADAPTING.md)) |
 | [`app.py`](app.py) | Thin entry point (`import climate_change_on_sea_urchins.dashboard`) — kept so `streamlit run app.py` and the existing Streamlit Community Cloud deployment work unchanged |
 | [`scripts/`](scripts/) | Data download scripts (Copernicus Marine, EC50 from Google Sheets) — standalone, not part of the installable package since they require Copernicus credentials |
@@ -179,3 +179,21 @@ analysis pipeline within their valid mathematical range. It does **not** certify
 scientific accuracy of the upstream Copernicus reanalysis or of the EC50 bioassay itself — those
 remain the responsibility of the original data providers (CMEMS, ISPRA) and standard scientific
 peer review. See [`tests/test_data_quality.py`](tests/test_data_quality.py) for the exact checks.
+
+## Reproducing the manuscript's published numbers
+
+The manuscript points to this package as an independent means of verifying its results.
+[`tests/test_paper_values.py`](tests/test_paper_values.py) checks, with a declared tolerance,
+that the pipeline reproduces the published values for:
+
+| Section | Output | What it checks |
+|---|---|---|
+| 3.1 (trial-level pre/post contrast) | [`results/period_contrast_raw.json`](results/period_contrast_raw.json) | n/mean/SD/median/Mann-Whitney on the 295 individual EC50 determinations, split at `SPLIT_DATE` |
+| 3.5, 2nd paragraph (annual MHW-metric changepoint) | [`results/mhw_annual_changepoint.json`](results/mhw_annual_changepoint.json) | **Unresolved** — every (metric, year-range) variant tried is recorded, none reproduces the manuscript's four reference values together; see the module's own docstring |
+| 3.6 (negative control) | [`results/negative_control.json`](results/negative_control.json) | Trend, pre/post level and dispersion, and an independent QLR/AR(1) changepoint search on the assay's own negative-control series — plus a data-quality check for single-replicate outliers |
+| Table S2 (thermal threshold sensitivity) | [`results/thermal_threshold_sensitivity.csv`](results/thermal_threshold_sensitivity.csv) | Same detrended/partial tests as the primary 24°C thermal-legacy analysis, swept over 22–26°C |
+
+Not every published number is reproduced exactly — where a check surfaced a real discrepancy
+(a source-data outlier, a stale split-date carried over from an earlier draft, an unresolved
+metric definition), the corresponding output records the discrepancy explicitly rather than
+silently matching it. See each output's own `note`/`status` fields for details.

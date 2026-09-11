@@ -2,19 +2,27 @@
 Fetch EC50 data from Google Sheets and aggregate to monthly time series.
 
 Input:  Google Sheets (public export URL)
-        Columns: ID, DATE, EC50, UL, LL, pos, neg
+        Columns: ID, DATE, EC50, UL, LL, pos, neg, SRT DATE,
+                 Replica I/II/III CTRL negativo (malformed)
 
 Output: data/ec50_sheets.csv
         Columns: Datetime, EC50, EC50_ci_upper, EC50_ci_lower, EC50_n
         data/ec50_raw.csv
-        Columns: Datetime, ID, EC50 — one row per bioassay determination
-        (full resolution, not aggregated to month), used by changepoint.py's
+        Columns: Datetime, ID, EC50, ctrl_neg_rep1, ctrl_neg_rep2,
+        ctrl_neg_rep3 — one row per bioassay determination (full
+        resolution, not aggregated to month), used by changepoint.py's
         ordinal-sequence representation. Only the MONTH is recorded for many
         determinations, so a large fraction of rows share a Datetime; ID
         (the sheet's own row order) is kept specifically to give that
         ordinal sequence a well-defined, reproducible order -- sort by
         (Datetime, ID), never by Datetime alone (ties would otherwise
         resolve arbitrarily, and differently across pandas versions/runs).
+        The three ctrl_neg_rep* columns are the assay's negative-control
+        replicates (percent malformed larvae out of 100 examined) — fields
+        of the trial, not a separate series; used by negative_control.py.
+        They are NaN for trials where the validity criterion's supporting
+        data was not recorded (present for 232 of 295 trials) -- these NaNs
+        are informative and must not be filled.
 """
 
 import sys
@@ -99,9 +107,21 @@ def main():
     # makes this order reproducible -- sorting by Datetime alone leaves
     # same-date rows in an order that depends on pandas' sort implementation
     # and is not guaranteed stable across versions.
+    #
+    # ctrl_neg_rep1/2/3: the three negative-control replicates, kept as
+    # trial fields (same Datetime/ID as the determination itself) rather
+    # than a separate cache, since they have no independent timeline of
+    # their own -- see negative_control.py.
     per_assay = raw.copy()
     per_assay["Datetime"] = pd.to_datetime(per_assay["DATE"], dayfirst=False)
-    per_assay = per_assay[["Datetime", "ID", "EC50"]].sort_values(["Datetime", "ID"]).reset_index(drop=True)
+    per_assay = per_assay.rename(columns={
+        "Replica I CTRL negativo (malformed)":   "ctrl_neg_rep1",
+        "Replica II CTRL negativo (malformed)":  "ctrl_neg_rep2",
+        "Replica III CTRL negativo (malformed)": "ctrl_neg_rep3",
+    })
+    per_assay = per_assay[[
+        "Datetime", "ID", "EC50", "ctrl_neg_rep1", "ctrl_neg_rep2", "ctrl_neg_rep3",
+    ]].sort_values(["Datetime", "ID"]).reset_index(drop=True)
     per_assay.to_csv(RAW_OUT_PATH, index=False)
     print(f"Saved {len(per_assay)} per-determination rows to {RAW_OUT_PATH}")
 

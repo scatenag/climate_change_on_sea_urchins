@@ -53,8 +53,14 @@ window length (0.54->0.80), consistent with a real, narrow-window effect being
 progressively swamped by shared trend, not an arbitrary cutoff.
 
 Outputs:
-    results/thermal_legacy.csv          — per-assay EC50 + thermal dose per window
-    results/thermal_legacy_summary.json — raw/detrended/nested stats + verdict
+    results/thermal_legacy.csv                  — per-assay EC50 + thermal dose per window
+    results/thermal_legacy_summary.json         — raw/detrended/nested stats + verdict
+    results/thermal_threshold_sensitivity.csv   — Table S2: same detrended/partial
+        tests as above, swept over threshold_C instead of window, window fixed
+        at the 24-month window found robust above. THRESHOLD_C (24C) stays the
+        one a-priori primary threshold (Amato et al. 2025); the other four
+        (22/23/25/26C) are a robustness check, not alternatives presented on
+        equal footing — see run_threshold_sensitivity().
 """
 import json
 import numpy as np
@@ -66,8 +72,18 @@ from statsmodels.stats.multitest import multipletests
 from .common import load_data, RESULTS, ROOT
 
 THRESHOLD_C = 24.0                 # C, chronic gametogenesis-blocking threshold
-                                    # for P. lividus (Amato et al. 2025)
+                                    # for P. lividus (Amato et al. 2025) -- the
+                                    # one a-priori primary threshold (Table S2's
+                                    # other four values are a robustness check,
+                                    # not alternatives on equal footing)
 WINDOWS = [12, 24, 36, 48, 60]      # months of cumulative thermal history
+
+# Table S2 robustness check: does the 24-month window's result hold up across
+# nearby threshold choices, or is 24C a special-cased cutoff? Not a search for
+# a "better" threshold -- THRESHOLD_C stays fixed at 24C regardless of outcome.
+THRESHOLD_SENSITIVITY_C = [22.0, 23.0, 24.0, 25.0, 26.0]
+SENSITIVITY_WINDOW_MONTHS = 24      # the window thermal_legacy_summary.json's
+                                     # own verdict found robust to both tests
 
 
 def _thermal_dose(sst, assay_date, window_months, thr):
@@ -198,6 +214,57 @@ def run():
     print(f"✓ thermal_legacy (24C threshold, {len(WINDOWS)} windows): "
           f"robust(both tests)={_fmt(robust)}  suggestive(rank-only)={_fmt(suggestive)}  "
           f"not-surviving={_fmt(not_surviving)} → {verdict}")
+
+    run_threshold_sensitivity()  # Table S2 -- see its own docstring
+
+
+def _sensitivity_row(real, sst, t, y, window, thr):
+    """detrended Spearman + nested-OLS partial test for one (window,
+    threshold) pair -- same two tests as run()'s per-window loop, factored
+    out separately (not shared with it) so run()'s own logic/output stays
+    untouched. See module docstring for the two outputs."""
+    dose = real["Datetime"].apply(lambda d: _thermal_dose(sst, d, window, thr)).values
+    det_r, det_p = _detrended_corr(dose, y, t)
+    X_td = sm.add_constant(np.column_stack([t, dose]))
+    fit_td = sm.OLS(y, X_td).fit()
+    return {
+        "threshold_C": thr,
+        "is_primary_threshold": thr == THRESHOLD_C,
+        "window_months": window,
+        "detrended_spearman_r": det_r,
+        "detrended_p": det_p,
+        "dose_coef_given_time": float(fit_td.params[2]),
+        "partial_p_dose_given_time": float(fit_td.pvalues[2]),
+    }
+
+
+def run_threshold_sensitivity(thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITIVITY_WINDOW_MONTHS):
+    """Table S2: sweep threshold_C at the fixed 24-month window, Bonferroni-
+    correcting across the len(thresholds) tests -- same "survives only if
+    both the rank and the parametric test clear Bonferroni" rule run() uses
+    across windows, applied here across thresholds instead."""
+    _, df_real, _, _ = load_data()
+    real = df_real.dropna(subset=["EC50"]).reset_index(drop=True)[["Datetime", "EC50"]]
+
+    sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
+    sst = sst.sort_values("Datetime").reset_index(drop=True)
+
+    t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)
+    y = real["EC50"].values
+
+    res = pd.DataFrame([_sensitivity_row(real, sst, t, y, window, thr) for thr in thresholds])
+
+    res["p_bonferroni"] = multipletests(res["detrended_p"], method="bonferroni")[1]
+    res["partial_p_bonferroni"] = multipletests(res["partial_p_dose_given_time"], method="bonferroni")[1]
+
+    correct_sign = (res["detrended_spearman_r"] < 0) & (res["dose_coef_given_time"] < 0)
+    res["bonferroni_survives"] = correct_sign & (res["p_bonferroni"] < 0.05) & (res["partial_p_bonferroni"] < 0.05)
+
+    res.to_csv(RESULTS / "thermal_threshold_sensitivity.csv", index=False)
+
+    survived = ", ".join(f"{int(t)}C" for t in res.loc[res["bonferroni_survives"], "threshold_C"])
+    print(f"✓ thermal_threshold_sensitivity ({window}m window, {len(thresholds)} thresholds): "
+          f"Bonferroni-survives={survived or 'none'}")
 
 
 if __name__ == "__main__":
