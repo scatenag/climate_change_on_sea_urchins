@@ -8,8 +8,8 @@
     "p_detrended_fdr_bh": 0.33742796937536407
   },
   "robustness": {
-    "pearson_r": -0.28353147803452233,
-    "pearson_p": 0.20100733652937247,
+    "pearson_r": -0.28353147803452894,
+    "pearson_p": 0.20100733652936179,
     "jackknife_p_min": 0.0007325317500767632,
     "jackknife_p_max": 0.05100136282401152,
     "jackknife_frac_below_0p05": 0.9545454545454546,

@@ -8,13 +8,13 @@
   "mhw_exposure_break_year": 2013,
   "exposure_precedes_response_years": 3,
   "multifactorial_stress_index": {
-    "pc1_variance_explained": 0.7103105561791446,
+    "pc1_variance_explained": 0.7103105561791445,
     "pc1_loadings_stress_oriented": {
-      "Temperature": 0.47904863791892843,
+      "Temperature": 0.47904863791892854,
       "Salinity": 0.28413289337617187,
-      "CO2": 0.5030669141111425,
-      "O2": 0.41108408889149706,
-      "pH": 0.5174112998347108
+      "CO2": 0.5030669141111426,
+      "O2": 0.41108408889149717,
+      "pH": 0.5174112998347107
     },
     "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated climate-change axis. Correlation with EC50 is co-trended, not causal."
   },
