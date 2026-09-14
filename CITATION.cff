@@ -4,13 +4,12 @@ title: "Climate Change on Sea Urchins: an open-science dashboard for monitoring 
 version: "1.5.0"
 date-released: "2026-09-14"
 license: MIT
-# TODO(v1.5.0 release): still the v1.4.0 record's DOI, pending the Zenodo
-# CONCEPT DOI (points to the latest version always, never needs updating
-# again after this) -- swap both fields below once it's provided.
-doi: "10.5281/zenodo.22304864"
+# Zenodo CONCEPT DOI (not a version-specific one): always resolves to the
+# latest release, so it does not need updating again on future releases.
+doi: "10.5281/zenodo.19352308"
 identifiers:
   - type: doi
-    value: "10.5281/zenodo.22304864"
+    value: "10.5281/zenodo.19352308"
 repository-code: "https://github.com/scatenag/climate_change_on_sea_urchins"
 url: "https://climate-change-on-sea-urchins.streamlit.app"
 abstract: >

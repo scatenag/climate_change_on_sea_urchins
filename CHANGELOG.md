@@ -59,6 +59,12 @@ an independent means of verifying its published numbers.
 - `requirements-lock.txt`: `pip freeze` of the exact environment this vintage was verified
   reproducible in (re-running the pipeline against it changes nothing in `results/`).
 
+### Changed
+
+- README badge and `CITATION.cff` now point to the Zenodo **concept DOI** (10.5281/zenodo.19352308)
+  instead of a version-specific one (10.5281/zenodo.22304864, the v1.4.0 record) — the concept
+  DOI always resolves to the latest release, so it will not need updating again.
+
 ## [1.4.0] - 2026-09-04
 
 ### Added
