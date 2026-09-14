@@ -66,9 +66,19 @@ an independent means of verifying its published numbers.
   DOI always resolves to the latest release, so it will not need updating again.
 - Repo root decluttered ahead of the release: `analysis.ipynb` and `narrative_sentinel_regime_shift.ipynb`
   moved to `notebooks/`; `marineHeatWaves.py` (vendored, unused reference implementation) moved
-  to `legacy/`. `paper.md`/`paper.bib`/`figures/` (the abandoned JOSS submission's source) removed
-  from the repository entirely — kept locally under `drafts/` (already git-ignored), not tracked
-  going forward.
+  to `legacy/`. `paper.md`/`paper.bib` (the abandoned JOSS submission's source) removed from the
+  repository entirely — kept locally under `drafts/` (already git-ignored), not tracked going
+  forward. Three paper-only illustrations (`figures/fig0_pipeline.png`, `fig1_timeseries.png`,
+  `fig2_app_screenshot.png`) removed with them; the four analysis figures `dashboard.py` loads at
+  runtime (`fig_cu_speciation_decomposition.png`, `fig_thermal_legacy.png`, `fig_regime_shift.png`,
+  `fig_mhw_lag_annual.png`) stay tracked in `figures/` — an initial pass removed those too, caught
+  and reverted before merge.
+- Removed obsolete/superseded tracked files (recoverable from git history/old releases, not kept
+  locally): `docs/MHW_ANALYSIS_RESEARCH.md` (unreferenced research notes predating the current
+  detrended/robustness analyses, moved to `drafts/`); `results/forecast_bio_{bad,good,mean}.csv`
+  and `results/mhw_lag_correlations.csv` (outputs of the frozen `legacy/analysis_2023_exploratory.ipynb`,
+  not produced by any current module); `assets/sea_urchin.png` (superseded by
+  `sea_urchin_transparent.png`, the only one `dashboard.py` uses).
 
 ## [1.4.0] - 2026-09-04
 
