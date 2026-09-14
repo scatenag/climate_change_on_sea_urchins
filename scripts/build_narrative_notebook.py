@@ -4,7 +4,7 @@ notebook that walks through the three analyses (cu_speciation, thermal_legacy,
 regime_shift) as one argument-by-exclusion.
 
 Run:  .venv/bin/python3 scripts/build_narrative_notebook.py
-      .venv/bin/jupyter nbconvert --to notebook --execute --inplace narrative_sentinel_regime_shift.ipynb
+      .venv/bin/jupyter nbconvert --to notebook --execute --inplace notebooks/narrative_sentinel_regime_shift.ipynb
 """
 from pathlib import Path
 import nbformat as nbf
@@ -204,6 +204,6 @@ on total dissolved copper.
 
 nb["cells"] = cells
 nb["metadata"] = {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}}
-out = Path(__file__).resolve().parent.parent / "narrative_sentinel_regime_shift.ipynb"
+out = Path(__file__).resolve().parent.parent / "notebooks" / "narrative_sentinel_regime_shift.ipynb"
 nbf.write(nb, out)
-print(f"✓ wrote {out.name} ({len(cells)} cells)")
+print(f"✓ wrote {out.relative_to(out.parent.parent)} ({len(cells)} cells)")

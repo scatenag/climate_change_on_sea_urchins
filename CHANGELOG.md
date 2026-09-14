@@ -64,6 +64,11 @@ an independent means of verifying its published numbers.
 - README badge and `CITATION.cff` now point to the Zenodo **concept DOI** (10.5281/zenodo.19352308)
   instead of a version-specific one (10.5281/zenodo.22304864, the v1.4.0 record) — the concept
   DOI always resolves to the latest release, so it will not need updating again.
+- Repo root decluttered ahead of the release: `analysis.ipynb` and `narrative_sentinel_regime_shift.ipynb`
+  moved to `notebooks/`; `marineHeatWaves.py` (vendored, unused reference implementation) moved
+  to `legacy/`. `paper.md`/`paper.bib`/`figures/` (the abandoned JOSS submission's source) removed
+  from the repository entirely — kept locally under `drafts/` (already git-ignored), not tracked
+  going forward.
 
 ## [1.4.0] - 2026-09-04
 
