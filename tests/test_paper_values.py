@@ -135,46 +135,18 @@ def test_thermal_threshold_sensitivity_24C_is_primary_and_matches_main_analysis(
 # ---------------------------------------------------------------------------
 # Section 3.5, 2nd paragraph -- annual MHW-metric changepoint (Compito D)
 #
-# UNRESOLVED, expected-failed by design: no (metric, year_range) variant
-# tried reproduces the manuscript's four reference values (phi, break_year,
-# bootstrap_p, CI90) together -- see mhw_annual_changepoint.py's docstring.
-# This is not asserted as "passing" reproduction; it documents the open
-# discrepancy so a future fix (or a future accidental regression toward a
-# false match) is visible either way.
+# CLOSED 2026-09-14: D. Sartori removed the paragraph this was written to
+# reproduce from the manuscript (this module's own investigation is what
+# surfaced the discrepancy that led to the removal). There is no longer a
+# manuscript number to reproduce, so this only checks the module still
+# records that plainly and keeps its variant table intact -- not a
+# reproduction test any more.
 # ---------------------------------------------------------------------------
 
-def _variant_matches_reference(variant, ref, phi_tol=0.03, p_tol=0.02):
-    return (
-        variant["break_year"] == ref["break_year"]
-        and abs(variant["phi"] - ref["phi"]) <= phi_tol
-        and abs(variant["bootstrap_p"] - ref["bootstrap_p"]) <= p_tol
-        and variant["ci90_lo_year"] == ref["ci90_lo_year"]
-        and variant["ci90_hi_year"] == ref["ci90_hi_year"]
-    )
-
-
-def test_mhw_annual_changepoint_documented_as_unresolved():
+def test_mhw_annual_changepoint_no_longer_cited():
     r = _results("mhw_annual_changepoint.json")
-    assert r["status"] == "unresolved"
-    assert r["manuscript_reference"] == {
-        "phi": 0.19, "break_year": 2014, "bootstrap_p": 0.076,
-        "ci90_lo_year": 2010, "ci90_hi_year": 2020,
-    }
-    assert len(r["variants"]) == 8, "expected 2 metrics x 4 year ranges"
-    assert "2023" in r["structural_cause"] and "2025" in r["structural_cause"], (
-        "structural_cause should explain the 2023/2025 dominance found while "
-        "investigating this, for whoever picks it up next"
-    )
-
-    # The expected-failed assertion: confirm none of the 8 variants happens
-    # to match the manuscript on all four values at once. If this ever
-    # fails, it means a variant now DOES reproduce the reference -- a
-    # genuine finding that should be reported, not a bug in this test.
-    matches = [v for v in r["variants"] if _variant_matches_reference(v, r["manuscript_reference"])]
-    assert matches == [], (
-        f"expected no variant to reproduce the manuscript reference (this case is "
-        f"documented as unresolved, pending review), but found: {matches}"
-    )
+    assert r["cited_in_manuscript"] is False
+    assert len(r["variants"]) == 8, "expected 2 metrics x 4 year ranges, kept as a record"
 
 
 def test_negative_control_pre_post_at_published_split():

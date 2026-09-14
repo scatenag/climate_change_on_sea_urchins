@@ -1,6 +1,10 @@
 """
 Changepoint (QLR/AR(1)) on the annual MHW-exposure metric (manuscript
 section 3.5, second paragraph) -- STATUS: UNRESOLVED, not a finished result.
+No longer cited in the manuscript as of 2026-09-14 (D. Sartori removed the
+paragraph this was meant to reproduce, once this module's own investigation
+surfaced the discrepancy below). Left in place as a record of what was
+tried; see cited_in_manuscript / manuscript_citation_note in the output.
 
 reuses qlr_ar1_changepoint() from changepoint.py unchanged, exactly as
 already applied to the two EC50 representations there. What is NOT settled
@@ -111,6 +115,15 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED):
 
     summary = {
         "status": "unresolved",
+        "cited_in_manuscript": False,
+        "manuscript_citation_note": (
+            "The section 3.5 2nd-paragraph this module was written to "
+            "reproduce was removed from the manuscript (D. Sartori, "
+            "2026-09-14) -- this module's own investigation is what "
+            "surfaced the discrepancy that led to the removal. Left in "
+            "place, unresolved, as a record of what was tried; nothing "
+            "below is reproducing a manuscript number any more."
+        ),
         "manuscript_reference": MANUSCRIPT_REFERENCE,
         "variants": variants,
         "structural_cause": (
