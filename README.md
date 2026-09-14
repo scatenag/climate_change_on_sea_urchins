@@ -182,18 +182,32 @@ peer review. See [`tests/test_data_quality.py`](tests/test_data_quality.py) for 
 
 ## Reproducing the manuscript's published numbers
 
+The analysis published in Sartori, Scatena, Gaion et al. (*Marine Pollution Bulletin*,
+submitted) corresponds to package release **v1.5.0** (see the DOI badge above). The live
+dashboard and the tip of this repository reflect the most recent data available and will keep
+diverging from that specific release as the underlying series grows via the automated monthly
+update — see [`tests/fixtures/paper_mpb_2026/`](tests/fixtures/paper_mpb_2026/) below for the
+frozen snapshot the release's own numbers are checked against.
+
 The manuscript points to this package as an independent means of verifying its results.
-[`tests/test_paper_values.py`](tests/test_paper_values.py) checks, with a declared tolerance,
-that the pipeline reproduces the published values for:
+[`tests/test_paper_values.py`](tests/test_paper_values.py) re-runs the relevant analysis modules
+(via [`tests/conftest.py`](tests/conftest.py)) against that frozen data snapshot — not the live
+`data/`, and not precomputed `results/` — and checks, with a declared tolerance, that they
+reproduce the published values for:
 
 | Section | Output | What it checks |
 |---|---|---|
 | 3.1 (trial-level pre/post contrast) | [`results/period_contrast_raw.json`](results/period_contrast_raw.json) | n/mean/SD/median/Mann-Whitney on the 295 individual EC50 determinations, split at `SPLIT_DATE` |
-| 3.5, 2nd paragraph (annual MHW-metric changepoint) | [`results/mhw_annual_changepoint.json`](results/mhw_annual_changepoint.json) | **Unresolved** — every (metric, year-range) variant tried is recorded, none reproduces the manuscript's four reference values together; see the module's own docstring |
 | 3.6 (negative control) | [`results/negative_control.json`](results/negative_control.json) | Trend, pre/post level and dispersion, and an independent QLR/AR(1) changepoint search on the assay's own negative-control series — plus a data-quality check for single-replicate outliers |
 | Table S2 (thermal threshold sensitivity) | [`results/thermal_threshold_sensitivity.csv`](results/thermal_threshold_sensitivity.csv) | Same detrended/partial tests as the primary 24°C thermal-legacy analysis, swept over 22–26°C |
 
 Not every published number is reproduced exactly — where a check surfaced a real discrepancy
-(a source-data outlier, a stale split-date carried over from an earlier draft, an unresolved
-metric definition), the corresponding output records the discrepancy explicitly rather than
-silently matching it. See each output's own `note`/`status` fields for details.
+(a stale split-date carried over from an earlier draft, an unresolved metric definition), the
+corresponding output records the discrepancy explicitly rather than silently matching it. See
+each output's own `note`/`status` fields for details.
+
+[`results/mhw_annual_changepoint.json`](results/mhw_annual_changepoint.json) applied the same
+changepoint procedure to the annual MHW exposure metric, investigated for a manuscript
+paragraph that no (metric, year-range) variant tried ended up reproducing — that paragraph was
+removed from the manuscript as a result. The output is kept (`cited_in_manuscript: false`) as a
+record of what was tried, but is no longer part of the reproduction check above.

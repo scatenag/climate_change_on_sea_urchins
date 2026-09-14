@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-14
+
+The version cited in Sartori, Scatena, Gaion et al. (submitted, *Marine Pollution Bulletin*) as
+an independent means of verifying its published numbers.
+
+### Fixed
+
+- CO2 units corrected: Copernicus's `spco2` is Pascal, not microatmospheres (commit `7d4b75d`,
+  2026-09-10) — conversion applied at ingestion via `config.CO2_PA_TO_UATM`. `results/` had not
+  been regenerated since that fix landed (it was regenerated in three separate, inconsistent
+  runs predating the seed work below); this release's single official run (see "vendemmia" below)
+  is the first to reflect it consistently. Verified via a controlled before/after comparison
+  (current data vs. data restored to just before `7d4b75d`, both with current code/seeds):
+  differs only where expected (CO2 means/SD/trend/distributions), identical elsewhere
+  (correlations, both changepoint analyses, the regime-shift stress index, copper speciation,
+  forecast) to floating-point noise.
+- Deterministic ordering of the raw EC50 sequence by (Datetime, ID) before the QLR/AR(1)
+  changepoint — commit `cb333cd`.
+
 ### Added
 
 - `negative_control.py`: new module reproducing manuscript section 3.6 (assay negative-control
@@ -13,9 +32,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `changepoint.qlr_ar1_changepoint`, not reimplemented). `data/ec50_raw.csv` gained three new
   columns (`ctrl_neg_rep1/2/3`, via `scripts/fetch_ec50.py`) to carry the source data. Also adds
   a data-quality check flagging single-replicate outliers (>3 pooled-SD from the other two
-  replicates of the same trial) — found and flags a real one (trial 224, 2020-01-01) that turned
-  out to explain part of a Spearman-p discrepancy against the manuscript; that discrepancy is
-  recorded as OPEN, pending a decision on the source data, not silently resolved.
+  replicates of the same trial) — flags trial 224 (2020-01-01); confirmed by D. Sartori (2026-09-14)
+  to be two distinct trials, not a data-entry error, so the value stands uncorrected.
 - `period_split.py`: adds `results/period_contrast_raw.json`, the manuscript's section 3.1
   pre/post contrast computed on the 295 individual EC50 trials (`data/ec50_raw.csv`), alongside
   the existing monthly-series contrast.
@@ -25,19 +43,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   equal footing with the robustness-check values. `run()`'s existing computation/output is
   unchanged.
 - `mhw_annual_changepoint.py`: new module applying `qlr_ar1_changepoint` to the annual MHW
-  exposure metric (manuscript section 3.5, 2nd paragraph). **Unresolved**: no (metric,
-  year-range) variant tried reproduces the manuscript's reference values (phi, break year,
-  bootstrap p, CI90) together; `results/mhw_annual_changepoint.json` records every variant tried
-  side by side with the reference, explicitly as an open discrepancy — not resolved or guessed
-  at here, pending review.
-- `tests/test_paper_values.py`: new test file, one invariant per section above, each with a
-  declared tolerance (or, for the unresolved changepoint case, asserting the discrepancy stays
-  documented rather than silently passing).
-
-### Fixed
-
-- Deterministic ordering of the raw EC50 sequence by (Datetime, ID) before the QLR/AR(1)
-  changepoint — commit `cb333cd`. Not yet included in a release tag.
+  exposure metric. Investigated for the manuscript's section 3.5 2nd paragraph, but no (metric,
+  year-range) variant tried reproduced the reference values (phi, break year, bootstrap p, CI90)
+  together; that paragraph was removed from the manuscript as a result (D. Sartori, 2026-09-14).
+  `results/mhw_annual_changepoint.json` keeps every variant tried, flagged
+  `cited_in_manuscript: false`, as a record of what was investigated.
+- The single official pipeline run ("vendemmia") this release's `results/` reflects — regenerated
+  once from current code, current seeds, and the data vintage cut on the dates below, superseding
+  three earlier, inconsistent runs.
+- `tests/fixtures/paper_mpb_2026/`: frozen snapshot of `data/*.csv` this vintage was computed
+  from. `tests/test_paper_values.py` (via the new `tests/conftest.py`) now re-runs the four
+  manuscript-value modules above against this fixture instead of reading precomputed `results/`,
+  so it no longer depends on the live, auto-updating `data/` and stays green as the real series
+  grows past this vintage.
+- `requirements-lock.txt`: `pip freeze` of the exact environment this vintage was verified
+  reproducible in (re-running the pipeline against it changes nothing in `results/`).
 
 ## [1.4.0] - 2026-09-04
 

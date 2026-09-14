@@ -1007,6 +1007,14 @@ with _ico_col:
         unsafe_allow_html=True,
     )
 
+st.caption(
+    "The analysis published in Sartori, Scatena, Gaion et al. (*Marine Pollution "
+    "Bulletin*, submitted) corresponds to package release **v1.5.0** (see the DOI "
+    "badge in the repository README). This dashboard reflects the most recent data "
+    "available and will diverge from that release as the underlying series keeps "
+    "growing via the automated monthly update."
+)
+
 st.markdown("#### Date range")
 _date_range_slider()
 _bcol1, _bcol2, _ = st.columns([1, 1, 3])
