@@ -149,7 +149,7 @@ see the fallback IDs in the fetch scripts.
 
 Hobday et al. (2016) method — 90th-percentile threshold on an 11-day moving-window daily
 climatology (2003–2012 baseline), 5-day minimum event duration, ≤2-day gaps merged. Vendored
-reference implementation in [`marineHeatWaves.py`](marineHeatWaves.py); the production detection
+reference implementation in [`marineHeatWaves.py`](legacy/marineHeatWaves.py); the production detection
 run uses the equivalent, explicitly-parameterized reimplementation in
 [`mhw_detection.py`](src/climate_change_on_sea_urchins/mhw_detection.py), run automatically as
 the first step of `ccsu-run-pipeline` so the event catalogue can never drift out of sync with
