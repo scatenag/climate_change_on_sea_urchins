@@ -1,0 +1,116 @@
+{
+  "hypothesis": "chronic cumulative heat stress (degree-days above 24C, the gametogenesis-blocking threshold per Amato et al. 2025) on the wild adult population drives the EC50 decline (copper is the revealer, not the cause)",
+  "threshold_C": 24.0,
+  "windows_months": [
+    12,
+    24,
+    36,
+    48,
+    60
+  ],
+  "verdict": "supported_narrow_window",
+  "windows_robust": [
+    24
+  ],
+  "windows_suggestive_rank_only": [
+    12,
+    36
+  ],
+  "windows_not_surviving": [
+    48,
+    60
+  ],
+  "per_window": [
+    {
+      "window_months": 12,
+      "raw_spearman_r": -0.48448421830821564,
+      "raw_p": 5.6440514775498905e-11,
+      "detrended_spearman_r": -0.2220504209132071,
+      "detrended_p": 0.004388646019021361,
+      "dose_time_collinearity": 0.5402688807175036,
+      "vif": 1.4122108916973988,
+      "r2_time_only": 0.45810858670425414,
+      "r2_time_plus_dose": 0.4743918981115459,
+      "delta_r2": 0.01628331140729178,
+      "dose_coef_given_time": -0.028158359992618103,
+      "partial_p_dose_given_time": 0.027385068357735697,
+      "p_fdr": 0.010971615047553403,
+      "p_bonferroni": 0.021943230095106805,
+      "partial_p_fdr": 0.06846267089433924,
+      "partial_p_bonferroni": 0.1369253417886785
+    },
+    {
+      "window_months": 24,
+      "raw_spearman_r": -0.5737713416021596,
+      "raw_p": 1.1854344638097564e-15,
+      "detrended_spearman_r": -0.2570535521306133,
+      "detrended_p": 0.0009249122887620053,
+      "dose_time_collinearity": 0.6211673539512192,
+      "vif": 1.6282637449708697,
+      "r2_time_only": 0.45810858670425414,
+      "r2_time_plus_dose": 0.48493972512946837,
+      "delta_r2": 0.02683113842521423,
+      "dose_coef_given_time": -0.05054411324512421,
+      "partial_p_dose_given_time": 0.004426943226885945,
+      "p_fdr": 0.004624561443810026,
+      "p_bonferroni": 0.004624561443810026,
+      "partial_p_fdr": 0.022134716134429723,
+      "partial_p_bonferroni": 0.022134716134429723
+    },
+    {
+      "window_months": 36,
+      "raw_spearman_r": -0.5768275098932573,
+      "raw_p": 7.724967813481258e-16,
+      "detrended_spearman_r": -0.2036732228262978,
+      "detrended_p": 0.009115112721219084,
+      "dose_time_collinearity": 0.6678233576138777,
+      "vif": 1.8050151742919758,
+      "r2_time_only": 0.45810858670425414,
+      "r2_time_plus_dose": 0.46874670384308614,
+      "delta_r2": 0.010638117138832004,
+      "dose_coef_given_time": -0.039031261449369116,
+      "partial_p_dose_given_time": 0.07535267575521779,
+      "p_fdr": 0.01519185453536514,
+      "p_bonferroni": 0.04557556360609542,
+      "partial_p_fdr": 0.12558779292536298,
+      "partial_p_bonferroni": 0.3767633787760889
+    },
+    {
+      "window_months": 48,
+      "raw_spearman_r": -0.5799718020507018,
+      "raw_p": 4.949075534696294e-16,
+      "detrended_spearman_r": -0.09905730959150082,
+      "detrended_p": 0.2083762951021226,
+      "dose_time_collinearity": 0.7525412883553046,
+      "vif": 2.3058390729704437,
+      "r2_time_only": 0.45810858670425414,
+      "r2_time_plus_dose": 0.461689088613482,
+      "delta_r2": 0.0035805019092278734,
+      "dose_coef_given_time": -0.02738471259239656,
+      "partial_p_dose_given_time": 0.3038119099340411,
+      "p_fdr": 0.26047036887765324,
+      "p_bonferroni": 1.0,
+      "partial_p_fdr": 0.3797648874175514,
+      "partial_p_bonferroni": 1.0
+    },
+    {
+      "window_months": 60,
+      "raw_spearman_r": -0.5511409453567703,
+      "raw_p": 2.4715099101128913e-14,
+      "detrended_spearman_r": -0.051496056882859215,
+      "detrended_p": 0.5138650736153594,
+      "dose_time_collinearity": 0.7955661223389747,
+      "vif": 2.724242292629423,
+      "r2_time_only": 0.45810858670425414,
+      "r2_time_plus_dose": 0.4583537285376207,
+      "delta_r2": 0.0002451418333665467,
+      "dose_coef_given_time": -0.008898049656923314,
+      "partial_p_dose_given_time": 0.7882007943724729,
+      "p_fdr": 0.5138650736153594,
+      "p_bonferroni": 1.0,
+      "partial_p_fdr": 0.7882007943724729,
+      "partial_p_bonferroni": 1.0
+    }
+  ],
+  "interpretation": "Windows robust to BOTH the rank-based (Spearman, detrended) and the parametric (OLS partial) Bonferroni-corrected test, in the biologically expected (negative) direction (24m): a genuine, cross-validated effect of chronic heat dose on EC50 beyond the shared trend. Windows significant on the rank test alone but NOT corroborated by the parametric partial test (12m, 36m) are fragile/method-dependent and should be treated as suggestive, not established. Windows surviving neither test (48m, 60m) have dose-time collinearity high enough that the detrended residuals are mostly noise. Only claim the robust window(s) as a finding; report the suggestive ones, if any, explicitly as unconfirmed by the cross-check."
+}

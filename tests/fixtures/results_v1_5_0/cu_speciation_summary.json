@@ -1,0 +1,18 @@
+{
+  "n_pre": 94,
+  "n_post": 69,
+  "pH_pre_mean": 8.111614989361701,
+  "pH_post_mean": 8.098086650084387,
+  "delta_pH": -0.013528339277314672,
+  "CO3_pre_umol_kg": 226.09751988668657,
+  "CO3_post_umol_kg": 225.10947968184567,
+  "fCu_amplification_post_carbonate": 1.0050477449409085,
+  "fCu_amplification_post_literature": 1.0331208815113457,
+  "ec50_decline_nominal_pct": 42.932145699348126,
+  "ec50_decline_corrected_carbonate_pct": 42.707709111717115,
+  "ec50_decline_corrected_literature_pct": 41.39683035164387,
+  "geochemical_share_carbonate_pct": 0.5227704881156664,
+  "geochemical_share_literature_pct": 3.5761439888329813,
+  "biological_residual_mannwhitney_p": 7.868480044065658e-25,
+  "biological_residual_mannwhitney_p_literature": 7.824272200710729e-24
+}

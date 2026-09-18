@@ -1,0 +1,11 @@
+{
+  "band_months": [
+    1,
+    8
+  ],
+  "observed_mean_coherence": 0.21119638323950643,
+  "null_mean": 0.24248768294665082,
+  "null_sd": 0.02778812881131955,
+  "n_surrogates": 100,
+  "p_value": 0.86
+}

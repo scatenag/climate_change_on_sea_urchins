@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `tests/test_golden_master.py`: regression test for the entire `results/` directory (64
+  files), not just the ~15 manuscript-cited numbers `test_paper_values.py` covers. Reruns the
+  full pipeline (all 16 Python modules, plus the R DLNM script when available) against the
+  same frozen fixture `test_paper_values.py` uses, and compares every output file against a
+  frozen reference (`tests/fixtures/results_v1_5_0/`) with per-file tolerances declared and
+  justified by category (closed-form, seeded bootstrap/RNG, iterative MLE optimizer, and the
+  known ARIMA-prewhitening scale-sensitivity case) rather than one uniform tolerance. Marked
+  `@pytest.mark.golden` (reruns the whole pipeline, ~2-3 min) so it can be run standalone with
+  `pytest -m golden`, separate from the fast default suite. Verified with a sabotage test:
+  corrupting one reference value makes the test fail naming that exact file/field; restoring
+  it returns to green.
+- `tests/conftest.py::golden_pipeline_results`: generalizes the existing `paper_results`
+  fixture from 4 modules to the full pipeline (`pipeline._MODULES`).
+
 ## [1.5.0] - 2026-09-14
 
 The version cited in Sartori, Scatena, Gaion et al. (submitted, *Marine Pollution Bulletin*) as

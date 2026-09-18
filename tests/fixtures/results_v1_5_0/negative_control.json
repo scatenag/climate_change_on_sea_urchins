@@ -1,0 +1,98 @@
+{
+  "n_trials_total": 295,
+  "n_with_negative_control": 232,
+  "n_without_negative_control": 63,
+  "note_validity_criterion": "The negative control is a per-trial validity field, present only when the trial's validity criterion was supported by data: 232 of 295 trials.",
+  "trend": {
+    "status": "open",
+    "spearman_rho": 0.07057659877474538,
+    "spearman_p": 0.2843853848524096,
+    "manuscript_spearman_rho": 0.07,
+    "manuscript_spearman_p": 0.3,
+    "note": "OPEN, not an accepted rounding difference: trial ID 224 (2020-01-01, replicates [14, 1, 14]) is a source-data outlier (see replicate_outlier_flags), still uncorrected in the sheet as of this run. spearman_rho/spearman_p above are this module's own computation on data/ec50_raw.csv exactly as fetched -- outlier included, unmodified. Independently, G. Scatena/Davide (2026-09-11) report that computing 'with the outlier still present' gives rho=+0.0666/p=0.3124 (matching the manuscript's 0.07/0.30) and 'without it' gives rho=+0.0706/p=0.2843 (matching this module's own value above) -- i.e. they attribute this module's as-fetched output to the CORRECTED scenario, not the as-fetched one this module actually ran. That attribution is not reconciled here (several ways of excluding/correcting trial 224 were tried and none reproduced 0.0666/0.3124); recorded as reported, pending Davide's decision on the source row."
+  },
+  "pre_post_current_split": {
+    "split_date": "2016-06-01",
+    "n_pre": 128,
+    "n_post": 104,
+    "mean_pre": 13.7265625,
+    "mean_post": 14.141025641025639,
+    "mannwhitney_p": 0.3782347247869372,
+    "levene_p": {
+      "mean": 0.5766026599126146,
+      "median": 0.627292256542352,
+      "trimmed": 0.3903042954459911
+    }
+  },
+  "pre_post_published_split": {
+    "split_date": "2016-01-01",
+    "n_pre": 120,
+    "n_post": 112,
+    "mean_pre": 13.716666666666667,
+    "mean_post": 14.122023809523808,
+    "mannwhitney_p": 0.41615157660129,
+    "levene_p": {
+      "mean": 0.33299254451703075,
+      "median": 0.37428615738285875,
+      "trimmed": 0.2636942124243668
+    },
+    "note": "Reproduces the manuscript's published section 3.6 numbers (13.7%/14.1%, Mann-Whitney p=0.41, Levene p=0.38 with scipy's default center='median') almost exactly. This is the split in effect before SPLIT_DATE moved to 2016-06-01 (see common.py) -- not carried forward to this section."
+  },
+  "changepoint_qlr_ar1": {
+    "trim_0.10_primary": {
+      "n": 232,
+      "phi": 0.16474486678037537,
+      "F_max": 6.970651647794142,
+      "break_index": 203,
+      "p_value": 0.12529156947684106,
+      "ci90_lo_index": 60,
+      "ci90_hi_index": 208,
+      "B": 3000,
+      "seed": 0,
+      "trim": 0.1,
+      "break_date": "2022-10-26",
+      "n_pre": 203,
+      "n_post": 29,
+      "mean_pre": 13.77175697865353,
+      "mean_post": 14.89655172413793
+    },
+    "trim_0.15_module_default": {
+      "n": 232,
+      "phi": 0.16474486678037537,
+      "F_max": 5.054000510945456,
+      "break_index": 47,
+      "p_value": 0.23492169276907698,
+      "ci90_lo_index": 36,
+      "ci90_hi_index": 181,
+      "B": 3000,
+      "seed": 0,
+      "trim": 0.15,
+      "break_date": "2010-11-01",
+      "n_pre": 47,
+      "n_post": 185,
+      "mean_pre": 13.212765957446805,
+      "mean_post": 14.090090090090092
+    },
+    "note": "trim=0.10 locates the manuscript's reported break (Oct 2022, n=203/29); trim=0.15 (changepoint.py's module default, used for the EC50 series) excludes that index from its search window (it sits at ~88% of the series) and finds a different, also non-significant break instead. Both trims are within the 10-15% range the manuscript's methods declare; both agree on the conclusion: no significant changepoint in the negative-control series."
+  },
+  "replicate_outlier_flags": {
+    "threshold_sd": 3.0,
+    "pooled_replicate_sd": 2.3989367355854285,
+    "n_flagged": 1,
+    "flags": [
+      {
+        "trial_id": 224,
+        "date": "2020-01-01",
+        "flagged_replicate": "ctrl_neg_rep2",
+        "replicate_values": [
+          14.0,
+          1.0,
+          14.0
+        ],
+        "deviation_from_other_two": 13.0,
+        "threshold": 7.196810206756286
+      }
+    ],
+    "note": "Flags any single replicate deviating from the mean of the OTHER TWO replicates of its own trial by more than 3 standard deviations of the pooled replicate distribution (all readings across every trial with a control). Added after trial 224 (2020-01-01) turned out to be an uncorrected source-data outlier (see the 'trend' section above) -- to catch the next one."
+  }
+}

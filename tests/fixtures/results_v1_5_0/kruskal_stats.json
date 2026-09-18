@@ -1,0 +1,74 @@
+{
+  "O2": {
+    "kruskal_stat": 2.499009545043691,
+    "kruskal_p": 0.11391792178958478,
+    "mannwhitney_stat": 10812.0,
+    "mannwhitney_p": 0.11408673328865802,
+    "n_pre": 161,
+    "n_post": 121,
+    "mean_pre": 238.14658416149064,
+    "mean_post": 235.7833264612119,
+    "median_pre": 238.60466,
+    "median_post": 235.21748
+  },
+  "CO2": {
+    "kruskal_stat": 9.530473925577212,
+    "kruskal_p": 0.0020208792815853477,
+    "mannwhitney_stat": 7648.0,
+    "mannwhitney_p": 0.0020259001667958915,
+    "n_pre": 161,
+    "n_post": 121,
+    "mean_pre": 394.9737371136785,
+    "mean_post": 419.48507804713995,
+    "median_pre": 380.7289415247964,
+    "median_post": 400.02758450530473
+  },
+  "Temperature": {
+    "kruskal_stat": 2.9668619764152027,
+    "kruskal_p": 0.08498656300804272,
+    "mannwhitney_stat": 8573.0,
+    "mannwhitney_p": 0.0851201708205498,
+    "n_pre": 161,
+    "n_post": 121,
+    "mean_pre": 18.375346332298136,
+    "mean_post": 19.205921697867907,
+    "median_pre": 17.862993,
+    "median_post": 18.639145
+  },
+  "Salinity": {
+    "kruskal_stat": 55.49838140741656,
+    "kruskal_p": 9.353600044523891e-14,
+    "mannwhitney_stat": 4691.0,
+    "mannwhitney_p": 9.406041564784875e-14,
+    "n_pre": 161,
+    "n_post": 121,
+    "mean_pre": 37.91453799378882,
+    "mean_post": 38.06200604801096,
+    "median_pre": 37.938484,
+    "median_post": 38.05516
+  },
+  "pH": {
+    "kruskal_stat": 9.20536454564865,
+    "kruskal_p": 0.0024130693862393945,
+    "mannwhitney_stat": 11797.0,
+    "mannwhitney_p": 0.0024189764054937044,
+    "n_pre": 161,
+    "n_post": 121,
+    "mean_pre": 8.094272005590062,
+    "mean_post": 8.073580297408125,
+    "median_pre": 8.101311,
+    "median_post": 8.082537
+  },
+  "EC50": {
+    "kruskal_stat": 104.18957360320364,
+    "kruskal_p": 1.838555556604472e-24,
+    "mannwhitney_stat": 6282.0,
+    "mannwhitney_p": 1.870643399332907e-24,
+    "n_pre": 94,
+    "n_post": 69,
+    "mean_pre": 46.61951773049645,
+    "mean_post": 26.604758454106282,
+    "median_pre": 46.535,
+    "median_post": 26.79
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "n_obs": 801,
+  "n_events": 107,
+  "params": {
+    "Intercept": 57.480000712952545,
+    "C(season)[T.Spring]": 0.9620543347750278,
+    "C(season)[T.Summer]": -1.4299208399178462,
+    "C(season)[T.Winter]": 1.7222483178957273,
+    "lag_post_end": -0.1534912846180181,
+    "intensity_max": -1.0238375615286803,
+    "lag_post_end:intensity_max": 0.020249517936077654,
+    "duration_days": 0.021283510903257995,
+    "time_index": -1.6276769452717654,
+    "Group Var": 0.9634148584689209
+  },
+  "pvalues": {
+    "Intercept": 8.00119863269295e-269,
+    "C(season)[T.Spring]": 0.06974366705409812,
+    "C(season)[T.Summer]": 0.042842476431262815,
+    "C(season)[T.Winter]": 0.0011225596430549415,
+    "lag_post_end": 0.0944901812189026,
+    "intensity_max": 0.40829636433547356,
+    "lag_post_end:intensity_max": 0.8400567829243611,
+    "duration_days": 0.388448413027198,
+    "time_index": 1.8328951055955175e-66,
+    "Group Var": 4.974980922565414e-09
+  },
+  "tvalues": {
+    "Intercept": 35.02950194866035,
+    "C(season)[T.Spring]": 1.8135718533355913,
+    "C(season)[T.Summer]": -2.0252424333727164,
+    "C(season)[T.Winter]": 3.257859514936409,
+    "lag_post_end": -1.67217316118317,
+    "intensity_max": -0.8268953763074594,
+    "lag_post_end:intensity_max": 0.20182084753645452,
+    "duration_days": 0.8624345898262059,
+    "time_index": -17.221464958063518,
+    "Group Var": 5.848006843037262
+  }
+}

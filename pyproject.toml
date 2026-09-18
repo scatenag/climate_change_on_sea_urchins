@@ -56,3 +56,8 @@ ccsu-dashboard     = "climate_change_on_sea_urchins._launch_dashboard:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+markers = [
+    "golden: full-pipeline regression test against tests/fixtures/results_v1_5_0/ (slow: reruns the whole pipeline, plus R/DLNM if available -- run alone with `pytest -m golden`)",
+]
