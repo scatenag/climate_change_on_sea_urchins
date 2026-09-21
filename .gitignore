@@ -24,6 +24,13 @@ dist/
 !figures/*.png
 data_LSTMS_*.csv
 trend_*.csv
+# ...except inside a committed test fixture: those ARE part of what's
+# reproducible, this rule just wasn't scoped to exclude them. Found the hard
+# way -- `git add tests/fixtures/results_v1_5_0/` silently skipped 6 files
+# matching trend_*.csv, so the committed golden-master reference shipped
+# incomplete (CI caught it; see the coverage-guard test in
+# tests/test_golden_master.py, which is what flagged the gap).
+!tests/fixtures/**/trend_*.csv
 
 # Claude Code IDE config
 .claude/

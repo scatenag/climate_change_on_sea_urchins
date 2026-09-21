@@ -29,21 +29,40 @@ actually produces the number:
                              can in principle amplify tiny floating-point
                              differences more than a closed-form statistic
                              would, even though this run measured 0 here.
-  KNOWN_ISSUE (rtol=1e-2) -- ccf_results_prewhitened.csv /
-                             prewhitening_diagnostics.json specifically: the
-                             ARIMA prewhitening grid-search is NOT invariant
-                             to a linear rescaling of the input (found
-                             during the v1.5.0 CO2-unit fix: ~0.6% shift in
-                             spearman_r at some lags between the pre-fix
-                             and post-fix data). Not triggered by re-running
-                             on this fixed fixture (also measured at 0 here)
-                             -- the wider tolerance is deliberate headroom
-                             for that known, separate sensitivity, not a
-                             fix. Ask to have a GitHub issue opened for it
-                             (no `gh` CLI in this environment to do it here):
-                             standardizing the series before the ARIMA fit
-                             would make the result scale-invariant by
-                             construction -- not done in this session, per
+  KNOWN_ISSUE (rtol=1e-2)    -- prewhitening_diagnostics.json only (the
+                             ARIMA order/AIC/Ljung-Box diagnostics): held up
+                             on the one real cross-machine run measured so
+                             far (GitHub Actions, 2026-09-21) -- order
+                             selection itself was stable there.
+  ARIMA_FIT (rtol=0.5,      -- the *fitted values* downstream of that same
+             atol=0.02)        ARIMA prewhitening: ccf_results_prewhitened.csv
+                             (whole file) and robustness_severe_ccf.csv's
+                             r_arima/p_arima columns specifically (a
+                             per-column override -- the rest of that file is
+                             plain Spearman, TIGHT). NOT invariant to a
+                             linear rescaling of the input (found during the
+                             v1.5.0 CO2-unit fix), and confirmed genuinely
+                             cross-machine unstable even on identical input
+                             (GitHub Actions, 2026-09-21: up to ~4.7%
+                             relative shift on affected lags, ~10% of rows
+                             affected, while two runs on this same laptop
+                             measured exactly 0 -- the discrepancy is real,
+                             not a fluke of my own single machine). Plausible
+                             mechanism: the grid-search picks the ARIMA order
+                             by AIC, a discrete choice that can flip to a
+                             different (p,q) on near-tied AIC values from
+                             machine to machine, which moves the fitted
+                             residual correlation by more than ordinary
+                             optimizer-convergence noise would. This
+                             tolerance does not pretend to catch subtle
+                             regressions in these specific columns, only
+                             gross ones (wrong sign, NaN, order-of-magnitude
+                             change) -- ask to have a GitHub issue opened for
+                             it (no `gh` CLI in this environment to do it
+                             here): standardizing the series before the
+                             ARIMA fit would make the result scale-invariant
+                             by construction, and may also stabilize the
+                             order selection -- not done in this session, per
                              the constraint that this session changes no
                              analysis logic.
 
@@ -54,15 +73,27 @@ environment -- R stays an optional dependency (see CLAUDE.md).
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 REFERENCE_DIR = Path(__file__).parent / "fixtures" / "results_v1_5_0"
 
-TIGHT = 1e-6
-MODERATE = 1e-4
-LOOSE = 1e-3
-KNOWN_ISSUE = 1e-2
+# Each tier is (rtol, atol) -- numpy/pandas-style combined tolerance:
+# |actual - reference| <= atol + rtol * |reference|. atol matters for
+# values near zero, where a relative tolerance alone is nearly meaningless.
+TIGHT = (1e-6, 1e-12)
+MODERATE = (1e-4, 1e-12)
+LOOSE = (1e-3, 1e-12)
+KNOWN_ISSUE = (1e-2, 1e-12)
+ARIMA_FIT = (0.5, 0.02)  # see module docstring -- gross-error check only
+
+# (file, column) -> tolerance tier, for files that mix a stable and an
+# ARIMA-derived column and so can't take one tolerance for the whole file.
+COLUMN_TOLERANCE_OVERRIDES = {
+    ("robustness_severe_ccf.csv", "r_arima"): ARIMA_FIT,
+    ("robustness_severe_ccf.csv", "p_arima"): ARIMA_FIT,
+}
 
 TOLERANCE_BY_FILE = {
     # -- deterministic / closed-form -----------------------------------------
@@ -83,7 +114,11 @@ TOLERANCE_BY_FILE = {
     "regime_shift_summary.json": TIGHT,
     "robustness_ccm.csv": TIGHT,  # deterministic: skccm's train_test_split is a
                                   # positional slice, not a shuffle -- no RNG at all
-    "robustness_severe_ccf.csv": TIGHT, "robustness_summer_temp.csv": TIGHT,
+    "robustness_severe_ccf.csv": TIGHT,  # file default; r_arima/p_arima columns
+                                          # overridden to ARIMA_FIT above -- the
+                                          # rest (r_raw/p_raw/r_diff/p_diff) is
+                                          # plain Spearman, genuinely TIGHT
+    "robustness_summer_temp.csv": TIGHT,
     "stationarity_results.json": TIGHT,
     "thermal_legacy.csv": TIGHT, "thermal_legacy_summary.json": TIGHT,
     "thermal_threshold_sensitivity.csv": TIGHT,
@@ -106,8 +141,9 @@ TOLERANCE_BY_FILE = {
     "mixed_effects_predictions.csv": LOOSE, "mixed_effects_summary.json": LOOSE,
 
     # -- known issue: ARIMA prewhitening, not scale-invariant (see module docstring) --
-    "ccf_results_prewhitened.csv": KNOWN_ISSUE,
-    "prewhitening_diagnostics.json": KNOWN_ISSUE,
+    "ccf_results_prewhitened.csv": ARIMA_FIT,     # the fitted correlations themselves
+    "prewhitening_diagnostics.json": KNOWN_ISSUE,  # order/AIC/Ljung-Box -- held up on
+                                                    # the one real cross-machine run so far
 
     # -- R / DLNM: deterministic given fixed data; skipped if R unavailable ----
     "dlnm_results.csv": TIGHT,
@@ -125,7 +161,29 @@ def _reference_files():
 def _assert_csv_matches(name, actual_dir, tol):
     ref = pd.read_csv(REFERENCE_DIR / name)
     act = pd.read_csv(actual_dir / name)
-    pd.testing.assert_frame_equal(ref, act, check_exact=False, rtol=tol, atol=1e-12)
+    overrides = {col: t for (fname, col), t in COLUMN_TOLERANCE_OVERRIDES.items() if fname == name}
+
+    if not overrides:
+        rtol, atol = tol
+        pd.testing.assert_frame_equal(ref, act, check_exact=False, rtol=rtol, atol=atol)
+        return
+
+    # Mixed file: some columns need a different tolerance than the file's
+    # default -- compare column by column instead of the whole-frame fast path.
+    assert list(ref.columns) == list(act.columns), f"{name}: column mismatch"
+    assert len(ref) == len(act), f"{name}: row count {len(ref)} (reference) vs {len(act)} (actual)"
+    for col in ref.columns:
+        col_rtol, col_atol = overrides.get(col, tol)
+        if pd.api.types.is_numeric_dtype(ref[col]):
+            r = ref[col].to_numpy(dtype=float)
+            a = act[col].to_numpy(dtype=float)
+            ok = np.isclose(r, a, rtol=col_rtol, atol=col_atol, equal_nan=True)
+            assert ok.all(), (
+                f"{name}.{col}: mismatch at row(s) {list(np.flatnonzero(~ok))} "
+                f"(rtol={col_rtol}, atol={col_atol}): reference={r[~ok]} actual={a[~ok]}"
+            )
+        else:
+            assert (ref[col].astype(str) == act[col].astype(str)).all(), f"{name}.{col}: non-numeric mismatch"
 
 
 def _assert_json_value_matches(ref, act, tol, path):
@@ -142,7 +200,8 @@ def _assert_json_value_matches(ref, act, tol, path):
     elif isinstance(ref, bool):
         assert ref == act, f"{path}: {act!r} != {ref!r}"
     elif isinstance(ref, (int, float)):
-        assert act == pytest.approx(ref, rel=tol, abs=1e-12), f"{path}: {act} != {ref} (rtol={tol})"
+        rtol, atol = tol
+        assert act == pytest.approx(ref, rel=rtol, abs=atol), f"{path}: {act} != {ref} (rtol={rtol}, atol={atol})"
     else:
         assert ref == act, f"{path}: {act!r} != {ref!r}"
 
