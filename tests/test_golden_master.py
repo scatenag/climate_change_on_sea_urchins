@@ -232,13 +232,3 @@ def test_golden_master_file(golden_pipeline_results, name):
         _assert_csv_matches(name, golden_pipeline_results, tol)
     else:
         _assert_json_matches(name, golden_pipeline_results, tol)
-
-
-@pytest.mark.golden
-def test_zzz_debug_dump_arima_files(golden_pipeline_results):
-    """TEMPORARY, for cross-platform verification only -- not part of the
-    suite's real coverage, will be removed before this PR is finalized."""
-    dump = {}
-    for fname in ["prewhitening_diagnostics.json", "robustness_severe_ccf_note.json"]:
-        dump[fname] = json.loads((golden_pipeline_results / fname).read_text())
-    pytest.fail(json.dumps(dump, indent=2))
