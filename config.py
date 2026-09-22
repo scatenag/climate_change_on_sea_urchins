@@ -32,9 +32,13 @@ EC50_EXPORT_URL = f"https://docs.google.com/spreadsheets/d/{EC50_SHEET_ID}/expor
 
 # --- Unit conversions --------------------------------------------------------
 # Copernicus's `spco2` variable (Mediterranean BGC reanalysis) is delivered in
-# Pascal, not the microatmospheres (uatm) its CF metadata nominally implies.
-# 1 atm = 101325 Pa, so Pa -> uatm is *(1e6 / 101325). Applied once at
-# ingestion in scripts/fetch_copernicus.py and scripts/fetch_copernicus_update.py.
+# Pascal -- and correctly documented as such: the CF standard_name it carries,
+# surface_partial_pressure_of_carbon_dioxide_in_sea_water, is associated with
+# Pascal in the CF conventions vocabulary, not microatmospheres (uatm). The
+# bug was this pipeline misreading the value as already being in uatm, not
+# any error on Copernicus's side. 1 atm = 101325 Pa, so Pa -> uatm is
+# *(1e6 / 101325). Applied once at ingestion in scripts/fetch_copernicus.py
+# and scripts/fetch_copernicus_update.py.
 # Deliberately NOT in study.yaml: this is a physical constant, not a
 # scientific choice a study file should be able to change (V2.1 constraint,
 # see docs/roadmap/ripresa-tool-tre-sessioni.md "Sessione 3").

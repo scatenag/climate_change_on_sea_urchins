@@ -74,8 +74,10 @@ environment:
     variable: spco2
     # As used downstream, after the Pa->uatm conversion (config.CO2_PA_TO_UATM,
     # a physical constant kept in code, not here -- see docs/adr/0000).
-    # Copernicus itself delivers this variable in Pa despite its CF metadata
-    # implying uatm.
+    # Copernicus correctly documents spco2 in Pa -- its CF standard_name,
+    # surface_partial_pressure_of_carbon_dioxide_in_sea_water, is associated
+    # with Pascal in the CF vocabulary. This pipeline was the one misreading
+    # the value as already being in uatm, not an error on Copernicus's side.
     unit: uatm
 
 windows: []
