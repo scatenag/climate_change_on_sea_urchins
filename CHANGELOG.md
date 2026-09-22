@@ -39,8 +39,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **ARIMA order selection now discards candidates that don't converge (issue #4, branch
   `fix/arima-convergence`)**, a genuine method change from v1.5.0, not just a bug fix — the
-  numbers below differ from the frozen `v1.5.0` reference and are pending the golden master
-  reference update (held for explicit approval; see PR).
+  numbers below differ from the frozen `v1.5.0` reference. Approved and the golden master
+  reference updated after two checks: (1) CI reproduced the exact same order for all four
+  driver series as this machine, confirming the instability is gone, not just moved; (2) of
+  the four `mhw_days → EC50` lags that newly cross p<0.05 (see below), none survives
+  Bonferroni correction on the manuscript's 89 tests (threshold 0.05/89 = 0.00056; lowest is
+  p=0.0052, ~9x above threshold) — the manuscript cites the frozen v1.5.0 release and Table
+  S3 is not among its results declared reproducible in Data availability, so no manuscript
+  action follows from this change.
   - `_best_arima_order()` (`mhw_analysis.py`) used to pick the lowest-AIC candidate
     regardless of whether the optimizer actually converged. `warnings.simplefilter("ignore")`
     was silencing statsmodels' own `ConvergenceWarning` along with everything else. It now
