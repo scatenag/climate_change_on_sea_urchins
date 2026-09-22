@@ -1,0 +1,296 @@
+{
+  "$defs": {
+    "ResponseAggregationSpec": {
+      "description": "How the per-trial source above rolls up into a period-level series.\nA distinct representation from the source itself: the count this\nproduces exists only here, never per trial -- it counts trials\naggregated into a period, not a biological sample size.",
+      "properties": {
+        "period": {
+          "description": "e.g. 'month'",
+          "title": "Period",
+          "type": "string"
+        },
+        "method": {
+          "const": "mean",
+          "title": "Method",
+          "type": "string"
+        },
+        "count_field": {
+          "description": "Canonical name for the resulting per-period trial count (e.g. 'n_assays'). Deliberately not 'n': that reads as biological sample size, which this is not.",
+          "title": "Count Field",
+          "type": "string"
+        }
+      },
+      "required": [
+        "period",
+        "method",
+        "count_field"
+      ],
+      "title": "ResponseAggregationSpec",
+      "type": "object"
+    },
+    "ResponseColumnMap": {
+      "description": "Explicit source-column -> canonical-field mapping for the per-trial\nresponse source. Never deduced from column names: in the current source\nsheet, the columns named `pos`/`neg` are NOT controls -- they are\n`UL-EC50` and `EC50-LL`, the asymmetric confidence-interval half-widths\n(see note-dati-sorgente.md). Declaring the mapping explicitly is what\nkeeps that kind of misreading from happening again, to a human or to\ncode working from the sheet.",
+      "properties": {
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "ci_low": {
+          "title": "Ci Low",
+          "type": "string"
+        },
+        "ci_high": {
+          "title": "Ci High",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "value",
+        "ci_low",
+        "ci_high"
+      ],
+      "title": "ResponseColumnMap",
+      "type": "object"
+    },
+    "ResponseSourceSpec": {
+      "description": "The per-trial (single-bioassay) source: one row per determination.",
+      "properties": {
+        "type": {
+          "const": "google_sheet",
+          "title": "Type",
+          "type": "string"
+        },
+        "sheet_id": {
+          "title": "Sheet Id",
+          "type": "string"
+        },
+        "temporal_resolution": {
+          "description": "Declared, not implied. In the current source, most rows record only the month, not a real day -- treating the dates as day-resolution would be a silent overstatement of precision.",
+          "title": "Temporal Resolution",
+          "type": "string"
+        },
+        "column_map": {
+          "$ref": "#/$defs/ResponseColumnMap"
+        },
+        "control_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-trial validity-control replicate columns (e.g. negative-control malformation-rate replicates), present only on a subset of trials. These are fields of the observation, not an independent series -- they share the trial's own date.",
+          "title": "Control Columns"
+        }
+      },
+      "required": [
+        "type",
+        "sheet_id",
+        "temporal_resolution",
+        "column_map"
+      ],
+      "title": "ResponseSourceSpec",
+      "type": "object"
+    },
+    "ResponseSpec": {
+      "description": "A response series: what is measured, on what population/individual,\nand how the raw per-trial source becomes the aggregated series most\nanalyses run on. See docs/roadmap/note-dati-sorgente.md for why each\nfield here is shaped the way it is.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "nature": {
+          "description": "What kind of quantity this is. Never default to 'biomarker' as a generic label for 'response series' -- most response series, including the current EC50 case, are not biomarkers, and calling one that is scientifically wrong.",
+          "enum": [
+            "population_proxy",
+            "index",
+            "toxicological_endpoint",
+            "biomarker"
+          ],
+          "title": "Nature",
+          "type": "string"
+        },
+        "adverse_direction": {
+          "description": "Which way the value moves when the organism's condition gets WORSE -- not 'higher/lower is better', since 'better' flips meaning depending on who's asking and this field must not.",
+          "enum": [
+            "decrease",
+            "increase"
+          ],
+          "title": "Adverse Direction",
+          "type": "string"
+        },
+        "unit": {
+          "description": "UCUM unit string, e.g. 'ug/L'",
+          "title": "Unit",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/ResponseSourceSpec"
+        },
+        "aggregation": {
+          "$ref": "#/$defs/ResponseAggregationSpec"
+        }
+      },
+      "required": [
+        "id",
+        "nature",
+        "adverse_direction",
+        "unit",
+        "source",
+        "aggregation"
+      ],
+      "title": "ResponseSpec",
+      "type": "object"
+    },
+    "SiteSpec": {
+      "description": "An oceanographic monitoring site -- in practice, a Copernicus Marine\ngrid cell (a nearest-cell approximation of the real site; see CLAUDE.md's\n\"Contesto scientifico utile\" on when that approximation breaks down).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "lat": {
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "title": "Lon",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "bbox_delta": {
+          "description": "Bounding-box half-width, degrees",
+          "title": "Bbox Delta",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "lat",
+        "lon",
+        "name",
+        "bbox_delta"
+      ],
+      "title": "SiteSpec",
+      "type": "object"
+    },
+    "VariableSpec": {
+      "description": "An environmental variable fetched from a provider. Declared for this\nstep's completeness; not yet consumed by any fetch script -- see module\ndocstring.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "dataset": {
+          "title": "Dataset",
+          "type": "string"
+        },
+        "variable": {
+          "title": "Variable",
+          "type": "string"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "dataset",
+        "variable",
+        "unit"
+      ],
+      "title": "VariableSpec",
+      "type": "object"
+    },
+    "WindowSpec": {
+      "description": "A named temporal window of the study. Declared for completeness; not\nyet consumed anywhere -- see module docstring and docs/adr/0000.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "start",
+        "end"
+      ],
+      "title": "WindowSpec",
+      "type": "object"
+    }
+  },
+  "description": "Top-level study specification: everything a case declares about\nitself. See examples/livorno_paracentrotus/study.yaml for the current\ncase, described with exactly today's config.py values.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "sites": {
+      "items": {
+        "$ref": "#/$defs/SiteSpec"
+      },
+      "title": "Sites",
+      "type": "array"
+    },
+    "responses": {
+      "items": {
+        "$ref": "#/$defs/ResponseSpec"
+      },
+      "title": "Responses",
+      "type": "array"
+    },
+    "environment": {
+      "items": {
+        "$ref": "#/$defs/VariableSpec"
+      },
+      "title": "Environment",
+      "type": "array"
+    },
+    "windows": {
+      "items": {
+        "$ref": "#/$defs/WindowSpec"
+      },
+      "title": "Windows",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "description",
+    "sites",
+    "responses"
+  ],
+  "title": "StudySpec",
+  "type": "object"
+}

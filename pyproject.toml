@@ -38,6 +38,8 @@ dependencies = [
     "Pillow>=10.0",
     "skccm==0.2.dev0",
     "pycwt==0.4.0b0",
+    "pydantic>=2,<3",
+    "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
@@ -53,6 +55,7 @@ Documentation = "https://github.com/scatenag/climate_change_on_sea_urchins/blob/
 [project.scripts]
 ccsu-run-pipeline = "climate_change_on_sea_urchins.pipeline:main"
 ccsu-dashboard     = "climate_change_on_sea_urchins._launch_dashboard:main"
+ccsu-validate-study = "climate_change_on_sea_urchins.study_spec:validate_study_cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]

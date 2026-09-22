@@ -1,0 +1,83 @@
+# The current case, described with exactly the values that lived as
+# hardcoded module constants in config.py before V2.1 (see
+# src/climate_change_on_sea_urchins/study_spec.py for what each field
+# means and why it's shaped this way -- driven by
+# docs/roadmap/note-dati-sorgente.md, an inspection of the real source
+# sheet, not an idealized case).
+#
+# environment/windows are declared here for completeness (V2.1's plan
+# calls for the models to exist) but nothing reads them yet -- the
+# Copernicus fetch scripts still hardcode their own dataset IDs/depth
+# range directly; wiring that up is a later branch
+# (note-tecniche.md's v2.1/provider-adapters), not this one.
+
+id: livorno-paracentrotus
+description: >
+  Paracentrotus lividus gamete EC50 sensitivity to copper, North Tyrrhenian
+  Sea off Livorno, 2003-present. The case this framework was originally
+  built around.
+
+sites:
+  - id: livorno-sud
+    lat: 43.4278
+    lon: 10.3956
+    name: Livorno Sud
+    bbox_delta: 0.1
+
+responses:
+  - id: plividus-cu-ec50
+    nature: population_proxy
+    adverse_direction: decrease
+    unit: ug/L
+    source:
+      type: google_sheet
+      sheet_id: "1e0-16D84ehRyotSC2BH9e9YqAnZksbv4gZDFgyPki8g"
+      temporal_resolution: month
+      column_map:
+        date: DATE
+        value: EC50
+        ci_low: LL
+        ci_high: UL
+      control_columns:
+        - "Replica I CTRL negativo (malformed)"
+        - "Replica II CTRL negativo (malformed)"
+        - "Replica III CTRL negativo (malformed)"
+    aggregation:
+      period: month
+      method: mean
+      count_field: n_assays
+
+environment:
+  - id: medsea-temperature
+    provider: copernicus_marine
+    dataset: cmems_mod_med_phy-temp_my_4.2km_P1M-m
+    variable: thetao
+    unit: degC
+  - id: medsea-salinity
+    provider: copernicus_marine
+    dataset: cmems_mod_med_phy-sal_my_4.2km_P1M-m
+    variable: so
+    unit: PSU
+  - id: medsea-o2
+    provider: copernicus_marine
+    dataset: cmems_mod_med_bgc-bio_my_4.2km_P1M-m
+    variable: o2
+    unit: mmol/m3
+  - id: medsea-ph
+    provider: copernicus_marine
+    dataset: cmems_mod_med_bgc-car_my_4.2km_P1M-m
+    variable: ph
+    unit: "1"
+  - id: medsea-co2
+    provider: copernicus_marine
+    dataset: cmems_mod_med_bgc-co2_my_4.2km_P1M-m
+    variable: spco2
+    # As used downstream, after the Pa->uatm conversion (config.CO2_PA_TO_UATM,
+    # a physical constant kept in code, not here -- see docs/adr/0000).
+    # Copernicus correctly documents spco2 in Pa -- its CF standard_name,
+    # surface_partial_pressure_of_carbon_dioxide_in_sea_water, is associated
+    # with Pascal in the CF vocabulary. This pipeline was the one misreading
+    # the value as already being in uatm, not an error on Copernicus's side.
+    unit: uatm
+
+windows: []

@@ -42,6 +42,11 @@ scikit-learn>=1.3,<1.9
 skccm==0.2.dev0
 pycwt==0.4.0b0
 
+# Study specification (V2.1): declarative study.yaml, validated at load time
+# instead of the case being hardcoded as module constants in config.py.
+pydantic>=2,<3
+PyYAML>=6,<7
+
 # Visualization & dashboard
 plotly>=5.18
 # Upper-bounded below the Tornado->Uvicorn internal server migration
