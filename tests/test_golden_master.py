@@ -57,14 +57,12 @@ actually produces the number:
                              tolerance does not pretend to catch subtle
                              regressions in these specific columns, only
                              gross ones (wrong sign, NaN, order-of-magnitude
-                             change) -- ask to have a GitHub issue opened for
-                             it (no `gh` CLI in this environment to do it
-                             here): standardizing the series before the
-                             ARIMA fit would make the result scale-invariant
-                             by construction, and may also stabilize the
-                             order selection -- not done in this session, per
-                             the constraint that this session changes no
-                             analysis logic.
+                             change) -- see issue #4: robustness_severe_ccf.csv's
+                             p_arima column has two p<0.05 that the
+                             manuscript's Table S3 counts against 89 tests,
+                             so this tolerance can currently hide a
+                             significance flip. Not fixed here (would change
+                             analysis logic); planned as its own branch.
 
 R/DLNM outputs (dlnm_results.csv, dlnm_lag_profile.csv, dlnm_slice_lag.csv)
 are SKIPPED, not failed, when Rscript/dlnm aren't available in the test
