@@ -29,40 +29,38 @@ actually produces the number:
                              can in principle amplify tiny floating-point
                              differences more than a closed-form statistic
                              would, even though this run measured 0 here.
+                             Also covers ccf_results_prewhitened.csv and
+                             robustness_severe_ccf_note.json's numeric
+                             diagnostics (aic, ljung_box_p) as of the
+                             fix/arima-convergence branch -- see below.
   KNOWN_ISSUE (rtol=1e-2)    -- prewhitening_diagnostics.json only (the
                              ARIMA order/AIC/Ljung-Box diagnostics): held up
                              on the one real cross-machine run measured so
                              far (GitHub Actions, 2026-09-21) -- order
                              selection itself was stable there.
-  ARIMA_FIT (rtol=0.5,      -- the *fitted values* downstream of that same
-             atol=0.02)        ARIMA prewhitening: ccf_results_prewhitened.csv
-                             (whole file) and robustness_severe_ccf.csv's
-                             r_arima/p_arima columns specifically (a
-                             per-column override -- the rest of that file is
-                             plain Spearman, TIGHT). NOT invariant to a
-                             linear rescaling of the input (found during the
-                             v1.5.0 CO2-unit fix), and confirmed genuinely
-                             cross-machine unstable even on identical input
-                             (GitHub Actions, 2026-09-21: up to ~4.7%
-                             relative shift on affected lags, ~10% of rows
-                             affected, while two runs on this same laptop
-                             measured exactly 0 -- the discrepancy is real,
-                             not a fluke of my own single machine). Plausible
-                             mechanism: the grid-search picks the ARIMA order
-                             by AIC, a discrete choice that can flip to a
-                             different (p,q) on near-tied AIC values from
-                             machine to machine, which moves the fitted
-                             residual correlation by more than ordinary
-                             optimizer-convergence noise would. This
-                             tolerance does not pretend to catch subtle
-                             regressions in these specific columns, only
-                             gross ones (wrong sign, NaN, order-of-magnitude
-                             change) -- see issue #4: robustness_severe_ccf.csv's
-                             p_arima column has two p<0.05 that the
-                             manuscript's Table S3 counts against 89 tests,
-                             so this tolerance can currently hide a
-                             significance flip. Not fixed here (would change
-                             analysis logic); planned as its own branch.
+
+ARIMA_FIT (rtol=0.5, atol=0.02), the very wide gross-error-only tolerance
+introduced 2026-09-21 for ccf_results_prewhitened.csv and
+robustness_severe_ccf.csv's r_arima/p_arima columns, is RETIRED as of the
+fix/arima-convergence branch (issue #4) -- see CHANGELOG.md for what changed
+and why the wide margin is no longer needed:
+  - _best_arima_order() (mhw_analysis.py) now discards candidates that don't
+    converge instead of picking whichever has the lowest AIC regardless.
+    Two of the four MHW driver series had a non-converging candidate at the
+    AIC optimum (mhw_severe_intensity: ARIMA(3,0,3); mhw_days: ARIMA(3,0,1))
+    -- exactly the kind of near-tied, numerically unstable fit that could
+    plausibly flip to a different order across machines. Restricting to
+    convergent candidates is expected to remove most of that instability,
+    which is why ccf_results_prewhitened.csv moves down to LOOSE.
+  - robustness_severe_ccf.csv's r_arima/p_arima columns are now always NaN
+    by design, not a fitted value at all: the ARIMA-prewhitened arm for
+    mhw_severe_intensity is marked not_applicable (see
+    robustness_severe_ccf_note.json and mhw_robustness.py) because the
+    filter, estimated on the driver alone, does not remove EC50's own 2016
+    regime shift from the residuals -- 13 of the driver's 17 nonzero months
+    fall after that shift. The column-level override is gone; the file now
+    takes its default TIGHT tolerance like the rest of its columns (NaN
+    trivially matches NaN across platforms).
 
 R/DLNM outputs (dlnm_results.csv, dlnm_lag_profile.csv, dlnm_slice_lag.csv)
 are SKIPPED, not failed, when Rscript/dlnm aren't available in the test
@@ -84,14 +82,12 @@ TIGHT = (1e-6, 1e-12)
 MODERATE = (1e-4, 1e-12)
 LOOSE = (1e-3, 1e-12)
 KNOWN_ISSUE = (1e-2, 1e-12)
-ARIMA_FIT = (0.5, 0.02)  # see module docstring -- gross-error check only
 
 # (file, column) -> tolerance tier, for files that mix a stable and an
 # ARIMA-derived column and so can't take one tolerance for the whole file.
-COLUMN_TOLERANCE_OVERRIDES = {
-    ("robustness_severe_ccf.csv", "r_arima"): ARIMA_FIT,
-    ("robustness_severe_ccf.csv", "p_arima"): ARIMA_FIT,
-}
+# Empty as of fix/arima-convergence (see module docstring): the mechanism
+# stays for the next file that needs a per-column override.
+COLUMN_TOLERANCE_OVERRIDES = {}
 
 TOLERANCE_BY_FILE = {
     # -- deterministic / closed-form -----------------------------------------
@@ -112,10 +108,10 @@ TOLERANCE_BY_FILE = {
     "regime_shift_summary.json": TIGHT,
     "robustness_ccm.csv": TIGHT,  # deterministic: skccm's train_test_split is a
                                   # positional slice, not a shuffle -- no RNG at all
-    "robustness_severe_ccf.csv": TIGHT,  # file default; r_arima/p_arima columns
-                                          # overridden to ARIMA_FIT above -- the
-                                          # rest (r_raw/p_raw/r_diff/p_diff) is
-                                          # plain Spearman, genuinely TIGHT
+    "robustness_severe_ccf.csv": TIGHT,  # r_raw/p_raw/r_diff/p_diff are plain
+                                          # Spearman; r_arima/p_arima are always
+                                          # NaN (arm marked not_applicable, see
+                                          # robustness_severe_ccf_note.json)
     "robustness_summer_temp.csv": TIGHT,
     "stationarity_results.json": TIGHT,
     "thermal_legacy.csv": TIGHT, "thermal_legacy_summary.json": TIGHT,
@@ -138,10 +134,12 @@ TOLERANCE_BY_FILE = {
     "forecast_meta.json": LOOSE,
     "mixed_effects_predictions.csv": LOOSE, "mixed_effects_summary.json": LOOSE,
 
-    # -- known issue: ARIMA prewhitening, not scale-invariant (see module docstring) --
-    "ccf_results_prewhitened.csv": ARIMA_FIT,     # the fitted correlations themselves
+    # -- ARIMA prewhitening, convergence-filtered as of fix/arima-convergence --
+    "ccf_results_prewhitened.csv": LOOSE,          # the fitted correlations themselves
     "prewhitening_diagnostics.json": KNOWN_ISSUE,  # order/AIC/Ljung-Box -- held up on
                                                     # the one real cross-machine run so far
+    "robustness_severe_ccf_note.json": LOOSE,      # arm marked not_applicable; numeric
+                                                    # diagnostics still MLE-derived
 
     # -- R / DLNM: deterministic given fixed data; skipped if R unavailable ----
     "dlnm_results.csv": TIGHT,

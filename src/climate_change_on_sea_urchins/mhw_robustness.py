@@ -45,7 +45,21 @@ RNG_SEED = 0
 
 # ── 1. Severe/Extreme-only driver ───────────────────────────────────────────
 
-def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
+# Why the ARIMA-prewhitened arm is marked not_applicable below -- see issue #4.
+_ARIMA_NOT_APPLICABLE_REASON = (
+    "13 of 17 nonzero months of mhw_severe_intensity fall after the 2016-06 "
+    "EC50 regime shift (SPLIT_DATE). The ARIMA filter is estimated on the "
+    "driver alone and does not remove that structural break from the "
+    "target, so the residual correlation is confounded by the shift rather "
+    "than reflecting a lagged response to severe events. With the shift "
+    "removed from EC50 (pre/post demeaned), significant lags (p<0.05) at "
+    "the best-converging order drop from 10/13 to 1/13. The "
+    "first-differenced arm (r_diff/p_diff) does not depend on an estimated "
+    "filter and is the retained result for this driver."
+)
+
+
+def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     sev = events[events["category"].isin(["Severe", "Extreme"])].copy()
     sev["peak_month"] = pd.to_datetime(sev["peak_date"]).dt.to_period("M").dt.to_timestamp()
     sev_monthly = sev.groupby("peak_month")["intensity_max"].max().rename("mhw_severe_intensity")
@@ -63,14 +77,25 @@ def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
         df_diff = difference_series(df2, [driver] + targets)
         df_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
         diff = compute_ccf(df_diff, driver, targets)
-        pw, _diag = compute_ccf_prewhitened(df2, driver, targets)
+        pw, diag = compute_ccf_prewhitened(df2, driver, targets)
 
     raw = raw.rename(columns={"spearman_r": "r_raw", "p_value": "p_raw"})
     diff = diff.rename(columns={"spearman_r": "r_diff", "p_value": "p_diff"})
     pw = pw.rename(columns={"spearman_r": "r_arima", "p_value": "p_arima"})
     out = raw.merge(diff[["lag", "r_diff", "p_diff"]], on="lag") \
              .merge(pw[["lag", "r_arima", "p_arima"]], on="lag", how="left")
-    return out[["lag", "r_raw", "p_raw", "r_diff", "p_diff", "r_arima", "p_arima", "n"]]
+    out = out[["lag", "r_raw", "p_raw", "r_diff", "p_diff", "r_arima", "p_arima", "n"]]
+
+    out["r_arima"] = np.nan
+    out["p_arima"] = np.nan
+    note = {
+        "driver": driver,
+        "arm": "arima_prewhitened",
+        "status": "not_applicable",
+        "reason": _ARIMA_NOT_APPLICABLE_REASON,
+        "diagnostics": diag,
+    }
+    return out, note
 
 
 # ── 2. Direct summer temperature anomaly ────────────────────────────────────
@@ -227,9 +252,11 @@ def run() -> None:
 
     print("── Robustness battery: 5 independent checks on the MHW->EC50 lag hypothesis ──")
 
-    severe = run_severe_ccf(df_full, events)
+    severe, severe_note = run_severe_ccf(df_full, events)
     severe.to_csv(RESULTS / "robustness_severe_ccf.csv", index=False)
-    print(f"✓ 1/5 Severe/Extreme-only CCF ({len(events[events.category.isin(['Severe','Extreme'])])} events)")
+    (RESULTS / "robustness_severe_ccf_note.json").write_text(json.dumps(severe_note, indent=2))
+    print(f"✓ 1/5 Severe/Extreme-only CCF ({len(events[events.category.isin(['Severe','Extreme'])])} events) "
+          f"-- ARIMA arm marked not applicable, see robustness_severe_ccf_note.json")
 
     summer = run_summer_temp(df_full, df_real)
     summer.to_csv(RESULTS / "robustness_summer_temp.csv", index=False)

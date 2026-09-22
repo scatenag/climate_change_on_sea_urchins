@@ -23,6 +23,7 @@ from statsmodels.tsa.ardl import ARDL
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.multitest import multipletests
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
 
 
@@ -72,21 +73,34 @@ def difference_series(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
 
 
 def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
-    """Grid-search ARIMA(p,0,q) by AIC. d=0: MHW driver series are at worst
-    borderline-stationary (ADF rejects a unit root; KPSS is ambiguous), so no
-    further differencing is imposed — matches the orders used in the CCF
-    robustness review (e.g. peak intensity: ARIMA(2,0,1))."""
+    """Grid-search ARIMA(p,0,q) by AIC among candidates that actually
+    converge. d=0: MHW driver series are at worst borderline-stationary (ADF
+    rejects a unit root; KPSS is ambiguous), so no further differencing is
+    imposed — matches the orders used in the CCF robustness review (e.g.
+    peak intensity: ARIMA(2,0,1)).
+
+    A candidate is discarded, regardless of its AIC, if statsmodels raises
+    ConvergenceWarning or its own mle_retvals says the optimizer didn't
+    converge. Picking the AIC-best order without this check is how issue #4
+    happened: on some drivers the lowest-AIC candidate is a fit that never
+    converged, and its residuals are then unreliable to a degree AIC alone
+    doesn't reveal.
+    """
     best_aic, best_order, best_fit = np.inf, None, None
     for p in range(max_p + 1):
         for q in range(max_q + 1):
             try:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
                     fit = ARIMA(series, order=(p, 0, q)).fit()
-                if fit.aic < best_aic:
-                    best_aic, best_order, best_fit = fit.aic, (p, 0, q), fit
             except Exception:
                 continue
+            warned_nonconvergence = any(issubclass(w.category, ConvergenceWarning) for w in caught)
+            retvals_converged = fit.mle_retvals.get("converged", True) if getattr(fit, "mle_retvals", None) else True
+            if warned_nonconvergence or not retvals_converged:
+                continue
+            if fit.aic < best_aic:
+                best_aic, best_order, best_fit = fit.aic, (p, 0, q), fit
     return best_order, best_fit
 
 
@@ -115,6 +129,7 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
         "driver": driver,
         "order": list(order),
         "aic": float(driver_fit.aic),
+        "converged": True,  # _best_arima_order() already discards non-converging candidates
         "ljung_box_p": {int(lag): float(p) for lag, p in zip(lb.index, lb["lb_pvalue"])},
         "white_noise": bool((lb["lb_pvalue"] > 0.05).all()),
     }
