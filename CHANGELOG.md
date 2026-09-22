@@ -21,6 +21,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it returns to green.
 - `tests/conftest.py::golden_pipeline_results`: generalizes the existing `paper_results`
   fixture from 4 modules to the full pipeline (`pipeline._MODULES`).
+- **V2.1, "specifica e astrazione della risposta" (branch `v2.1/study-spec`)**: declarative
+  `examples/livorno_paracentrotus/study.yaml`, validated by new pydantic models in
+  `src/climate_change_on_sea_urchins/study_spec.py` (`SiteSpec`, `ResponseSpec` — split into
+  a per-trial `ResponseSourceSpec` and a separate `ResponseAggregationSpec`, since the raw
+  source and the monthly-aggregated series are two different representations, not one —
+  `VariableSpec`, `WindowSpec`, `StudySpec`). `config.py` inverted to read this file instead
+  of hardcoding site/source values as module constants, re-exporting the exact same names
+  (`SITE_LAT`, `SITE_LON`, `SITE_NAME`, `BBOX_DELTA`, `EC50_SHEET_ID`, `EC50_EXPORT_URL`) so
+  none of the six files that import them changed. `CO2_PA_TO_UATM` deliberately stays a
+  hardcoded physical constant, not part of the spec. New `ccsu-validate-study` console script
+  and `docs/schema/study.schema.json` (JSON Schema export). New direct dependencies:
+  `pydantic>=2,<3`, `PyYAML>=6,<7` (both were already present transitively via Streamlit, now
+  declared). Verified with the golden master: zero drift, no new tolerances needed.
+
+### Fixed
+
+- `.gitignore`'s `trend_*.csv` rule (unanchored, matches any directory depth) was silently
+  dropping 6 files from `git add tests/fixtures/results_v1_5_0/` — the committed golden-master
+  reference shipped incomplete; caught by the coverage-guard test in `test_golden_master.py` on
+  the first real CI run. Fixed with a scoped negation, not by removing the original rule.
+- Two `test_golden_master.py` tolerances were set from single-machine measurements (both showed
+  exactly 0 relative difference locally) and turned out far too tight on a different machine:
+  `ccf_results_prewhitened.csv` and `robustness_severe_ccf.csv`'s `r_arima`/`p_arima` columns
+  (the latter mis-categorized as fully deterministic — missed that it shares the same ARIMA
+  prewhitening call). New `ARIMA_FIT` tolerance tier (rtol=0.5, atol=0.02, explicitly a
+  gross-error check only) plus per-column tolerance overrides for files that mix a stable and
+  an ARIMA-derived column.
 
 ## [1.5.0] - 2026-09-14
 
