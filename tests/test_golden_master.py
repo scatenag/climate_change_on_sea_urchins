@@ -29,29 +29,11 @@ actually produces the number:
                              can in principle amplify tiny floating-point
                              differences more than a closed-form statistic
                              would, even though this run measured 0 here.
-                             Also covers ccf_results_prewhitened.csv and
-                             robustness_severe_ccf_note.json's numeric
-                             diagnostics (aic, ljung_box_p) as of the
-                             fix/arima-convergence branch -- see below.
-  KNOWN_ISSUE (rtol=1e-2)    -- prewhitening_diagnostics.json only (the
-                             ARIMA order/AIC/Ljung-Box diagnostics): held up
-                             on the one real cross-machine run measured so
-                             far (GitHub Actions, 2026-09-21) -- order
-                             selection itself was stable there.
 
 ARIMA_FIT (rtol=0.5, atol=0.02), the very wide gross-error-only tolerance
 introduced 2026-09-21 for ccf_results_prewhitened.csv and
 robustness_severe_ccf.csv's r_arima/p_arima columns, is RETIRED as of the
-fix/arima-convergence branch (issue #4) -- see CHANGELOG.md for what changed
-and why the wide margin is no longer needed:
-  - _best_arima_order() (mhw_analysis.py) now discards candidates that don't
-    converge instead of picking whichever has the lowest AIC regardless.
-    Two of the four MHW driver series had a non-converging candidate at the
-    AIC optimum (mhw_severe_intensity: ARIMA(3,0,3); mhw_days: ARIMA(3,0,1))
-    -- exactly the kind of near-tied, numerically unstable fit that could
-    plausibly flip to a different order across machines. Restricting to
-    convergent candidates is expected to remove most of that instability,
-    which is why ccf_results_prewhitened.csv moves down to LOOSE.
+fix/arima-convergence branch (issue #4) -- see CHANGELOG.md:
   - robustness_severe_ccf.csv's r_arima/p_arima columns are now always NaN
     by design, not a fitted value at all: the ARIMA-prewhitened arm for
     mhw_severe_intensity is marked not_applicable (see
@@ -61,6 +43,32 @@ and why the wide margin is no longer needed:
     fall after that shift. The column-level override is gone; the file now
     takes its default TIGHT tolerance like the rest of its columns (NaN
     trivially matches NaN across platforms).
+  - ccf_results_prewhitened.csv, prewhitening_diagnostics.json, and
+    robustness_severe_ccf_note.json's `diagnostics` block move to
+    STRUCTURAL_ONLY_FILES instead of any numeric tolerance tier -- see below.
+    A wide numeric tolerance was the wrong fix for these three: no rtol/atol
+    is safe to declare when the *order itself* isn't reproducible.
+
+STRUCTURAL_ONLY_FILES -- no numeric comparison at all, only structural
+checks (columns, row count, which driver/lag combinations exist, where NaN
+falls). _best_arima_order() (mhw_analysis.py) now discards ARIMA candidates
+that don't converge (see its docstring), which removes one real bug -- but
+does not make order selection itself reproducible across machines.
+Confirmed directly on two consecutive CI runs of this exact branch, same
+code, same data, both against GitHub's ubuntu-latest hosted runners:
+  - run 35732697098 (2026-09-22): mhw_days -> ARIMA(1,0,1), matching this
+    machine exactly.
+  - run 35732781059 (2026-09-22), immediately after, no code change (only a
+    CHANGELOG.md edit): mhw_days -> an order starting with p=3, matching
+    the OLD pre-fix (non-convergent-filtered) reference instead.
+For a near-degenerate driver (mhw_days: 45% zero months; mhw_severe_intensity:
+94%), *which* candidates converge at all depends on the runner's hardware/
+BLAS path, which can change which order wins by AIC even after discarding
+non-convergent ones -- a golden master cannot pin numeric values that aren't
+a property of the code and data alone. See issue #4 for the V3.1 fix (a
+deterministic order-selection procedure); tests/test_mhw_analysis.py covers
+the fit/filter/correlate computation itself with a forced, fixed order,
+independent of this problem.
 
 R/DLNM outputs (dlnm_results.csv, dlnm_lag_profile.csv, dlnm_slice_lag.csv)
 are SKIPPED, not failed, when Rscript/dlnm aren't available in the test
@@ -81,7 +89,15 @@ REFERENCE_DIR = Path(__file__).parent / "fixtures" / "results_v1_5_0"
 TIGHT = (1e-6, 1e-12)
 MODERATE = (1e-4, 1e-12)
 LOOSE = (1e-3, 1e-12)
-KNOWN_ISSUE = (1e-2, 1e-12)
+
+# Files with no numeric tolerance at all -- see module docstring
+# ("STRUCTURAL_ONLY_FILES"). Checked with dedicated structural assertions
+# instead of TOLERANCE_BY_FILE + _assert_csv_matches/_assert_json_matches.
+STRUCTURAL_ONLY_FILES = {
+    "ccf_results_prewhitened.csv",
+    "prewhitening_diagnostics.json",
+    "robustness_severe_ccf_note.json",
+}
 
 # (file, column) -> tolerance tier, for files that mix a stable and an
 # ARIMA-derived column and so can't take one tolerance for the whole file.
@@ -134,12 +150,9 @@ TOLERANCE_BY_FILE = {
     "forecast_meta.json": LOOSE,
     "mixed_effects_predictions.csv": LOOSE, "mixed_effects_summary.json": LOOSE,
 
-    # -- ARIMA prewhitening, convergence-filtered as of fix/arima-convergence --
-    "ccf_results_prewhitened.csv": LOOSE,          # the fitted correlations themselves
-    "prewhitening_diagnostics.json": KNOWN_ISSUE,  # order/AIC/Ljung-Box -- held up on
-                                                    # the one real cross-machine run so far
-    "robustness_severe_ccf_note.json": LOOSE,      # arm marked not_applicable; numeric
-                                                    # diagnostics still MLE-derived
+    # ccf_results_prewhitened.csv, prewhitening_diagnostics.json and
+    # robustness_severe_ccf_note.json are in STRUCTURAL_ONLY_FILES instead
+    # of here -- see module docstring.
 
     # -- R / DLNM: deterministic given fixed data; skipped if R unavailable ----
     "dlnm_results.csv": TIGHT,
@@ -208,25 +221,101 @@ def _assert_json_matches(name, actual_dir, tol):
     _assert_json_value_matches(ref, act, tol, path=name)
 
 
+_DIAGNOSTICS_KEYS = {"driver", "order", "aic", "converged", "ljung_box_p", "white_noise"}
+
+
+def _assert_arima_diagnostics_shape(diag, path):
+    """Structural-only check for one driver's ARIMA diagnostics block: right
+    keys, right types, internally consistent -- never compares order/aic/
+    ljung_box_p/white_noise *values* against a reference (see module
+    docstring on why those aren't reproducible across machines)."""
+    assert set(diag.keys()) == _DIAGNOSTICS_KEYS, f"{path}: unexpected keys {set(diag.keys()) ^ _DIAGNOSTICS_KEYS}"
+    assert isinstance(diag["order"], list) and len(diag["order"]) == 3, f"{path}.order: expected a 3-element list"
+    assert all(isinstance(x, int) for x in diag["order"]), f"{path}.order: expected 3 ints"
+    assert isinstance(diag["aic"], (int, float)), f"{path}.aic: expected a number"
+    assert diag["converged"] is True, f"{path}.converged: expected True (non-convergent candidates are discarded)"
+    assert isinstance(diag["ljung_box_p"], dict) and set(diag["ljung_box_p"]) == {"6", "12", "24"}, \
+        f"{path}.ljung_box_p: expected keys '6'/'12'/'24'"
+    assert all(isinstance(v, (int, float)) for v in diag["ljung_box_p"].values()), \
+        f"{path}.ljung_box_p: expected numeric p-values"
+    assert isinstance(diag["white_noise"], bool), f"{path}.white_noise: expected a bool"
+
+
+def _assert_prewhitened_ccf_structure(name, actual_dir):
+    """ccf_results_prewhitened.csv: same columns, same set of
+    (driver, variable, lag) rows, same `n` per row (data-availability-driven,
+    not fit-derived, so still reproducible), and the same NaN pattern in
+    spearman_r/p_value (insufficient-data rows are deterministic; the FITTED
+    values in non-NaN rows are not compared)."""
+    ref = pd.read_csv(REFERENCE_DIR / name)
+    act = pd.read_csv(actual_dir / name)
+    assert list(ref.columns) == list(act.columns), f"{name}: column mismatch"
+
+    key_cols = ["driver", "variable", "lag"]
+    ref_keys = set(ref[key_cols].apply(tuple, axis=1))
+    act_keys = set(act[key_cols].apply(tuple, axis=1))
+    assert ref_keys == act_keys, f"{name}: driver/variable/lag combinations differ: {ref_keys ^ act_keys}"
+    assert len(ref) == len(act), f"{name}: row count {len(ref)} (reference) vs {len(act)} (actual)"
+
+    merged = ref.merge(act, on=key_cols, suffixes=("_ref", "_act"))
+    assert (merged["n_ref"] == merged["n_act"]).all(), f"{name}: n (valid-pair count) differs where it shouldn't"
+    for col in ("spearman_r", "p_value"):
+        ref_nan = merged[f"{col}_ref"].isna()
+        act_nan = merged[f"{col}_act"].isna()
+        assert (ref_nan == act_nan).all(), f"{name}.{col}: NaN pattern differs from reference"
+
+
+def _assert_prewhitening_diagnostics_structure(name, actual_dir):
+    """prewhitening_diagnostics.json: same set of drivers, each with a
+    well-formed diagnostics block -- order/aic/ljung_box_p values not
+    compared against the reference."""
+    ref = json.loads((REFERENCE_DIR / name).read_text())
+    act = json.loads((actual_dir / name).read_text())
+    assert set(ref.keys()) == set(act.keys()), f"{name}: driver set differs: {set(ref) ^ set(act)}"
+    for driver, diag in act.items():
+        assert diag["driver"] == driver, f"{name}.{driver}: diagnostics 'driver' field doesn't match its own key"
+        _assert_arima_diagnostics_shape(diag, f"{name}.{driver}")
+
+
+def _assert_severe_note_structure(name, actual_dir):
+    """robustness_severe_ccf_note.json: driver/arm/status/reason are fixed
+    strings (not fit-derived) and compared exactly; only the nested
+    `diagnostics` block is structural-only."""
+    ref = json.loads((REFERENCE_DIR / name).read_text())
+    act = json.loads((actual_dir / name).read_text())
+    for key in ("driver", "arm", "status", "reason"):
+        assert ref[key] == act[key], f"{name}.{key}: {act[key]!r} != {ref[key]!r}"
+    _assert_arima_diagnostics_shape(act["diagnostics"], f"{name}.diagnostics")
+
+
 @pytest.mark.golden
 def test_golden_master_reference_matches_declared_tolerances():
     """Guards the test itself, not the pipeline: every file in the frozen
-    reference must have a declared tolerance and vice versa -- catches a
-    forgotten file (or a stale tolerance entry) the moment results/'s shape
-    changes, instead of silently not checking a new file."""
+    reference must have a declared tolerance (or be structural-only) and
+    vice versa -- catches a forgotten file (or a stale entry) the moment
+    results/'s shape changes, instead of silently not checking a new file."""
     ref_files = set(_reference_files())
-    declared = set(TOLERANCE_BY_FILE)
+    declared = set(TOLERANCE_BY_FILE) | STRUCTURAL_ONLY_FILES
     assert ref_files == declared, (
-        f"in reference but no declared tolerance: {ref_files - declared}; "
+        f"in reference but not declared: {ref_files - declared}; "
         f"declared but not in reference: {declared - ref_files}"
     )
 
 
 @pytest.mark.golden
-@pytest.mark.parametrize("name", sorted(TOLERANCE_BY_FILE))
+@pytest.mark.parametrize("name", sorted(set(TOLERANCE_BY_FILE) | STRUCTURAL_ONLY_FILES))
 def test_golden_master_file(golden_pipeline_results, name):
     if name in R_ONLY_FILES and not (golden_pipeline_results / name).exists():
         pytest.skip("Rscript/dlnm not available in this environment")
+    if name == "ccf_results_prewhitened.csv":
+        _assert_prewhitened_ccf_structure(name, golden_pipeline_results)
+        return
+    if name == "prewhitening_diagnostics.json":
+        _assert_prewhitening_diagnostics_structure(name, golden_pipeline_results)
+        return
+    if name == "robustness_severe_ccf_note.json":
+        _assert_severe_note_structure(name, golden_pipeline_results)
+        return
     tol = TOLERANCE_BY_FILE[name]
     if name.endswith(".csv"):
         _assert_csv_matches(name, golden_pipeline_results, tol)

@@ -72,6 +72,23 @@ def difference_series(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return out
 
 
+def _fit_arima_if_converged(series: np.ndarray, order: tuple[int, int, int]):
+    """Fit ARIMA(series, order); return the fit, or None if statsmodels
+    raised ConvergenceWarning or its own mle_retvals says the optimizer
+    didn't converge (or the fit raised outright)."""
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            fit = ARIMA(series, order=order).fit()
+    except Exception:
+        return None
+    warned_nonconvergence = any(issubclass(w.category, ConvergenceWarning) for w in caught)
+    retvals_converged = fit.mle_retvals.get("converged", True) if getattr(fit, "mle_retvals", None) else True
+    if warned_nonconvergence or not retvals_converged:
+        return None
+    return fit
+
+
 def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
     """Grid-search ARIMA(p,0,q) by AIC among candidates that actually
     converge. d=0: MHW driver series are at worst borderline-stationary (ADF
@@ -79,25 +96,26 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
     imposed — matches the orders used in the CCF robustness review (e.g.
     peak intensity: ARIMA(2,0,1)).
 
-    A candidate is discarded, regardless of its AIC, if statsmodels raises
-    ConvergenceWarning or its own mle_retvals says the optimizer didn't
-    converge. Picking the AIC-best order without this check is how issue #4
-    happened: on some drivers the lowest-AIC candidate is a fit that never
-    converged, and its residuals are then unreliable to a degree AIC alone
-    doesn't reveal.
+    A candidate is discarded, regardless of its AIC, if it doesn't converge
+    (see _fit_arima_if_converged). Picking the AIC-best order without this
+    check is how issue #4 happened: on some drivers the lowest-AIC candidate
+    is a fit that never converged, and its residuals are then unreliable to
+    a degree AIC alone doesn't reveal.
+
+    This discards a bad *reason* to prefer one order over another, but does
+    not make the choice itself reproducible across machines: near-degenerate
+    driver series (e.g. mostly-zero event counts) can have a *different set*
+    of candidates converge on different hardware, which can change which
+    order wins by AIC even after this filter -- confirmed on two consecutive
+    CI runs of identical code and data (see test_golden_master.py's
+    STRUCTURAL_ONLY_FILES and issue #4). Order selection here is best-effort,
+    not guaranteed deterministic; nothing downstream should assume it is.
     """
     best_aic, best_order, best_fit = np.inf, None, None
     for p in range(max_p + 1):
         for q in range(max_q + 1):
-            try:
-                with warnings.catch_warnings(record=True) as caught:
-                    warnings.simplefilter("always")
-                    fit = ARIMA(series, order=(p, 0, q)).fit()
-            except Exception:
-                continue
-            warned_nonconvergence = any(issubclass(w.category, ConvergenceWarning) for w in caught)
-            retvals_converged = fit.mle_retvals.get("converged", True) if getattr(fit, "mle_retvals", None) else True
-            if warned_nonconvergence or not retvals_converged:
+            fit = _fit_arima_if_converged(series, (p, 0, q))
+            if fit is None:
                 continue
             if fit.aic < best_aic:
                 best_aic, best_order, best_fit = fit.aic, (p, 0, q), fit
@@ -105,7 +123,8 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
 
 
 def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
-                             tau_max: int = TAU_MAX) -> tuple[pd.DataFrame, dict]:
+                             tau_max: int = TAU_MAX,
+                             order: tuple[int, int, int] | None = None) -> tuple[pd.DataFrame, dict]:
     """
     Box-Jenkins pre-whitening CCF (Method E in the CCF robustness review):
     fit the best ARIMA(p,0,q) (by AIC) to the driver, apply that SAME fitted
@@ -117,9 +136,19 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
     `df` must be the full continuous (imputed) frame — EC50 residuals are
     restricted to real (non-imputed) months only *after* filtering, so the
     filter itself always sees an unbroken monthly series.
+
+    `order`: normally left None (grid-searched by _best_arima_order -- see
+    its docstring on why that choice isn't guaranteed reproducible across
+    machines for near-degenerate drivers). Passing a fixed low order instead
+    skips the search entirely and is what tests/test_mhw_analysis.py uses to
+    exercise this function's fit-apply-correlate computation deterministically,
+    independent of order selection.
     """
     driver_full = df[driver].ffill().bfill().values
-    order, driver_fit = _best_arima_order(driver_full)
+    if order is None:
+        order, driver_fit = _best_arima_order(driver_full)
+    else:
+        driver_fit = _fit_arima_if_converged(driver_full, order)
     if driver_fit is None:
         return pd.DataFrame(), {}
 
@@ -129,7 +158,7 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
         "driver": driver,
         "order": list(order),
         "aic": float(driver_fit.aic),
-        "converged": True,  # _best_arima_order() already discards non-converging candidates
+        "converged": True,  # both paths above only ever return a converged fit
         "ljung_box_p": {int(lag): float(p) for lag, p in zip(lb.index, lb["lb_pvalue"])},
         "white_noise": bool((lb["lb_pvalue"] > 0.05).all()),
     }

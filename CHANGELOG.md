@@ -37,46 +37,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **ARIMA order selection now discards candidates that don't converge (issue #4, branch
-  `fix/arima-convergence`)**, a genuine method change from v1.5.0, not just a bug fix — the
-  numbers below differ from the frozen `v1.5.0` reference. Approved and the golden master
-  reference updated after two checks: (1) CI reproduced the exact same order for all four
-  driver series as this machine, confirming the instability is gone, not just moved; (2) of
-  the four `mhw_days → EC50` lags that newly cross p<0.05 (see below), none survives
-  Bonferroni correction on the manuscript's 89 tests (threshold 0.05/89 = 0.00056; lowest is
-  p=0.0052, ~9x above threshold) — the manuscript cites the frozen v1.5.0 release and Table
-  S3 is not among its results declared reproducible in Data availability, so no manuscript
-  action follows from this change.
+- **ARIMA order selection discards candidates that don't converge, and the golden master
+  stops pinning numeric values it can't reproduce (issue #4, branch `fix/arima-convergence`)**.
   - `_best_arima_order()` (`mhw_analysis.py`) used to pick the lowest-AIC candidate
     regardless of whether the optimizer actually converged. `warnings.simplefilter("ignore")`
     was silencing statsmodels' own `ConvergenceWarning` along with everything else. It now
     captures warnings instead of blanket-ignoring them, and discards any candidate that
     raises `ConvergenceWarning` or whose own `mle_retvals` says it didn't converge, before
-    comparing AIC. Diagnostics now record `converged: true` per driver alongside `order`/`aic`
-    (trivially true after the filter, kept explicit per the contract).
-  - Two of the four MHW driver series had a non-converging candidate sitting at the AIC
-    optimum: `mhw_severe_intensity` (ARIMA(3,0,3) → now ARIMA(2,0,2)) and `mhw_days`
-    (ARIMA(3,0,1) → now ARIMA(1,0,1)). `mhw_peak_intensity` and `mhw_cum_intensity` were
-    already picking a convergent candidate and are unaffected.
-  - Effect on `results/ccf_results_prewhitened.csv`: only the `mhw_days → EC50` rows change
-    (all 13 lags); `mhw_peak_intensity`/`mhw_cum_intensity` rows are unchanged. Four lags
-    (1, 2, 3, 9) cross the p<0.05 threshold that weren't significant before.
+    comparing AIC (`_fit_arima_if_converged()`, shared with a new `order` parameter on
+    `compute_ccf_prewhitened()` that skips the search entirely when a fixed order is passed).
+  - This fixes a real bug — a discarded fit's residuals are unreliable in a way AIC alone
+    doesn't reveal — but does **not** make order selection itself reproducible across
+    machines. Confirmed directly: two consecutive CI runs of the identical branch (no code
+    change between them) picked different orders for `mhw_days` on GitHub's own hosted
+    runners. For a near-degenerate driver (`mhw_days`: 45% zero months; `mhw_severe_intensity`:
+    94%), *which* candidates converge at all depends on the runner's hardware/BLAS path, which
+    can change which order wins by AIC even after discarding non-convergent ones. No
+    Bonferroni-survival check or manuscript comparison was performed on the resulting numbers
+    for this reason: they are not a property of the code and data alone, so they are not
+    reported here or anywhere else. A deterministic order-selection procedure is left to
+    V3.1 (see issue #4).
+  - Consequently, `tests/test_golden_master.py` no longer compares the fitted values in
+    `results/ccf_results_prewhitened.csv`, `results/prewhitening_diagnostics.json`, or
+    `results/robustness_severe_ccf_note.json`'s `diagnostics` block against the frozen
+    reference — the previous `ARIMA_FIT` tolerance tier (rtol=0.5, atol=0.02, introduced
+    2026-09-21) is retired, and no numeric tolerance replaces it for these three: a new
+    `STRUCTURAL_ONLY_FILES` set checks columns, row count, which driver/lag combinations
+    exist, and where NaN falls, never the fitted numbers themselves (see the module
+    docstring). `tests/test_mhw_analysis.py` (new) separately covers the fit/filter/
+    correlate computation on its own, with a forced fixed order, under `LOOSE` tolerance.
   - `mhw_robustness.py::run_severe_ccf`'s ARIMA-prewhitened arm for `mhw_severe_intensity` is
-    now marked `not_applicable`: `robustness_severe_ccf.csv`'s `r_arima`/`p_arima` columns are
-    always `NaN`, with the reason (and the full diagnostics) written to the new
-    `results/robustness_severe_ccf_note.json`. Reason: 13 of the driver's 17 nonzero months
-    fall after the 2016-06 EC50 regime shift (`SPLIT_DATE`); the filter is estimated on the
-    driver alone and doesn't remove that shift from the target, so the residual correlation
-    is confounded by it rather than reflecting a lagged response — confirmed by re-running
-    with the shift removed from EC50 (pre/post demeaned): significant lags collapse from
-    10/13 to 1/13 at the now-selected order. The first-differenced arm (`r_diff`/`p_diff`) is
-    unaffected and is the retained result for this driver.
-  - `tests/test_golden_master.py`: the `ARIMA_FIT` tolerance tier (rtol=0.5, atol=0.02,
-    introduced 2026-09-21 as a gross-error-only stopgap) is retired.
-    `ccf_results_prewhitened.csv` moves to `LOOSE` (rtol=1e-3, the same tier already used for
-    other iterative-MLE-optimizer outputs); the per-column override on
-    `robustness_severe_ccf.csv` is removed (its `r_arima`/`p_arima` are now constant `NaN`,
-    trivially stable across platforms, so the file takes its default `TIGHT` tolerance).
+    marked `not_applicable`: `results/robustness_severe_ccf.csv`'s `r_arima`/`p_arima` columns
+    are always `NaN` (unconditionally, so still `TIGHT`-tolerance-safe), with the reason (and
+    diagnostics) written to the new `results/robustness_severe_ccf_note.json`. Reason: 13 of
+    the driver's 17 nonzero months fall after the 2016-06 EC50 regime shift (`SPLIT_DATE`);
+    the filter is estimated on the driver alone and doesn't remove that shift from the target,
+    so the residual correlation is confounded by it rather than reflecting a lagged response —
+    confirmed by re-running with the shift removed from EC50 (pre/post demeaned): significant
+    lags collapse from 10/13 to 1/13 at the order convergent on this machine. The
+    first-differenced arm (`r_diff`/`p_diff`) is unaffected and is the retained result for
+    this driver.
 
 ### Fixed
 
