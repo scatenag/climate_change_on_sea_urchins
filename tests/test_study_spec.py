@@ -91,6 +91,14 @@ def test_response_nature_is_not_biomarker():
     assert load_study(EXAMPLE).responses[0].nature == "population_proxy"
 
 
+def test_response_label_matches_ec50_for_output_identity():
+    # Invariant #4 (CLAUDE.md): artifact identity (results/ CSV headers,
+    # dashboard labels) is derived from the spec, never a hardcoded literal.
+    # For Livorno this equals "EC50", so existing outputs stay byte-identical
+    # once modules read it from here instead of the string "EC50".
+    assert load_study(EXAMPLE).responses[0].label == "EC50"
+
+
 def test_missing_file_raises_study_spec_error_not_a_bare_traceback(tmp_path):
     with pytest.raises(StudySpecError, match="no such file"):
         load_study(tmp_path / "does_not_exist.yaml")

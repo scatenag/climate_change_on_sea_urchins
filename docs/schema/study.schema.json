@@ -109,6 +109,11 @@
           "title": "Id",
           "type": "string"
         },
+        "label": {
+          "description": "Human-readable name for output artifacts (results/ CSV/JSON headers, dashboard labels) -- distinct from `id`, which is a slug. Writing a literal like 'EC50' at an output boundary instead of reading it from here is the artifact-identity invariant (CLAUDE.md #4) being violated, not honored.",
+          "title": "Label",
+          "type": "string"
+        },
         "nature": {
           "description": "What kind of quantity this is. Never default to 'biomarker' as a generic label for 'response series' -- most response series, including the current EC50 case, are not biomarkers, and calling one that is scientifically wrong.",
           "enum": [
@@ -143,6 +148,7 @@
       },
       "required": [
         "id",
+        "label",
         "nature",
         "adverse_direction",
         "unit",

@@ -26,6 +26,7 @@ sites:
 
 responses:
   - id: plividus-cu-ec50
+    label: EC50
     nature: population_proxy
     adverse_direction: decrease
     unit: ug/L
