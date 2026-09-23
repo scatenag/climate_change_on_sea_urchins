@@ -30,6 +30,14 @@ BBOX_DELTA = _site.bbox_delta
 EC50_SHEET_ID   = _response.source.sheet_id
 EC50_EXPORT_URL = f"https://docs.google.com/spreadsheets/d/{EC50_SHEET_ID}/export?format=csv"
 
+# --- Response series specification, for output identity ---------------------
+# Analysis modules never import this module directly (that would tie each
+# one to a single case, the opposite of what V2.1 is for) -- they receive a
+# ResponseSpec as a `response` parameter instead. This is the one place that
+# default comes from when a caller doesn't pass one explicitly, via
+# common.default_response_spec() (see its docstring).
+RESPONSE_SPEC = _response
+
 # --- Unit conversions --------------------------------------------------------
 # Copernicus's `spco2` variable (Mediterranean BGC reanalysis) is delivered in
 # Pascal -- and correctly documented as such: the CF standard_name it carries,

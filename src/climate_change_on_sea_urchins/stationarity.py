@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller, kpss
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL, default_response_spec
 
 
 def test_series(series: pd.Series, name: str) -> dict:
@@ -41,16 +41,22 @@ def test_series(series: pd.Series, name: str) -> dict:
     }
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+
     df, df_real, _, _ = load_data()
 
-    # For EC50 use real measurements only (no imputed values)
+    # For the response use real measurements only (no imputed values)
     results = []
     for col in ALL_COLS + MHW_COLS:
         if col not in df.columns:
             continue
-        src = df_real if col == "EC50" else df
-        results.append(test_series(src[col], col))
+        src = df_real if col == RESPONSE_COL else df
+        # Output identity: the response's "variable" name is its display
+        # label, never the internal RESPONSE_COL (see common.py).
+        name = response.label if col == RESPONSE_COL else col
+        results.append(test_series(src[col], name))
 
     (RESULTS / "stationarity_results.json").write_text(json.dumps(results, indent=2))
 

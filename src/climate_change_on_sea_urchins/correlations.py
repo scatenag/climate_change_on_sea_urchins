@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_DATE
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL, SPLIT_DATE, default_response_spec
 
 
 def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.DataFrame:
@@ -69,26 +69,31 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
     return r_df, p_df
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for the response row/column below
+
     df, _, _, _ = load_data()
 
     df_work = df.set_index("Datetime")
 
-    # Mirror notebook cell 7: apply rolling mean to ALL EC50 values (not just NaN).
-    # The original notebook smooths the full EC50 series before decomposition,
-    # which reduces measurement noise and produces meaningful trend correlations.
-    df_work["EC50"] = df_work["EC50"].rolling(
+    # Mirror notebook cell 7: apply rolling mean to ALL response values (not
+    # just NaN). The original notebook smooths the full series before
+    # decomposition, which reduces measurement noise and produces
+    # meaningful trend correlations.
+    df_work[RESPONSE_COL] = df_work[RESPONSE_COL].rolling(
         window=12, min_periods=1, center=True
     ).mean()
 
     pre_mask  = df_work.index <  SPLIT_DATE
     post_mask = df_work.index >= SPLIT_DATE
 
-    env_cols = ALL_COLS   # O2, CO2, Temperature, Salinity, pH, EC50
+    env_cols = ALL_COLS   # O2, CO2, Temperature, Salinity, pH, response
     mhw_cols = MHW_COLS   # mhw_peak_intensity, mhw_days
     all_cols  = env_cols + mhw_cols
 
-    for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
+    for period, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
         subset = df_work[mask]
 
         # Trend components for env variables
@@ -100,8 +105,12 @@ def run():
         combined = pd.concat([trend_env, trend_mhw], axis=1)
 
         r_df, p_df = spearman_matrix(combined, all_cols)
-        r_df.to_csv(RESULTS / f"corr_{label}.csv")
-        p_df.to_csv(RESULTS / f"corr_pval_{label}.csv")
+        # Output identity: the response's row/column name is its display
+        # label, never the internal RESPONSE_COL (see common.py).
+        r_df = r_df.rename(index={RESPONSE_COL: label}, columns={RESPONSE_COL: label})
+        p_df = p_df.rename(index={RESPONSE_COL: label}, columns={RESPONSE_COL: label})
+        r_df.to_csv(RESULTS / f"corr_{period}.csv")
+        p_df.to_csv(RESULTS / f"corr_pval_{period}.csv")
 
     print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {len(all_cols)} vars)")
 

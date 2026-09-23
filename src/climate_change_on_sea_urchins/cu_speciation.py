@@ -44,7 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, SPLIT_DATE
+from .common import load_data, RESULTS, RESPONSE_COL, IMPUTED_COL, SPLIT_DATE, default_response_spec
 
 # Representative NW-Mediterranean surface total alkalinity (mol/kg-SW), scaled by
 # salinity. The decomposition uses only the RELATIVE carbonate-ion ratio, which is
@@ -102,11 +102,16 @@ def _decline_pct(pre, post):
     return (pre.mean() - post.mean()) / pre.mean() * 100.0
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for output columns below
+    bio_col, bio_lit_col = f"{label}_bio", f"{label}_bio_lit"
+
     df_full, df_real, _, _ = load_data()
 
-    d = df_real.dropna(subset=["EC50", "pH", "Temperature", "Salinity"]).copy()
-    d = d[~d["EC50_imputed"]].reset_index(drop=True)
+    d = df_real.dropna(subset=[RESPONSE_COL, "pH", "Temperature", "Salinity"]).copy()
+    d = d[~d[IMPUTED_COL]].reset_index(drop=True)
 
     # Carbonate ion the embryos experienced each assay month
     d["CO3"] = carbonate_ion(d["pH"].values, d["Temperature"].values, d["Salinity"].values)
@@ -122,41 +127,44 @@ def run():
     # Upper bound: assumes CuCO3(0) fully dominates inorganic Cu complexation.
     d["fCu_amplification"] = co3_ref / d["CO3"]
 
-    # Free-Cu2+-equivalent ("biological") EC50: constant biology -> flat series.
-    d["EC50_bio"] = d["EC50"] * d["fCu_amplification"]
+    # Free-Cu2+-equivalent ("biological") response: constant biology -> flat series.
+    d[bio_col] = d[RESPONSE_COL] * d["fCu_amplification"]
 
     # Independent literature-anchored correction (log-linear in pH).
     # amplification = fCu2+(t)/fCu2+(ref) = exp(S_pH * (pH_t - pH_ref)), with the
     # negative sensitivity S_pH this exceeds 1 when pH falls below the baseline.
     ph_ref = d.loc[pre_mask, "pH"].mean()
     d["fCu_amplification_lit"] = np.exp(LIT_SENSITIVITY * (d["pH"] - ph_ref))
-    d["EC50_bio_lit"] = d["EC50"] * d["fCu_amplification_lit"]
+    d[bio_lit_col] = d[RESPONSE_COL] * d["fCu_amplification_lit"]
 
+    # Output identity: response columns are named from the display label,
+    # never RESPONSE_COL (see common.py) -- for Livorno label == "EC50", so
+    # this file's columns are unchanged.
     out = d[["Datetime", "pH", "Temperature", "Salinity", "CO3",
              "fCu_amplification", "fCu_amplification_lit",
-             "EC50", "EC50_bio", "EC50_bio_lit"]].copy()
+             RESPONSE_COL, bio_col, bio_lit_col]].rename(columns={RESPONSE_COL: label})
     out.to_csv(RESULTS / "cu_speciation_decomposition.csv", index=False)
 
     # ---- Decomposition summary ----
-    ec50_pre, ec50_post = d.loc[pre_mask, "EC50"], d.loc[post_mask, "EC50"]
+    ec50_pre, ec50_post = d.loc[pre_mask, RESPONSE_COL], d.loc[post_mask, RESPONSE_COL]
     dec_nom = _decline_pct(ec50_pre, ec50_post)
 
-    def geochem_share(bio_col):
-        bio_pre, bio_post = d.loc[pre_mask, bio_col], d.loc[post_mask, bio_col]
+    def geochem_share(col):
+        bio_pre, bio_post = d.loc[pre_mask, col], d.loc[post_mask, col]
         dec_bio = _decline_pct(bio_pre, bio_post)
         return dec_bio, (dec_nom - dec_bio) / dec_nom * 100.0
 
-    dec_bio_carb, share_carb = geochem_share("EC50_bio")
-    dec_bio_lit, share_lit = geochem_share("EC50_bio_lit")
+    dec_bio_carb, share_carb = geochem_share(bio_col)
+    dec_bio_lit, share_lit = geochem_share(bio_lit_col)
 
     # Robustness of the residual biological decline (Mann-Whitney on each
-    # corrected EC50 series -- carbonate-based and literature-based give
+    # corrected response series -- carbonate-based and literature-based give
     # slightly different corrections, so both are tested independently
     # rather than reporting only one).
-    u_carb, p_bio_carb = stats.mannwhitneyu(d.loc[pre_mask, "EC50_bio"],
-                                            d.loc[post_mask, "EC50_bio"], alternative="greater")
-    u_lit, p_bio_lit = stats.mannwhitneyu(d.loc[pre_mask, "EC50_bio_lit"],
-                                          d.loc[post_mask, "EC50_bio_lit"], alternative="greater")
+    u_carb, p_bio_carb = stats.mannwhitneyu(d.loc[pre_mask, bio_col],
+                                            d.loc[post_mask, bio_col], alternative="greater")
+    u_lit, p_bio_lit = stats.mannwhitneyu(d.loc[pre_mask, bio_lit_col],
+                                          d.loc[post_mask, bio_lit_col], alternative="greater")
 
     summary = {
         "n_pre": int(pre_mask.sum()),

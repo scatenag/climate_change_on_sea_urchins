@@ -69,7 +69,7 @@ from scipy import stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, RESULTS, ROOT
+from .common import load_data, RESULTS, ROOT, RESPONSE_COL, default_response_spec
 
 THRESHOLD_C = 24.0                 # C, chronic gametogenesis-blocking threshold
                                     # for P. lividus (Amato et al. 2025) -- the
@@ -102,17 +102,23 @@ def _detrended_corr(x, y, t):
     return float(r), float(p)
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for thermal_legacy.csv's column below
+
     _, df_real, _, _ = load_data()
-    real = df_real.dropna(subset=["EC50"]).reset_index(drop=True)[["Datetime", "EC50"]]
+    real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
     sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
     sst = sst.sort_values("Datetime").reset_index(drop=True)
 
     t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)
-    y = real["EC50"].values
+    y = real[RESPONSE_COL].values
 
-    out = real.copy()
+    # Output identity: rename to the display label, never RESPONSE_COL --
+    # for Livorno label == "EC50", so thermal_legacy.csv is unchanged.
+    out = real.rename(columns={RESPONSE_COL: label})
     rows = []
     for win in WINDOWS:
         col = f"dose_{int(THRESHOLD_C)}C_{win}m"
@@ -244,13 +250,13 @@ def run_threshold_sensitivity(thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITI
     both the rank and the parametric test clear Bonferroni" rule run() uses
     across windows, applied here across thresholds instead."""
     _, df_real, _, _ = load_data()
-    real = df_real.dropna(subset=["EC50"]).reset_index(drop=True)[["Datetime", "EC50"]]
+    real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
     sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
     sst = sst.sort_values("Datetime").reset_index(drop=True)
 
     t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)
-    y = real["EC50"].values
+    y = real[RESPONSE_COL].values
 
     res = pd.DataFrame([_sensitivity_row(real, sst, t, y, window, thr) for thr in thresholds])
 

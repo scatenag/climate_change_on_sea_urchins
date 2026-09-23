@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, ROOT, SPLIT_YEAR
+from .common import load_data, RESULTS, ROOT, SPLIT_YEAR, RESPONSE_COL, default_response_spec
 
 ENV = ["Temperature", "Salinity", "CO2", "O2", "pH"]
 # Sign of each variable along the climate-change stress axis (stress increases
@@ -101,19 +101,23 @@ def _ews(ec_series):
     }
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for the response series below
+
     df_full, df_real, _, _ = load_data()
     split_year = int(SPLIT_YEAR)
 
     rows = []
 
-    # --- EC50 changepoint (monthly real measurements) ---
-    r = df_real.dropna(subset=["EC50"]).reset_index(drop=True)
-    k, p = pettitt(r["EC50"].values)
+    # --- response changepoint (monthly real measurements) ---
+    r = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)
+    k, p = pettitt(r[RESPONSE_COL].values)
     ec50_break = r["Datetime"].iloc[k]
-    rows.append({"series": "EC50", "break_date": ec50_break.date().isoformat(),
+    rows.append({"series": label, "break_date": ec50_break.date().isoformat(),
                  "break_year": int(ec50_break.year), "p_value": p,
-                 "pre_mean": float(r["EC50"][:k].mean()), "post_mean": float(r["EC50"][k:].mean())})
+                 "pre_mean": float(r[RESPONSE_COL][:k].mean()), "post_mean": float(r[RESPONSE_COL][k:].mean())})
 
     # --- MHW exposure changepoints (annual) ---
     ann = pd.read_csv(ROOT / "data" / "mhw_annual.csv")
@@ -144,41 +148,46 @@ def run():
     stress_idx.to_csv(RESULTS / "regime_shift_stress_index.csv", index=False)
 
     # --- early-warning signals ---
-    ews = _ews(r.set_index("Datetime")["EC50"])
+    ews = _ews(r.set_index("Datetime")[RESPONSE_COL])
     csd = (ews["variance_kendall_tau"] > 0 and ews["variance_p"] < 0.05
            and ews["ar1_kendall_tau"] > 0 and ews["ar1_p"] < 0.05)
 
     exposure_lag = (int(ec50_break.year) - mhw_break_year) if mhw_break_year else None
 
     summary = {
+        # Fixed schema key, not derived from RESPONSE_COL or label: unlike
+        # "series" above (one row per variable, where label belongs), this
+        # is a single, hardcoded field name describing its role -- it was
+        # never at risk of drifting when RESPONSE_COL's value changes later,
+        # so left as-is rather than renamed without being asked.
         "ec50_regime_shift": {"break": ec50_break.date().isoformat(), "p": p,
-                              "pre_mean": float(r["EC50"][:k].mean()),
-                              "post_mean": float(r["EC50"][k:].mean())},
+                              "pre_mean": float(r[RESPONSE_COL][:k].mean()),
+                              "post_mean": float(r[RESPONSE_COL][k:].mean())},
         "mhw_exposure_break_year": mhw_break_year,
         "exposure_precedes_response_years": exposure_lag,
         "multifactorial_stress_index": {
             "pc1_variance_explained": var_expl,
             "pc1_loadings_stress_oriented": loadings,
-            "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated "
-                    "climate-change axis. Correlation with EC50 is co-trended, not causal.",
+            "note": f"PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated "
+                    f"climate-change axis. Correlation with {label} is co-trended, not causal.",
         },
         "early_warning_signals": ews,
         "critical_slowing_down_detected": bool(csd),
         "verdict": (
-            "Regime shift in EC50 confirmed ~{yr} (Pettitt p={p:.1e}). MHW exposure "
+            "Regime shift in {label} confirmed ~{yr} (Pettitt p={p:.1e}). MHW exposure "
             "shifts ~{mhw}, ~{lag} yr BEFORE the biological collapse — consistent with "
             "multi-year population-scale accumulation, not an acute lag. Environmental "
             "stress is multifactorial (PC1 = {ve:.0f}% of T/S/CO2/O2/pH variance). "
             "Canonical critical-slowing-down early-warning signals are NOT present "
             "(absolute variance falls, AR(1) not rising) — this is a documented regime "
             "shift, not a demonstrated dynamical tipping point."
-        ).format(yr=ec50_break.year, p=p, mhw=mhw_break_year,
+        ).format(label=label, yr=ec50_break.year, p=p, mhw=mhw_break_year,
                  lag=exposure_lag, ve=var_expl * 100),
     }
     with (RESULTS / "regime_shift_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"✓ regime_shift: EC50 break {ec50_break.date()} (p={p:.1e}); MHW exposure "
+    print(f"✓ regime_shift: {label} break {ec50_break.date()} (p={p:.1e}); MHW exposure "
           f"break {mhw_break_year} (~{exposure_lag} yr earlier); stress PC1={var_expl*100:.0f}%; "
           f"critical slowing down: {'YES' if csd else 'NOT detected'}")
 

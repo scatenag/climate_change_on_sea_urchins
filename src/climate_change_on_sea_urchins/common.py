@@ -147,3 +147,21 @@ def load_ec50_monthly() -> pd.DataFrame:
     monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"])
     monthly = monthly.rename(columns={"EC50": RESPONSE_COL})
     return monthly.sort_values("Datetime").reset_index(drop=True)
+
+
+def default_response_spec():
+    """Loads config.RESPONSE_SPEC -- the one place this happens outside
+    pipeline.py's own explicit load. Fallback for a module's `response`
+    parameter when a caller doesn't pass one explicitly (tests, `python -m
+    module`); pipeline.py always passes one.
+
+    Transitional (V2.1 response-abstraction, note-tecniche.md sec 4): remove
+    once every caller passes the object explicitly. A module that reaches
+    this default can only ever process the one case config.py currently
+    points at -- that's why it's a fallback, not the primary path, and why
+    this import is local to the function rather than a module-level import
+    of config (which would tie every module that imports common.py, not
+    just the ones that actually hit this fallback, to a single case).
+    """
+    import config
+    return config.RESPONSE_SPEC
