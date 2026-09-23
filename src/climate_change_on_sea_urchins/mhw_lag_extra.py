@@ -30,7 +30,7 @@ import json
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
-from .common import load_data, RESULTS
+from .common import load_data, RESULTS, RESPONSE_COL, default_response_spec
 
 LAG_MIN, LAG_MAX = -6, 12
 N_BOOT = 999
@@ -52,7 +52,7 @@ def _nearest_ec50(dates: pd.DatetimeIndex, obs_dates: pd.Series, obs_ec50: pd.Se
 
 def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     lags = np.arange(LAG_MIN, LAG_MAX + 1)
-    obs_dates, obs_ec50 = df_real["Datetime"], df_real["EC50"]
+    obs_dates, obs_ec50 = df_real["Datetime"], df_real[RESPONSE_COL]
 
     rows = []
     for _, ev in events.iterrows():
@@ -60,10 +60,10 @@ def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
         vals = _nearest_ec50(pd.DatetimeIndex(dates), obs_dates, obs_ec50)
         for lag, v in zip(lags, vals):
             rows.append((lag, v))
-    epoch_df = pd.DataFrame(rows, columns=["lag", "EC50"])
+    epoch_df = pd.DataFrame(rows, columns=["lag", RESPONSE_COL])
 
     composite = (
-        epoch_df.groupby("lag")["EC50"]
+        epoch_df.groupby("lag")[RESPONSE_COL]
         .agg(n="count", mean_ec50="mean", sd_EC50="std")
         .reset_index()
     )
@@ -104,7 +104,7 @@ def _season_of(month: int) -> str:
 
 
 def build_post_event_df(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
-    obs_dates, obs_ec50 = df_real["Datetime"], df_real["EC50"]
+    obs_dates, obs_ec50 = df_real["Datetime"], df_real[RESPONSE_COL]
     t0 = df_real["Datetime"].min()
 
     rows = []
@@ -116,21 +116,25 @@ def build_post_event_df(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataF
         for lag, d, v in zip(lags, dates, vals):
             if np.isnan(v):
                 continue
-            rows.append(dict(
-                event_id=ev["event_id"], lag_post_end=int(lag), EC50=v,
-                intensity_max=ev["intensity_max"], duration_days=ev["duration_days"],
-                season=_season_of(d.month),
-                time_index=(d - t0).days / 365.25,
-            ))
+            rows.append({
+                "event_id": ev["event_id"], "lag_post_end": int(lag), RESPONSE_COL: v,
+                "intensity_max": ev["intensity_max"], "duration_days": ev["duration_days"],
+                "season": _season_of(d.month),
+                "time_index": (d - t0).days / 365.25,
+            })
     return pd.DataFrame(rows)
 
 
-def run_mixed_effects(df_real: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def run_mixed_effects(df_real: pd.DataFrame, events: pd.DataFrame, response=None) -> tuple[pd.DataFrame, dict]:
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for the predicted-column name below
+
     post_event_df = build_post_event_df(df_real, events)
-    print(f"  Post-event observations (real EC50 only): {len(post_event_df)}")
+    print(f"  Post-event observations (real response only): {len(post_event_df)}")
 
     model = smf.mixedlm(
-        "EC50 ~ lag_post_end * intensity_max + duration_days + C(season) + time_index",
+        f"{RESPONSE_COL} ~ lag_post_end * intensity_max + duration_days + C(season) + time_index",
         data=post_event_df, groups=post_event_df["event_id"],
     )
     fit = model.fit(reml=True)
@@ -162,17 +166,23 @@ def run_mixed_effects(df_real: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.D
                     + fit.params.get("duration_days", 0.0) * med_duration
                     + fit.params.get("time_index", 0.0) * x["time_index"]
                     + fit.params.get("C(season)[T.Summer]", 0.0))  # reference summer for the predicted curve
-            pred_rows.append(dict(lag_post_end=lag, intensity_max=inten, EC50_pred=pred))
+            # Output identity: predicted-column name from the display label,
+            # never RESPONSE_COL -- for Livorno label == "EC50", so this
+            # stays "EC50_pred".
+            pred_rows.append({"lag_post_end": lag, "intensity_max": inten, f"{label}_pred": pred})
     predictions = pd.DataFrame(pred_rows)
     return predictions, summary
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run() -> None:
+def run(response=None) -> None:
+    if response is None:
+        response = default_response_spec()
+
     df_full, df_real, events, monthly = load_data()
 
-    print("── SEA (Python port, real EC50 only) ──────────────────────────────")
+    print("── SEA (Python port, real response only) ───────────────────────────")
     sea = run_sea(df_real, events)
     sea.to_csv(RESULTS / "sea_results.csv", index=False)
     n_sig = int(sea["significant"].sum())
@@ -180,7 +190,7 @@ def run() -> None:
           f"{'diffuse across most lags (trend-confounding signature)' if n_sig > len(sea) * 0.7 else 'localized'}")
 
     print("\n── Mixed-effects model (Python port, corrected time-indexing) ─────")
-    predictions, summary = run_mixed_effects(df_real, events)
+    predictions, summary = run_mixed_effects(df_real, events, response=response)
     predictions.to_csv(RESULTS / "mixed_effects_predictions.csv", index=False)
     (RESULTS / "mixed_effects_summary.json").write_text(json.dumps(summary, indent=2))
     p_lag = summary["pvalues"].get("lag_post_end", float("nan"))

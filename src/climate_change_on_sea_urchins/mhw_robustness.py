@@ -37,8 +37,8 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import r2_score
-from .common import load_data, RESULTS, TAU_MAX
-from .mhw_analysis import compute_ccf, difference_series, compute_ccf_prewhitened
+from .common import load_data, RESULTS, TAU_MAX, RESPONSE_COL, IMPUTED_COL
+from .mhw_analysis import compute_ccf, difference_series, compute_ccf_prewhitened, _mask_imputed
 
 RNG_SEED = 0
 
@@ -67,15 +67,15 @@ def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.Data
     df2 = df_full.merge(sev_monthly, left_on="Datetime", right_index=True, how="left")
     df2["mhw_severe_intensity"] = df2["mhw_severe_intensity"].fillna(0.0)
 
-    driver, targets = "mhw_severe_intensity", ["EC50"]
+    driver, targets = "mhw_severe_intensity", [RESPONSE_COL]
     df_ccf = df2.copy()
-    df_ccf.loc[df_ccf["EC50_imputed"], "EC50"] = np.nan
+    df_ccf[RESPONSE_COL] = _mask_imputed(df_ccf, RESPONSE_COL, df_ccf[RESPONSE_COL].values)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         raw = compute_ccf(df_ccf, driver, targets)
         df_diff = difference_series(df2, [driver] + targets)
-        df_diff.loc[df2["EC50_imputed"].values, "EC50"] = np.nan
+        df_diff[RESPONSE_COL] = _mask_imputed(df2, RESPONSE_COL, df_diff[RESPONSE_COL].values)
         diff = compute_ccf(df_diff, driver, targets)
         pw, diag = compute_ccf_prewhitened(df2, driver, targets)
 
@@ -114,14 +114,14 @@ def run_summer_temp(df_full: pd.DataFrame, df_real: pd.DataFrame) -> pd.DataFram
             ref_date = pd.Timestamp(f"{ref_year}-07-15")
             lag_months = (dt.year - ref_date.year) * 12 + (dt.month - ref_date.month)
             if 0 <= lag_months <= 12 and ref_year in jja.index:
-                rows.append(dict(lag=lag_months, EC50=r["EC50"], jja_anom=jja.loc[ref_year]))
+                rows.append({"lag": lag_months, RESPONSE_COL: r[RESPONSE_COL], "jja_anom": jja.loc[ref_year]})
     lag_df = pd.DataFrame(rows)
 
     out = []
     for lag in range(13):
         sub = lag_df[lag_df.lag == lag]
         if len(sub) >= 10:
-            r, p = stats.spearmanr(sub["jja_anom"], sub["EC50"])
+            r, p = stats.spearmanr(sub["jja_anom"], sub[RESPONSE_COL])
             out.append(dict(lag=lag, n=len(sub), r=r, p=p))
     return pd.DataFrame(out)
 
@@ -138,9 +138,9 @@ def run_ml_battery(df_full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     feat["month_sin"] = np.sin(2 * np.pi * d["Datetime"].dt.month / 12)
     feat["month_cos"] = np.cos(2 * np.pi * d["Datetime"].dt.month / 12)
 
-    real_mask = ~d["EC50_imputed"]
+    real_mask = ~d[IMPUTED_COL]
     Xr = feat.drop(columns=["Datetime"])[real_mask.values].reset_index(drop=True)
-    yr = d["EC50"][real_mask.values].reset_index(drop=True)
+    yr = d[RESPONSE_COL][real_mask.values].reset_index(drop=True)
     Xr = Xr.dropna()
     yr = yr.loc[Xr.index].reset_index(drop=True)
     Xr = Xr.reset_index(drop=True)
@@ -189,7 +189,7 @@ def run_ccm(df_full: pd.DataFrame) -> pd.DataFrame:
 
     d = df_full.sort_values("Datetime").reset_index(drop=True)
     x = d["mhw_peak_intensity"].values.astype(float)
-    y = d["EC50"].values.astype(float)
+    y = d[RESPONSE_COL].values.astype(float)
     x = (x - x.mean()) / x.std()
     y = (y - y.mean()) / y.std()
 
@@ -218,7 +218,7 @@ def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dic
 
     d = df_full.sort_values("Datetime").reset_index(drop=True)
     x = d["mhw_peak_intensity"].values.astype(float)
-    y = d["EC50"].values.astype(float)
+    y = d[RESPONSE_COL].values.astype(float)
     x = (x - x.mean()) / x.std()
     y = (y - y.mean()) / y.std()
 
