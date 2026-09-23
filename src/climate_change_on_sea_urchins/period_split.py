@@ -7,7 +7,7 @@ import json
 import numpy as np
 import pandas as pd
 from scipy import stats
-from .common import ROOT, load_data, RESULTS, ALL_COLS, MHW_COLS, SPLIT_DATE
+from .common import load_data, load_ec50_raw, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL, SPLIT_DATE
 
 
 def _raw_trial_contrast():
@@ -16,11 +16,10 @@ def _raw_trial_contrast():
     used elsewhere in this module. Manuscript section 3.1 reports this
     trial-level contrast alongside the monthly one.
     """
-    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
-    raw = raw.sort_values(["Datetime", "ID"]).reset_index(drop=True)
+    raw = load_ec50_raw()
 
-    pre = raw.loc[raw["Datetime"] < SPLIT_DATE, "EC50"]
-    post = raw.loc[raw["Datetime"] >= SPLIT_DATE, "EC50"]
+    pre = raw.loc[raw["Datetime"] < SPLIT_DATE, RESPONSE_COL]
+    post = raw.loc[raw["Datetime"] >= SPLIT_DATE, RESPONSE_COL]
     _, p_mwu = stats.mannwhitneyu(pre, post, alternative="two-sided")
 
     diff_abs = float(pre.mean() - post.mean())

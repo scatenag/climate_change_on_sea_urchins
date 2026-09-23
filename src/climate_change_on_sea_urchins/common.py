@@ -108,3 +108,42 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
 ENV_COLS  = ["O2", "CO2", "Temperature", "Salinity", "pH"]
 ALL_COLS  = ENV_COLS + [RESPONSE_COL]
 MHW_COLS  = ["mhw_peak_intensity", "mhw_days"]
+
+
+def load_ec50_raw() -> pd.DataFrame:
+    """The per-trial (single-bioassay) raw sequence, data/ec50_raw.csv --
+    one row per determination, not yet aggregated to any period (distinct
+    from load_data()'s monthly df_full/df_real). Every column from the CSV
+    is preserved (ID, the negative-control replicate columns, etc.); only
+    the response value column is renamed to RESPONSE_COL, so callers never
+    reference the literal "EC50".
+
+    Sorted by (Datetime, ID), not Datetime alone: ~110 of 295 rows share a
+    Datetime (many determinations record only the month), and that tie
+    order changes downstream statistics enough to matter (see
+    changepoint.py's module docstring) -- ID (the source sheet's row order)
+    is what makes the sequence reproducible.
+    """
+    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
+    raw = raw.rename(columns={"EC50": RESPONSE_COL})
+    if "ID" not in raw.columns:
+        raise ValueError(
+            "data/ec50_raw.csv is missing the ID column -- re-run "
+            "scripts/fetch_ec50.py. Many determinations share a Datetime "
+            "(month-only dates), so ID (the source sheet's row order) is "
+            "required to give the ordinal sequence a reproducible order; "
+            "sorting by Datetime alone is not enough."
+        )
+    return raw.sort_values(["Datetime", "ID"]).reset_index(drop=True)
+
+
+def load_ec50_monthly() -> pd.DataFrame:
+    """The monthly-aggregated response series as fetched directly from the
+    source, data/ec50_sheets.csv -- distinct from load_data()'s df_full/
+    df_real, which merge in environmental variables and MHW metrics on top
+    of it. Its dates are unique (one row per month), unlike ec50_raw.csv's.
+    Response value column renamed to RESPONSE_COL, same as load_ec50_raw().
+    """
+    monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"])
+    monthly = monthly.rename(columns={"EC50": RESPONSE_COL})
+    return monthly.sort_values("Datetime").reset_index(drop=True)
