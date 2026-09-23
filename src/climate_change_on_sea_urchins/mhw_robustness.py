@@ -45,7 +45,7 @@ RNG_SEED = 0
 
 # ── 1. Severe/Extreme-only driver ───────────────────────────────────────────
 
-# Why the ARIMA-prewhitened arm is marked not_applicable below -- see issue #4.
+# Why the ARIMA-prewhitened arm is marked not_applicable below -- see issue #9.
 _ARIMA_NOT_APPLICABLE_REASON = (
     "13 of 17 nonzero months of mhw_severe_intensity fall after the 2016-06 "
     "EC50 regime shift (SPLIT_DATE). The ARIMA filter is estimated on the "

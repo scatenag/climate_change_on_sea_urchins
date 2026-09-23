@@ -4,7 +4,7 @@ filter target, correlate residuals) independently of order *selection*.
 
 Order selection (_best_arima_order) is not reproducible across machines for
 near-degenerate drivers -- confirmed by two consecutive CI runs of identical
-code and data picking different orders for mhw_days (see issue #4 and
+code and data picking different orders for mhw_days (see issue #9 and
 test_golden_master.py's STRUCTURAL_ONLY_FILES). That instability lives in
 *which* candidates converge on a given machine, not in the fit/filter/
 correlate arithmetic itself. This test isolates the latter: it forces a

@@ -98,7 +98,7 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
 
     A candidate is discarded, regardless of its AIC, if it doesn't converge
     (see _fit_arima_if_converged). Picking the AIC-best order without this
-    check is how issue #4 happened: on some drivers the lowest-AIC candidate
+    check is how issue #9 happened: on some drivers the lowest-AIC candidate
     is a fit that never converged, and its residuals are then unreliable to
     a degree AIC alone doesn't reveal.
 
@@ -108,7 +108,7 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
     of candidates converge on different hardware, which can change which
     order wins by AIC even after this filter -- confirmed on two consecutive
     CI runs of identical code and data (see test_golden_master.py's
-    STRUCTURAL_ONLY_FILES and issue #4). Order selection here is best-effort,
+    STRUCTURAL_ONLY_FILES and issue #9). Order selection here is best-effort,
     not guaranteed deterministic; nothing downstream should assume it is.
     """
     best_aic, best_order, best_fit = np.inf, None, None

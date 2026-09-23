@@ -33,7 +33,7 @@ actually produces the number:
 ARIMA_FIT (rtol=0.5, atol=0.02), the very wide gross-error-only tolerance
 introduced 2026-09-21 for ccf_results_prewhitened.csv and
 robustness_severe_ccf.csv's r_arima/p_arima columns, is RETIRED as of the
-fix/arima-convergence branch (issue #4) -- see CHANGELOG.md:
+fix/arima-convergence branch (issue #9) -- see CHANGELOG.md:
   - robustness_severe_ccf.csv's r_arima/p_arima columns are now always NaN
     by design, not a fitted value at all: the ARIMA-prewhitened arm for
     mhw_severe_intensity is marked not_applicable (see
@@ -65,7 +65,7 @@ For a near-degenerate driver (mhw_days: 45% zero months; mhw_severe_intensity:
 94%), *which* candidates converge at all depends on the runner's hardware/
 BLAS path, which can change which order wins by AIC even after discarding
 non-convergent ones -- a golden master cannot pin numeric values that aren't
-a property of the code and data alone. See issue #4 for the V3.1 fix (a
+a property of the code and data alone. See issue #9 for the V3.1 fix (a
 deterministic order-selection procedure); tests/test_mhw_analysis.py covers
 the fit/filter/correlate computation itself with a forced, fixed order,
 independent of this problem.

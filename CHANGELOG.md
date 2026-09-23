@@ -38,7 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **ARIMA order selection discards candidates that don't converge, and the golden master
-  stops pinning numeric values it can't reproduce (issue #4, branch `fix/arima-convergence`)**.
+  stops pinning numeric values it can't reproduce (issue #9, branch `fix/arima-convergence`)**.
   - `_best_arima_order()` (`mhw_analysis.py`) used to pick the lowest-AIC candidate
     regardless of whether the optimizer actually converged. `warnings.simplefilter("ignore")`
     was silencing statsmodels' own `ConvergenceWarning` along with everything else. It now
@@ -56,7 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     Bonferroni-survival check or manuscript comparison was performed on the resulting numbers
     for this reason: they are not a property of the code and data alone, so they are not
     reported here or anywhere else. A deterministic order-selection procedure is left to
-    V3.1 (see issue #4).
+    V3.1 (see issue #9).
   - Consequently, `tests/test_golden_master.py` no longer compares the fitted values in
     `results/ccf_results_prewhitened.csv`, `results/prewhitening_diagnostics.json`, or
     `results/robustness_severe_ccf_note.json`'s `diagnostics` block against the frozen
