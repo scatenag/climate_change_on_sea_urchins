@@ -24,7 +24,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.multitest import multipletests
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX
+from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX, RESPONSE_COL, IMPUTED_COL, default_response_spec
 
 
 # ── 1. CCF ────────────────────────────────────────────────────────────────────
@@ -55,6 +55,20 @@ def compute_ccf(df: pd.DataFrame, driver: str, targets: list[str]) -> pd.DataFra
             rows.append(dict(variable=target, lag=lag, spearman_r=r, p_value=p, n=int(mask.sum())))
 
     return pd.DataFrame(rows)
+
+
+def _mask_imputed(df: pd.DataFrame, target: str, values: np.ndarray) -> np.ndarray:
+    """NaN out `values` (residuals, or the target column itself) wherever
+    `df["{target}_imputed"]` is True -- a structural property (does this
+    target have a companion imputed-months column at all?), never a check
+    on target's literal name. Not every target has one (e.g. O2, CO2 are
+    never flagged imputed the way the response series is): those pass
+    through unchanged. Used at every point in this module that restricts a
+    target to its real (non-imputed) measurements."""
+    imputed_col = f"{target}_imputed"
+    if imputed_col not in df.columns:
+        return values
+    return np.where(df[imputed_col].values, np.nan, values)
 
 
 def difference_series(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
@@ -172,10 +186,7 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
                 target_filtered = ARIMA(target_full, order=order).filter(driver_fit.params)
         except Exception:
             continue
-        target_resid = target_filtered.resid
-
-        if target == "EC50" and "EC50_imputed" in df.columns:
-            target_resid = np.where(df["EC50_imputed"].values, np.nan, target_resid)
+        target_resid = _mask_imputed(df, target, target_filtered.resid)
 
         for lag in range(0, tau_max + 1):
             if lag == 0:
@@ -256,13 +267,13 @@ def compute_ardl(df_real: pd.DataFrame, df_full: pd.DataFrame) -> pd.DataFrame:
 
     ec50_real = df_real.copy()
     ec50_real["period"] = ec50_real["Datetime"].dt.to_period("M")
-    ec50_monthly = ec50_real.set_index("period")["EC50"]
+    ec50_monthly = ec50_real.set_index("period")[RESPONSE_COL]
 
     # Align on common monthly periods
     common = mhw_monthly.index.intersection(ec50_monthly.index)
     y = ec50_monthly[common]
     x = mhw_monthly[common]
-    data = pd.DataFrame({"EC50": y, "MHW": x}).dropna()
+    data = pd.DataFrame({RESPONSE_COL: y, "MHW": x}).dropna()
 
     if len(data) < 20:
         print("  ARDL: insufficient aligned data")
@@ -271,7 +282,7 @@ def compute_ardl(df_real: pd.DataFrame, df_full: pd.DataFrame) -> pd.DataFrame:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            model = ARDL(data["EC50"], lags=3, exog=data[["MHW"]], order={"MHW": TAU_MAX})
+            model = ARDL(data[RESPONSE_COL], lags=3, exog=data[["MHW"]], order={"MHW": TAU_MAX})
             fit   = model.fit(cov_type="HC1")
 
         # Extract MHW lag coefficients
@@ -301,12 +312,26 @@ def compute_ardl(df_real: pd.DataFrame, df_full: pd.DataFrame) -> pd.DataFrame:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run():
+def _relabel_variable(frame: pd.DataFrame, label: str) -> pd.DataFrame:
+    """Output identity: the response's "variable" entry is its display
+    label, never the internal RESPONSE_COL (see common.py)."""
+    if "variable" not in frame.columns:
+        return frame
+    frame = frame.copy()
+    frame["variable"] = frame["variable"].replace({RESPONSE_COL: label})
+    return frame
+
+
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for "variable" fields below
+
     df, df_real, _, _ = load_data()
 
-    # For CCF: use real EC50 (NaN for imputed), full series for others
+    # For CCF: use real response (NaN for imputed), full series for others
     df_ccf = df.copy()
-    df_ccf.loc[df_ccf["EC50_imputed"], "EC50"] = np.nan
+    df_ccf[RESPONSE_COL] = _mask_imputed(df_ccf, RESPONSE_COL, df_ccf[RESPONSE_COL].values)
 
     driver  = "mhw_peak_intensity"
     targets = [c for c in ALL_COLS if c in df_ccf.columns]
@@ -315,39 +340,39 @@ def run():
     #     robustness review as confounded by shared non-stationary trend (all 13
     #     lags come out significant with no peak — the signature of spurious
     #     correlation, not a localized biological effect). Kept only for comparison.
-    ccf_df = compute_ccf(df_ccf, driver, targets)
+    ccf_df = _relabel_variable(compute_ccf(df_ccf, driver, targets), label)
     ccf_df.to_csv(RESULTS / "ccf_results.csv", index=False)
     _print_best_lags(ccf_df, "raw levels")
 
     # 1b. CCF — first differences (Method C: primary robust result). Differencing
     #     is applied to the full continuous series first (so month-over-month
-    #     deltas are never taken across a real-data gap), and the real-EC50-only
+    #     deltas are never taken across a real-data gap), and the real-response-only
     #     mask is re-applied afterwards, matching method A's restriction.
     df_diff = difference_series(df, [driver] + targets)
-    df_diff.loc[df["EC50_imputed"].values, "EC50"] = np.nan
-    ccf_diff_df = compute_ccf(df_diff, driver, targets)
+    df_diff[RESPONSE_COL] = _mask_imputed(df, RESPONSE_COL, df_diff[RESPONSE_COL].values)
+    ccf_diff_df = _relabel_variable(compute_ccf(df_diff, driver, targets), label)
     ccf_diff_df.to_csv(RESULTS / "ccf_results_diff.csv", index=False)
     _print_best_lags(ccf_diff_df, "first differences")
 
     # 1c. CCF — ARIMA pre-whitening (Method E), cross-checked against the two
-    #     other MHW driver metrics (all vs EC50 only, to keep runtime reasonable).
+    #     other MHW driver metrics (all vs response only, to keep runtime reasonable).
     prewhiten_parts, diagnostics_all = [], {}
     for alt_driver in ["mhw_peak_intensity", "mhw_days", "mhw_cum_intensity"]:
         if alt_driver not in df.columns:
             continue
-        pw_targets = targets if alt_driver == driver else ["EC50"]
+        pw_targets = targets if alt_driver == driver else [RESPONSE_COL]
         pw_df, diag = compute_ccf_prewhitened(df, alt_driver, pw_targets)
         if not pw_df.empty:
-            prewhiten_parts.append(pw_df)
+            prewhiten_parts.append(_relabel_variable(pw_df, label))
             diagnostics_all[alt_driver] = diag
 
     if prewhiten_parts:
         pw_all = pd.concat(prewhiten_parts, ignore_index=True)
         pw_all.to_csv(RESULTS / "ccf_results_prewhitened.csv", index=False)
         (RESULTS / "prewhitening_diagnostics.json").write_text(json.dumps(diagnostics_all, indent=2))
-        print("\n✓ CCF (ARIMA pre-whitening) — best lag, driver → EC50:")
+        print(f"\n✓ CCF (ARIMA pre-whitening) — best lag, driver → {label}:")
         for alt_driver, diag in diagnostics_all.items():
-            sub = pw_all[(pw_all["driver"] == alt_driver) & (pw_all["variable"] == "EC50")]
+            sub = pw_all[(pw_all["driver"] == alt_driver) & (pw_all["variable"] == label)]
             sub = sub.dropna(subset=["spearman_r"]).sort_values("p_value")
             if not sub.empty:
                 b = sub.iloc[0]
@@ -357,6 +382,9 @@ def run():
 
     # 2. Granger
     granger = compute_granger(df, driver, targets)
+    # Output identity: a per-variable dict keyed by display name, never the
+    # internal RESPONSE_COL (see common.py).
+    granger = {(label if var == RESPONSE_COL else var): data for var, data in granger.items()}
     (RESULTS / "granger_results.json").write_text(json.dumps(granger, indent=2))
     print(f"\n✓ Granger causality saved for {len(granger)} variables")
     for var, lag_data in granger.items():
