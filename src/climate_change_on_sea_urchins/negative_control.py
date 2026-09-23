@@ -73,7 +73,7 @@ import pandas as pd
 from scipy import stats
 
 from .changepoint import DEFAULT_B, DEFAULT_SEED, qlr_ar1_changepoint
-from .common import RESULTS, ROOT, SPLIT_DATE
+from .common import RESULTS, SPLIT_DATE, load_ec50_raw
 
 REPLICA_COLS = ["ctrl_neg_rep1", "ctrl_neg_rep2", "ctrl_neg_rep3"]
 
@@ -119,13 +119,12 @@ def _flag_replicate_outliers(ctrl, threshold=OUTLIER_SD_THRESHOLD):
 
 
 def _load_negative_control():
-    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
+    raw = load_ec50_raw()  # already sorted by (Datetime, ID) -- see its docstring
     if not set(REPLICA_COLS).issubset(raw.columns):
         raise ValueError(
             "data/ec50_raw.csv is missing the negative-control replicate "
             "columns -- re-run scripts/fetch_ec50.py."
         )
-    raw = raw.sort_values(["Datetime", "ID"]).reset_index(drop=True)
     n_total = len(raw)
 
     ctrl = raw.dropna(subset=REPLICA_COLS).copy().reset_index(drop=True)
