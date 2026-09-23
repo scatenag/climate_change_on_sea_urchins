@@ -24,6 +24,7 @@ sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not in the instal
 
 from climate_change_on_sea_urchins.common import (
     load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_DATE, SPLIT_YEAR, TAU_MAX,
+    RESPONSE_COL, IMPUTED_COL,
 )
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 
@@ -131,9 +132,9 @@ def test_df_full_has_mhw_columns():
 
 def test_df_real_only_real_measurements():
     _, df_real, _, _ = load_data()
-    assert "EC50_imputed" in df_real.columns
-    assert df_real["EC50_imputed"].sum() == 0, \
-        "df_real must contain only non-imputed EC50 measurements"
+    assert IMPUTED_COL in df_real.columns
+    assert df_real[IMPUTED_COL].sum() == 0, \
+        "df_real must contain only non-imputed response measurements"
 
 
 def test_df_real_non_empty():

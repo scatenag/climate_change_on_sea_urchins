@@ -40,16 +40,13 @@ TAU_MAX    = 12
 # hasn't migrated yet cannot silently diverge from one that has by writing
 # to the "other" copy.
 #
-# Values stay "EC50"/"EC50_imputed" -- today's real column names in
-# data/data_extended.csv and data/data_ec50_ci.csv -- until every module
-# that reads them has migrated from the literal to the constant. Only then
-# do the two values change to "response"/"response_imputed" in one step
-# (V2.1 response-abstraction, note-tecniche.md sec 4); the .rename() calls
-# below decouple the on-disk CSV column names (which never change) from
-# what the rest of the code calls the column, so that flip is the *only*
-# change that step needs.
-RESPONSE_COL = "EC50"
-IMPUTED_COL  = "EC50_imputed"
+# Flipped from "EC50"/"EC50_imputed" to these generic values now that every
+# module has migrated off the literal (V2.1 response-abstraction, note-
+# tecniche.md sec 4) -- the .rename() calls below decouple the on-disk CSV
+# column names (which never change) from what the rest of the code calls
+# the column, so this was the only change that step needed.
+RESPONSE_COL = "response"
+IMPUTED_COL  = "response_imputed"
 
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """

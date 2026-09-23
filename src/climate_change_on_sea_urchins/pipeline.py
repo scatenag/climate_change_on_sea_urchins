@@ -13,7 +13,7 @@ from . import (
 # them fall back to common.default_response_spec() (see its docstring on
 # why that fallback exists and why it isn't the primary path).
 _NEEDS_RESPONSE = {
-    "correlations", "stationarity", "regime_shift", "period_split",
+    "timeseries", "correlations", "stationarity", "regime_shift", "period_split",
     "cu_speciation", "thermal_legacy", "forecast",
     "mhw_analysis", "mhw_lag_extra",
 }
