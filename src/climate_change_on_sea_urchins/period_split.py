@@ -112,12 +112,14 @@ def run(response=None):
     raw_contrast = _raw_trial_contrast()
     (RESULTS / "period_contrast_raw.json").write_text(json.dumps(raw_contrast, indent=2))
 
-    # Distribution data for boxplots (Streamlit). Filename built from the
-    # response's display label, never RESPONSE_COL -- for Livorno label ==
-    # "EC50", so dist_EC50.csv is unchanged.
+    # Distribution data for boxplots (Streamlit). Filename AND column header
+    # built from the response's display label, never RESPONSE_COL -- for
+    # Livorno label == "EC50", so dist_EC50.csv is unchanged.
     for col in ALL_COLS:
         src = df_real if col == RESPONSE_COL else df
         out = src[["Datetime", col]].copy()
+        if col == RESPONSE_COL:
+            out = out.rename(columns={RESPONSE_COL: label})
         pre_label  = f"2003–{(SPLIT_DATE - pd.Timedelta(days=1)):%Y-%m}"
         post_label = f"{SPLIT_DATE:%Y-%m}–2025"
         out["period"] = np.where(out["Datetime"] < SPLIT_DATE, pre_label, post_label)
