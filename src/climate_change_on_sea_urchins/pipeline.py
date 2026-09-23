@@ -1,10 +1,21 @@
 """Run all analysis modules in sequence, populating results/."""
+import config
 from . import (
     mhw_detection, timeseries, period_split, correlations, stationarity,
     mhw_analysis, mhw_lag_extra, mhw_robustness, cu_speciation, thermal_legacy,
     regime_shift, changepoint, negative_control, mhw_lag_annual,
     mhw_annual_changepoint, forecast,
 )
+
+# Modules whose output carries the response series' identity (row/column
+# labels, "variable"/"series" fields, dict keys, output filenames) --
+# main() passes them config.RESPONSE_SPEC explicitly instead of letting
+# them fall back to common.default_response_spec() (see its docstring on
+# why that fallback exists and why it isn't the primary path).
+_NEEDS_RESPONSE = {
+    "correlations", "stationarity", "regime_shift", "period_split",
+    "cu_speciation", "thermal_legacy", "forecast",
+}
 
 _MODULES = [
     # mhw_detection runs first: it regenerates data/mhw_events.csv,
@@ -33,11 +44,15 @@ _MODULES = [
 
 
 def main() -> None:
+    response = config.RESPONSE_SPEC
     for label, module in _MODULES:
         print(f"\n{'=' * 60}")
         print(f"  Running {label}")
         print(f"{'=' * 60}")
-        module.run()
+        if label in _NEEDS_RESPONSE:
+            module.run(response=response)
+        else:
+            module.run()
 
     print("\n✓ All analysis modules complete — results/ populated")
 

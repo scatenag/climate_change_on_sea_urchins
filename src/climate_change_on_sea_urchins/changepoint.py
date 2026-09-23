@@ -70,7 +70,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import RESULTS, ROOT
+from .common import RESULTS, RESPONSE_COL, load_ec50_raw, load_ec50_monthly
 
 DEFAULT_B = 3000
 DEFAULT_SEED = 0
@@ -242,27 +242,19 @@ def _apply_to_dated_series(dates, values, B, seed, ordering=None):
 
 
 def run(B=DEFAULT_B, seed=DEFAULT_SEED):
-    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
-    if "ID" not in raw.columns:
-        raise ValueError(
-            "data/ec50_raw.csv is missing the ID column -- re-run "
-            "scripts/fetch_ec50.py. Many determinations share a Datetime "
-            "(month-only dates), so ID (the source sheet's row order) is "
-            "required to give the ordinal sequence a reproducible order; "
-            "sorting by Datetime alone is not enough (see module docstring)."
-        )
     # (Datetime, ID), not Datetime alone -- see module docstring: ~110 of
     # 295 rows tie on Datetime, and that tie order changes phi/F/the winning
     # break by enough to matter (measured: phi 0.246-0.315, break split
     # 65/35 between September/June across 300 random within-date orderings).
-    raw = raw.sort_values(["Datetime", "ID"]).reset_index(drop=True)
-    monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"]) \
-                .sort_values("Datetime").reset_index(drop=True)  # months are unique, no tie issue
+    # load_ec50_raw() already sorts this way and renames the response column
+    # to RESPONSE_COL.
+    raw = load_ec50_raw()
+    monthly = load_ec50_monthly()  # months are unique, no tie issue
 
     summary = {
         "ordinal_sequence": _apply_to_dated_series(
-            raw["Datetime"], raw["EC50"].values, B, seed, ordering="Datetime, then ID"),
-        "monthly_series": _apply_to_dated_series(monthly["Datetime"], monthly["EC50"].values, B, seed),
+            raw["Datetime"], raw[RESPONSE_COL].values, B, seed, ordering="Datetime, then ID"),
+        "monthly_series": _apply_to_dated_series(monthly["Datetime"], monthly[RESPONSE_COL].values, B, seed),
         "note": (
             "The monthly series is the primary changepoint analysis: its 163 "
             "dates are unique, so its order (and therefore phi/F/break) is "

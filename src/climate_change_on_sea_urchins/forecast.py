@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from scipy import stats
-from .common import load_data, RESULTS, TAU_MAX
+from .common import load_data, RESULTS, TAU_MAX, RESPONSE_COL, default_response_spec
 
 
 FORECAST_YEARS = 15
@@ -54,7 +54,7 @@ MHW_SCALE = {"bad": 2.0, "mean": 1.0, "good": 0.5}   # MHW has its own seasonal 
 
 
 def find_optimal_lag(df_real: pd.DataFrame, df_full: pd.DataFrame) -> int:
-    """Spearman r between mhw_peak_intensity(t-k) and real EC50(t)."""
+    """Spearman r between mhw_peak_intensity(t-k) and real response(t)."""
     best_lag, best_r = 2, 0.0
     for lag in range(0, TAU_MAX + 1):
         mhw_vals, ec50_vals = [], []
@@ -64,7 +64,7 @@ def find_optimal_lag(df_real: pd.DataFrame, df_full: pd.DataFrame) -> int:
             idx    = diffs.idxmin()
             if diffs[idx] <= pd.Timedelta("20 days"):
                 mhw_vals.append(df_full.loc[idx, "mhw_peak_intensity"])
-                ec50_vals.append(row["EC50"])
+                ec50_vals.append(row[RESPONSE_COL])
         xa, ya = np.array(mhw_vals), np.array(ec50_vals)
         mask = ~(np.isnan(xa) | np.isnan(ya))
         if mask.sum() < 10:
@@ -87,14 +87,14 @@ def build_monthly_series(df_real: pd.DataFrame, df_full: pd.DataFrame,
     monthly = df_full[cols].copy().sort_values("Datetime")
     monthly["mhw_lagged"] = (monthly["mhw_peak_intensity"].shift(opt_lag)
                              if opt_lag > 0 else monthly["mhw_peak_intensity"])
-    ec50_monthly = (df_real[["Datetime", "EC50"]]
+    ec50_monthly = (df_real[["Datetime", RESPONSE_COL]]
                     .set_index("Datetime")
                     .reindex(monthly.set_index("Datetime").index))
     monthly = monthly.set_index("Datetime")
-    monthly["EC50"] = ec50_monthly["EC50"].interpolate("linear")
+    monthly[RESPONSE_COL] = ec50_monthly[RESPONSE_COL].interpolate("linear")
     for col in ["pH", "Temperature", "mhw_lagged"]:
         monthly[col] = monthly[col].ffill().bfill()
-    monthly = monthly.dropna(subset=["EC50", "mhw_lagged", "pH", "Temperature"]).reset_index()
+    monthly = monthly.dropna(subset=[RESPONSE_COL, "mhw_lagged", "pH", "Temperature"]).reset_index()
     return monthly
 
 
@@ -149,7 +149,11 @@ def project_mhw(mhw_annual: pd.DataFrame, n_months: int,
     return pd.Series(trend * seasonal * scale, index=future_dates)
 
 
-def run():
+def run(response=None):
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for the forecast column below
+
     df, df_real, _, _ = load_data()
 
     mhw_annual_path = RESULTS.parent / "data" / "mhw_annual.csv"
@@ -168,7 +172,7 @@ def run():
     print(f"  Training window: {monthly_train.index[0].date()} – {monthly_train.index[-1].date()} "
           f"({len(monthly_train)} months)")
 
-    ec50_series = monthly_train["EC50"]
+    ec50_series = monthly_train[RESPONSE_COL]
     exog_hist   = monthly_train[["pH", "Temperature", "mhw_lagged"]]
 
     last_date = df["Datetime"].max()
@@ -270,7 +274,10 @@ def run():
 
         out = pd.DataFrame({
             "Datetime":      future_dates,
-            "EC50_forecast": fc_mean,
+            # Output identity: column name from the display label, never
+            # RESPONSE_COL (see common.py) -- for Livorno label == "EC50",
+            # so this stays "EC50_forecast".
+            f"{label}_forecast": fc_mean,
             "CI_lower":      fc_lo,
             "CI_upper":      fc_hi,
             "scenario":      scenario,

@@ -34,6 +34,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and `docs/schema/study.schema.json` (JSON Schema export). New direct dependencies:
   `pydantic>=2,<3`, `PyYAML>=6,<7` (both were already present transitively via Streamlit, now
   declared). Verified with the golden master: zero drift, no new tolerances needed.
+- **V2.1, response-series abstraction (branch `v2.1/response-abstraction`, in progress)**:
+  `ResponseSpec` gains a `label` field (display identity for outputs -- for Livorno, `"EC50"`).
+  `common.py` gains `RESPONSE_COL`/`IMPUTED_COL` (indirection constants, value `"EC50"`/
+  `"EC50_imputed"` for now -- not an alias: `load_data()` renames the CSVs' fixed on-disk
+  columns into these at the load boundary, so every downstream module reads the response
+  column through the constant, never the literal) and `load_ec50_raw()`/`load_ec50_monthly()`
+  (extending the single data-reading boundary to `data/ec50_raw.csv`/`ec50_sheets.csv`, which
+  `changepoint.py` and `period_split.py` read directly before this). `config.py` exports
+  `RESPONSE_SPEC`; `pipeline.py` loads it once and passes it as `response=` to the 7 modules
+  whose output carries the response's identity (`correlations`, `stationarity`,
+  `regime_shift`, `period_split`, `cu_speciation`, `thermal_legacy`, `forecast`) -- every
+  row/column label, `"variable"`/`"series"` field, per-variable dict key, output filename and
+  derived column name in those modules' output now comes from `response.label`, never from
+  the internal `RESPONSE_COL`. `docs/adr/0000-decisioni-rimandate.md` #6: `label` isn't
+  sanitized for filename use yet, deferred to V2.2's second case. Golden master: 65/65, zero
+  drift (Livorno's `label == RESPONSE_COL == "EC50"` today, so every output is byte-identical).
+  Not yet done: the MHW-family modules (`mhw_analysis.py`, `mhw_robustness.py`,
+  `mhw_lag_extra.py`, `mhw_lag_annual.py`) and the final step (flipping `RESPONSE_COL`/
+  `IMPUTED_COL`'s values to `"response"`/`"response_imputed"`) -- deliberately deferred until
+  after `fix/arima-convergence` merges, since both branches touch `mhw_analysis.py`.
 
 ### Changed
 

@@ -102,6 +102,13 @@ class ResponseSpec(BaseModel):
     analyses run on. See docs/roadmap/note-dati-sorgente.md for why each
     field here is shaped the way it is."""
     id: str
+    label: str = Field(
+        ..., description="Human-readable name for output artifacts (results/ "
+        "CSV/JSON headers, dashboard labels) -- distinct from `id`, which is "
+        "a slug. Writing a literal like 'EC50' at an output boundary instead "
+        "of reading it from here is the artifact-identity invariant "
+        "(CLAUDE.md #4) being violated, not honored."
+    )
     nature: Literal["population_proxy", "index", "toxicological_endpoint", "biomarker"] = Field(
         ..., description="What kind of quantity this is. Never default to "
         "'biomarker' as a generic label for 'response series' -- most "
