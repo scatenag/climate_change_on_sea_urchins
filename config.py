@@ -1,22 +1,31 @@
 """Site and data-source configuration for this monitoring framework instance.
 
-Reads examples/livorno_paracentrotus/study.yaml through
-climate_change_on_sea_urchins.study_spec.load_study() and re-exports the
-same names every other file already imports -- SITE_LAT, SITE_LON,
-SITE_NAME, BBOX_DELTA, EC50_SHEET_ID, EC50_EXPORT_URL -- so nothing else
-changes (see docs/roadmap/note-tecniche.md sec 4 and
-docs/adr/0000-decisioni-rimandate.md for what is deliberately not moved
-here yet).
+Reads a study.yaml through climate_change_on_sea_urchins.study_spec.load_study()
+and re-exports the same names every other file already imports -- SITE_LAT,
+SITE_LON, SITE_NAME, BBOX_DELTA, EC50_SHEET_ID, EC50_EXPORT_URL -- so nothing
+else changes (see docs/roadmap/note-tecniche.md sec 4 and
+docs/adr/0000-decisioni-rimandate.md for what is deliberately not moved here
+yet).
 
-To adapt the framework to a different site or response series, edit that
-YAML file, not this one -- see docs/ADAPTING.md.
+Which study: the CCSU_STUDY environment variable (path to a study.yaml,
+relative paths resolved against the current directory); if unset,
+examples/livorno_paracentrotus/study.yaml, so existing runs, CI and the
+auto-update workflow are unaffected.
 """
+import os
 from pathlib import Path
 
-from climate_change_on_sea_urchins.study_spec import load_study
+from climate_change_on_sea_urchins.study_spec import StudySpecError, load_study
 
-_STUDY_PATH = Path(__file__).resolve().parent / "examples" / "livorno_paracentrotus" / "study.yaml"
-_study = load_study(_STUDY_PATH)
+_DEFAULT_STUDY_PATH = Path(__file__).resolve().parent / "examples" / "livorno_paracentrotus" / "study.yaml"
+_STUDY_PATH = Path(os.environ.get("CCSU_STUDY") or _DEFAULT_STUDY_PATH)
+try:
+    _study = load_study(_STUDY_PATH)
+except StudySpecError as e:
+    if "CCSU_STUDY" in os.environ:
+        raise StudySpecError(f"CCSU_STUDY={os.environ['CCSU_STUDY']!r}: {e}") from e
+    raise
+STUDY_ID = _study.id
 _site = _study.sites[0]
 _response = _study.responses[0]
 

@@ -71,6 +71,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     golden master returned to 66/66 with zero new tolerances.
   - Golden master held at zero drift through every step (Livorno's `label == "EC50"` even
     after the flip, since `RESPONSE_COL` and `label` are independent by design).
+- **Study selection (V2.2 prerequisite)**: `config.py` loads the study named by the
+  `CCSU_STUDY` environment variable (path to a `study.yaml`), defaulting to
+  `examples/livorno_paracentrotus/study.yaml` -- existing runs, CI and the auto-update workflow
+  are unchanged. A bad path fails naming `CCSU_STUDY`. `config.STUDY_ID` exported. Not yet
+  safe to run the pipeline with another study: data and results are still read from and
+  written to the shared `data/`/`results/` until per-study namespacing lands.
 
 ### Changed
 
