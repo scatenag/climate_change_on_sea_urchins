@@ -167,7 +167,7 @@ def run(response=None):
 
     # Train on post-2016 only: this is the current climate regime.
     # Full-period training causes SARIMAX to mean-revert toward the pre-2016
-    # historical mean (~40 mg/L), making all forecasts unrealistically optimistic.
+    # historical mean (~40 µg/L), making all forecasts unrealistically optimistic.
     monthly_train = monthly[monthly.index >= "2016-01-01"]
     print(f"  Training window: {monthly_train.index[0].date()} – {monthly_train.index[-1].date()} "
           f"({len(monthly_train)} months)")

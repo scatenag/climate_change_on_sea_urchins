@@ -40,7 +40,7 @@ PHYSICAL_BOUNDS = {
     "pH":          (7.6, 8.3),       # total scale
     "O2":          (190.0, 290.0),   # dissolved oxygen, model units
     "CO2":         (250.0, 700.0),   # uatm; monthly values incl. seasonal cycle (observed 303.5-581.5)
-    "EC50":        (1.0, 100.0),     # mg/L, sea urchin fertilization bioassay
+    "EC50":        (1.0, 100.0),     # µg/L, sea urchin fertilization bioassay
 }
 
 MHW_CATEGORIES = {"Moderate", "Strong", "Severe", "Extreme"}

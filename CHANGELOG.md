@@ -117,6 +117,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- EC50 unit labeled `mg/L` instead of `µg/L` throughout the dashboard (23 occurrences: axis
+  titles, hover templates, metrics, captions) — a factor-1000 error visible on the public app
+  (issue #3). The values were always µg/L (the manuscript reports 46.54 µg/L); only the label
+  was wrong. The same wrong unit also fixed in a `forecast.py` comment, in
+  `scripts/explore_mhw_ec50.py`'s axis labels, and in a `tests/test_data_quality.py` comment.
+- The CO₂ unit note in `README.md` and in the dashboard said Copernicus's CF metadata implied
+  µatm. It doesn't: the `standard_name` of `spco2` is associated with Pascal, so Copernicus
+  declares the right unit and the misreading was this pipeline's. Same correction as the one
+  already applied to `config.py`/`study.yaml`.
+
 - `.gitignore`'s `trend_*.csv` rule (unanchored, matches any directory depth) was silently
   dropping 6 files from `git add tests/fixtures/results_v1_5_0/` — the committed golden-master
   reference shipped incomplete; caught by the coverage-guard test in `test_golden_master.py` on
