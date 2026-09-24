@@ -69,7 +69,7 @@ from scipy import stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, RESULTS, ROOT, RESPONSE_COL, default_response_spec
+from .common import load_data, RESULTS, RESPONSE_COL, default_response_spec, load_sst_daily
 
 THRESHOLD_C = 24.0                 # C, chronic gametogenesis-blocking threshold
                                     # for P. lividus (Amato et al. 2025) -- the
@@ -110,7 +110,7 @@ def run(response=None):
     _, df_real, _, _ = load_data()
     real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
-    sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
+    sst = load_sst_daily()
     sst = sst.sort_values("Datetime").reset_index(drop=True)
 
     t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)
@@ -252,7 +252,7 @@ def run_threshold_sensitivity(thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITI
     _, df_real, _, _ = load_data()
     real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
-    sst = pd.read_csv(ROOT / "data" / "sst_daily.csv", parse_dates=["Datetime"])
+    sst = load_sst_daily()
     sst = sst.sort_values("Datetime").reset_index(drop=True)
 
     t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)

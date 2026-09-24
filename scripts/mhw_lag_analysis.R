@@ -49,14 +49,17 @@ if (length(script_flag) > 0) {
   ROOT <- normalizePath(".")
 }
 cat("ROOT:", ROOT, "\n")
-# Output directory: first argument if given (the workflow passes Python's
-# common.RESULTS, the one resolver of where results live), else results/.
+# Input/output directories: positional arguments if given (the workflow
+# passes Python's common.DATA/common.RESULTS, the one resolvers of where
+# each lives), else the repo-root data/results/ this script has always used.
 trailing <- commandArgs(trailingOnly=TRUE)
-RESULTS_DIR <- if (length(trailing) >= 1) trailing[1] else file.path(ROOT, "results")
+DATA_DIR    <- if (length(trailing) >= 1) trailing[1] else file.path(ROOT, "data")
+RESULTS_DIR <- if (length(trailing) >= 2) trailing[2] else file.path(ROOT, "results")
+cat("DATA_DIR:", DATA_DIR, "\n")
 cat("RESULTS_DIR:", RESULTS_DIR, "\n")
 
-DATA     <- read_csv(file.path(ROOT, "data", "data_extended.csv"),    show_col_types=FALSE)
-MONTHLY  <- read_csv(file.path(ROOT, "data", "mhw_monthly.csv"),      show_col_types=FALSE)
+DATA     <- read_csv(file.path(DATA_DIR, "data_extended.csv"),    show_col_types=FALSE)
+MONTHLY  <- read_csv(file.path(DATA_DIR, "mhw_monthly.csv"),      show_col_types=FALSE)
 
 cat("Loaded:", nrow(DATA), "monthly rows\n")
 

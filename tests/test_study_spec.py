@@ -91,6 +91,36 @@ def test_response_nature_is_not_biomarker():
     assert load_study(EXAMPLE).responses[0].nature == "population_proxy"
 
 
+def test_response_split_date_matches_common_split_date():
+    # docs/adr/0001: SPLIT_DATE is a regime-shift estimate for THIS response
+    # series, so it lives per-response, not as a bare module constant.
+    assert load_study(EXAMPLE).responses[0].split_date == "2016-06-01"
+
+
+def test_study_data_dir_resolves_to_the_repo_data_directory():
+    # Relative to the study.yaml's own location, resolved to an absolute
+    # path by load_study() -- for Livorno this is today's data/, so nothing
+    # moves and the auto-update workflow is unaffected.
+    resolved = Path(load_study(EXAMPLE).data_dir)
+    assert resolved.is_absolute()
+    assert resolved == (Path(__file__).parent.parent / "data").resolve()
+
+
+def test_study_data_dir_must_exist(tmp_path):
+    bad = tmp_path / "study.yaml"
+    bad.write_text(EXAMPLE.read_text().replace("data_dir: ../../data", "data_dir: ../../no-such-dir"))
+    with pytest.raises(StudySpecError, match="data_dir"):
+        load_study(bad)
+
+
+def test_study_mhw_climatology_baseline():
+    # A scientific choice (Hobday et al. 2016 baseline period), not a code
+    # default -- CLAUDE.md invariant #6.
+    clim = load_study(EXAMPLE).mhw_climatology
+    assert clim.baseline_start_year == 2003
+    assert clim.baseline_end_year == 2012
+
+
 def test_response_label_matches_ec50_for_output_identity():
     # Invariant #4 (CLAUDE.md): artifact identity (results/ CSV headers,
     # dashboard labels) is derived from the spec, never a hardcoded literal.

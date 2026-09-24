@@ -17,6 +17,13 @@ description: >
   Sea off Livorno, 2003-present. The case this framework was originally
   built around.
 
+# Relative to this file's own location -- today's data/, so nothing moves.
+data_dir: ../../data
+
+mhw_climatology:
+  baseline_start_year: 2003
+  baseline_end_year: 2012
+
 sites:
   - id: livorno-sud
     lat: 43.4278
@@ -30,6 +37,10 @@ responses:
     nature: population_proxy
     adverse_direction: decrease
     unit: ug/L
+    # docs/adr/0001: rank-based estimate, kept distinct from
+    # changepoint.py's own QLR/AR(1) estimate (~September 2016) on the same
+    # series -- results are insensitive to the choice within that range.
+    split_date: "2016-06-01"
     source:
       type: google_sheet
       sheet_id: "1e0-16D84ehRyotSC2BH9e9YqAnZksbv4gZDFgyPki8g"

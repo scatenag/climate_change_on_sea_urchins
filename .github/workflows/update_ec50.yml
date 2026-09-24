@@ -124,8 +124,9 @@ jobs:
           steps.check_ec50.outputs.changed == 'true' ||
           steps.check_copernicus.outputs.changed == 'true'
         run: |
+          DATA_DIR=$(python -c "from climate_change_on_sea_urchins.common import DATA; print(DATA)")
           RESULTS_DIR=$(python -c "from climate_change_on_sea_urchins.common import RESULTS; print(RESULTS)")
-          Rscript scripts/mhw_lag_analysis.R "$RESULTS_DIR"
+          Rscript scripts/mhw_lag_analysis.R "$DATA_DIR" "$RESULTS_DIR"
 
       # ── Step 4: Commit and push ───────────────────────────────────────────────
       - name: Commit and push updated results

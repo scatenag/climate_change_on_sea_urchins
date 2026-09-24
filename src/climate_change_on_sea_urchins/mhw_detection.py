@@ -22,18 +22,22 @@ other analysis step — never a separate manual step to remember. (A prior
 version of this project kept this detection step outside the automated
 pipeline; the MHW catalogue then silently fell out of sync with a corrected
 sst_daily.csv for months. See CHANGELOG / project history.)
+
+Input/output paths are resolved from common.DATA *inside* run(), not bound
+to separate module-level constants at import time: a prior version computed
+SST_PATH/OUT_EVENTS/OUT_MONTHLY/OUT_ANNUAL once at import from common.ROOT,
+which meant redirecting common.DATA/ROOT for a test fixture (or a
+CCSU_STUDY switch happening late) had no effect on this module -- it kept
+silently reading and writing the real project's data/ regardless. See
+tests/test_data_boundary.py, which both documents that bug concretely and
+guards against it returning in any module.
 """
 import numpy as np
 import pandas as pd
-from .common import ROOT
+from . import common
 
-SST_PATH     = ROOT / "data" / "sst_daily.csv"
-OUT_EVENTS   = ROOT / "data" / "mhw_events.csv"
-OUT_MONTHLY  = ROOT / "data" / "mhw_monthly.csv"
-OUT_ANNUAL   = ROOT / "data" / "mhw_annual.csv"
-
-CLIM_START = 2003   # climatology baseline period
-CLIM_END   = 2012
+CLIM_START = common.MHW_CLIM_START   # StudySpec.mhw_climatology -- a scientific
+CLIM_END   = common.MHW_CLIM_END     # choice, not a code default (CLAUDE.md #6)
 PCTILE     = 90
 MIN_DAYS   = 5
 MAX_GAP    = 2
@@ -208,14 +212,15 @@ def to_annual(events: list) -> pd.DataFrame:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def run() -> None:
-    if not SST_PATH.exists():
+    sst_path = common.DATA / "sst_daily.csv"
+    if not sst_path.exists():
         raise FileNotFoundError(
-            f"Daily SST file not found: {SST_PATH}\n"
+            f"Daily SST file not found: {sst_path}\n"
             "Run: python scripts/fetch_copernicus_daily.py"
         )
 
-    print(f"Loading daily SST from {SST_PATH}...")
-    df = pd.read_csv(SST_PATH, parse_dates=["Datetime"])
+    print(f"Loading daily SST from {sst_path}...")
+    df = common.load_sst_daily()
     print(f"  {len(df)} days, {df['Datetime'].min().date()} → {df['Datetime'].max().date()}")
 
     print(f"\nComputing climatology (baseline {CLIM_START}–{CLIM_END}, p{PCTILE})...")
@@ -234,18 +239,21 @@ def run() -> None:
         print(f"  Duration: {ev_df['duration_days'].min()}–{ev_df['duration_days'].max()} days")
         print(f"  Intensity (max): {ev_df['intensity_max'].max():.2f}°C above threshold")
 
-        ev_df.to_csv(OUT_EVENTS, index=False)
-        print(f"\n  Saved: {OUT_EVENTS}")
+        out_events = common.DATA / "mhw_events.csv"
+        ev_df.to_csv(out_events, index=False)
+        print(f"\n  Saved: {out_events}")
 
     monthly = to_monthly(daily)
-    monthly.to_csv(OUT_MONTHLY, index=False)
-    print(f"  Saved: {OUT_MONTHLY} ({len(monthly)} months)")
+    out_monthly = common.DATA / "mhw_monthly.csv"
+    monthly.to_csv(out_monthly, index=False)
+    print(f"  Saved: {out_monthly} ({len(monthly)} months)")
     print(f"  MHW months: {(monthly['mhw_days'] > 0).sum()} / {len(monthly)}")
 
     annual = to_annual(events)
     if not annual.empty:
-        annual.to_csv(OUT_ANNUAL, index=False)
-        print(f"  Saved: {OUT_ANNUAL} ({len(annual)} years)")
+        out_annual = common.DATA / "mhw_annual.csv"
+        annual.to_csv(out_annual, index=False)
+        print(f"  Saved: {out_annual} ({len(annual)} years)")
 
     print("✓ mhw_detection complete")
 

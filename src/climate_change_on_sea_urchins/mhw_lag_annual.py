@@ -33,7 +33,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, RESULTS, ROOT, RESPONSE_COL
+from .common import load_data, RESULTS, RESPONSE_COL, load_mhw_annual
 
 PREDICTORS = ["event_count", "total_mhw_days", "cum_intensity_sum", "max_intensity"]
 LAGS = [0, 1, 2, 3]
@@ -49,7 +49,7 @@ def run():
     _, df_real, _, _ = load_data()
     real = df_real.dropna(subset=[RESPONSE_COL])
     ec = real.assign(y=real["Datetime"].dt.year).groupby("y")[RESPONSE_COL].mean()
-    ann = pd.read_csv(ROOT / "data" / "mhw_annual.csv").set_index("year")
+    ann = load_mhw_annual().set_index("year")
 
     rows = []
     for pred in PREDICTORS:

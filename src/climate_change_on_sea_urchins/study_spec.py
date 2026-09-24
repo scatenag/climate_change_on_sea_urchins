@@ -21,13 +21,12 @@ assay count):
   - ResponseAggregationSpec: how that per-trial source rolls up into the
     period-level series most analyses actually run on.
 
-Scope for this step (branch v2.1/study-spec): only SiteSpec and the
-ResponseSpec fields config.py's current constants + note-dati-sorgente.md
-require. VariableSpec and WindowSpec exist as models (and appear in the
-example study.yaml) because this step's plan calls for all five, but
-neither is wired to any fetch script or to SPLIT_DATE yet -- that is
-v2.1/provider-adapters and a later decision, respectively (see docs/adr/
-0000-decisioni-rimandate.md).
+VariableSpec and WindowSpec exist as models (and appear in the example
+study.yaml) for completeness but aren't wired to any fetch script or
+consumed anywhere yet -- that is v2.1/provider-adapters (see docs/adr/
+0000-decisioni-rimandate.md for what else is still deliberately deferred).
+data_dir, split_date (on ResponseSpec, ADR-0007) and mhw_climatology are
+wired: common.py resolves and validates them at its own load time.
 """
 from __future__ import annotations
 
@@ -123,6 +122,16 @@ class ResponseSpec(BaseModel):
         "must not."
     )
     unit: str = Field(..., description="UCUM unit string, e.g. 'ug/L'")
+    split_date: str = Field(
+        ..., description="ISO date (YYYY-MM-DD): the pre/post regime-shift "
+        "boundary estimated for THIS response series (docs/adr/0001 -- a "
+        "rank-based estimate, deliberately not reconciled with "
+        "changepoint.py's own QLR/AR(1) estimate on the same series). Per-"
+        "response, not a shared constant: a second response series has its "
+        "own regime shift, possibly at a different date. Validated at "
+        "common.py's load time against the actual response series' date "
+        "range, not here (this module never reads data/)."
+    )
     source: ResponseSourceSpec
     aggregation: ResponseAggregationSpec
 
@@ -146,12 +155,28 @@ class WindowSpec(BaseModel):
     end: str
 
 
+class MhwClimatologySpec(BaseModel):
+    """The daily-SST baseline period Marine Heatwave detection (Hobday et
+    al. 2016) computes its per-day-of-year threshold from. A scientific
+    choice, not a code default (CLAUDE.md invariant #6) -- previously
+    mhw_detection.py's own CLIM_START/CLIM_END module constants."""
+    baseline_start_year: int
+    baseline_end_year: int
+
+
 class StudySpec(BaseModel):
     """Top-level study specification: everything a case declares about
     itself. See examples/livorno_paracentrotus/study.yaml for the current
     case, described with exactly today's config.py values."""
     id: str
     description: str
+    data_dir: str = Field(
+        ..., description="Where this study's data/ lives, relative to this "
+        "study.yaml's own location. Resolved to an absolute path by "
+        "load_study(), which also checks it exists -- callers (common.py) "
+        "always see an absolute, existing directory."
+    )
+    mhw_climatology: MhwClimatologySpec
     sites: list[SiteSpec]
     responses: list[ResponseSpec]
     environment: list[VariableSpec] = Field(default_factory=list)
@@ -186,9 +211,17 @@ def load_study(path: str | Path) -> StudySpec:
         raise StudySpecError(f"{path}: invalid YAML{where}: {e}") from e
 
     try:
-        return StudySpec.model_validate(raw)
+        spec = StudySpec.model_validate(raw)
     except ValidationError as e:
         raise StudySpecError(f"{path}: invalid study spec:\n{e}") from e
+
+    resolved_data_dir = (path.parent / spec.data_dir).resolve()
+    if not resolved_data_dir.is_dir():
+        raise StudySpecError(
+            f"{path}: data_dir {spec.data_dir!r} does not exist ({resolved_data_dir})"
+        )
+    spec.data_dir = str(resolved_data_dir)
+    return spec
 
 
 DEFAULT_STUDY_PATH = (Path(__file__).resolve().parent.parent.parent
