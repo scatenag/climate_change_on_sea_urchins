@@ -12,19 +12,9 @@ relative paths resolved against the current directory); if unset,
 examples/livorno_paracentrotus/study.yaml, so existing runs, CI and the
 auto-update workflow are unaffected.
 """
-import os
-from pathlib import Path
+from climate_change_on_sea_urchins.study_spec import load_selected_study
 
-from climate_change_on_sea_urchins.study_spec import StudySpecError, load_study
-
-_DEFAULT_STUDY_PATH = Path(__file__).resolve().parent / "examples" / "livorno_paracentrotus" / "study.yaml"
-_STUDY_PATH = Path(os.environ.get("CCSU_STUDY") or _DEFAULT_STUDY_PATH)
-try:
-    _study = load_study(_STUDY_PATH)
-except StudySpecError as e:
-    if "CCSU_STUDY" in os.environ:
-        raise StudySpecError(f"CCSU_STUDY={os.environ['CCSU_STUDY']!r}: {e}") from e
-    raise
+_study = load_selected_study()  # CCSU_STUDY, or Livorno -- see its docstring
 STUDY_ID = _study.id
 _site = _study.sites[0]
 _response = _study.responses[0]
