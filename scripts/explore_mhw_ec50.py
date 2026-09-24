@@ -122,7 +122,7 @@ ax0.scatter(df_real["Datetime"], df_real["EC50"], color="navy", s=18,
 for _, ev in events.iterrows():
     ax0.axvspan(ev["start_date"], ev["end_date"],
                 alpha=0.15, color="tomato", lw=0)
-ax0.set_ylabel("EC50 (mg/L)")
+ax0.set_ylabel("EC50 (µg/L)")
 ax0.set_title("EC50 time series with Marine Heatwave events (red shading)", fontsize=11)
 handles = [Patch(facecolor="steelblue", alpha=0.5, label="EC50 (incl. imputed)"),
            Patch(facecolor="navy", label="EC50 (real measurement)"),
@@ -209,7 +209,7 @@ for col_idx, lag in enumerate(best_lags[:3]):
         ax.set_title(f"Lag {lag}m (n={len(x)})", fontsize=9)
 
     ax.set_xlabel("MHW peak intensity (°C above threshold)")
-    ax.set_ylabel("EC50 real (mg/L)")
+    ax.set_ylabel("EC50 real (µg/L)")
 
 scatter_df = pd.DataFrame(scatter_rows)
 scatter_df.to_csv(ROOT / "explore_lag_scatter.csv", index=False)

@@ -82,8 +82,8 @@ def test_response_adverse_direction_is_decrease_for_ec50():
 
 
 def test_response_unit_is_microgram_per_liter():
-    # The manuscript reports 46.54 ug/L; mg/L (in dashboard.py) is a
-    # factor-1000 labeling bug there, not the source of truth for the unit.
+    # The manuscript reports 46.54 ug/L. dashboard.py labeled it mg/L until
+    # issue #3 -- a factor-1000 labeling bug, never the source of truth.
     assert load_study(EXAMPLE).responses[0].unit == "ug/L"
 
 

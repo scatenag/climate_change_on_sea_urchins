@@ -142,8 +142,10 @@ Months not yet folded into the multiyear reanalysis are backfilled from the equi
 `MEDSEA_ANALYSISFORECAST` near-real-time product (`..._anfc_...` dataset IDs, same variables) —
 see the fallback IDs in the fetch scripts.
 
-> ℹ️ **CO₂ unit note**: Copernicus's `spco2` is delivered in Pascal, not the µatm its CF
-> metadata implies — confirmed by an automated cross-check
+> ℹ️ **CO₂ unit note**: Copernicus's `spco2` is delivered in Pascal, and correctly documented
+> as such — its CF `standard_name`, `surface_partial_pressure_of_carbon_dioxide_in_sea_water`,
+> is associated with Pascal in the CF vocabulary. The error was this pipeline's, which read the
+> value as µatm. Confirmed by an automated cross-check
 > ([`scripts/build_dataset.py::cross_check_co2`](scripts/build_dataset.py), also enforced in
 > [`tests/test_data_quality.py`](tests/test_data_quality.py)) against the original 2003–2022
 > series (`data/data.csv`, Sartori et al. 2023), whose CO₂ column turned out to be in the same
