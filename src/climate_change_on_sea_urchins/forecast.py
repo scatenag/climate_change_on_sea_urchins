@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from scipy import stats
-from .common import load_data, RESULTS, TAU_MAX, RESPONSE_COL, default_response_spec
+from .common import load_data, load_mhw_annual, RESULTS, TAU_MAX, RESPONSE_COL, default_response_spec
 
 
 FORECAST_YEARS = 15
@@ -156,8 +156,7 @@ def run(response=None):
 
     df, df_real, _, _ = load_data()
 
-    mhw_annual_path = RESULTS.parent / "data" / "mhw_annual.csv"
-    mhw_annual = pd.read_csv(mhw_annual_path) if mhw_annual_path.exists() else pd.DataFrame()
+    mhw_annual = load_mhw_annual()
 
     opt_lag = find_optimal_lag(df_real, df)
     print(f"  Optimal MHW→EC50 lag: {opt_lag} months")

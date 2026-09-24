@@ -29,6 +29,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 from config import CO2_PA_TO_UATM
+from climate_change_on_sea_urchins.common import RESULTS
 
 # (min, max) — generous margin around the observed 2003-2025 range, wide
 # enough to tolerate genuine future extremes (continued warming, a record
@@ -164,7 +165,7 @@ def test_mhw_events_year_matches_start_date():
 # ---------------------------------------------------------------------------
 
 def test_stationarity_pvalues_are_probabilities():
-    results = json.loads((ROOT / "results" / "stationarity_results.json").read_text())
+    results = json.loads((RESULTS / "stationarity_results.json").read_text())
     for r in results:
         if "error" in r:
             continue
@@ -174,7 +175,7 @@ def test_stationarity_pvalues_are_probabilities():
 
 
 def test_granger_pvalues_are_probabilities():
-    granger = json.loads((ROOT / "results" / "granger_results.json").read_text())
+    granger = json.loads((RESULTS / "granger_results.json").read_text())
     for var, lag_data in granger.items():
         if not lag_data or "error" in lag_data:
             continue
@@ -185,7 +186,7 @@ def test_granger_pvalues_are_probabilities():
 
 @pytest.mark.parametrize("fname", ["corr_all.csv", "corr_pre.csv", "corr_post.csv"])
 def test_correlation_matrices_bounded(fname):
-    df = pd.read_csv(ROOT / "results" / fname, index_col=0)
+    df = pd.read_csv(RESULTS / fname, index_col=0)
     numeric = df.select_dtypes("number")
     out_of_range = numeric[(numeric < -1.0001) | (numeric > 1.0001)].stack()
     assert out_of_range.empty, f"{fname}: correlation value(s) outside [-1,1]: {out_of_range.to_dict()}"
@@ -195,7 +196,7 @@ def test_correlation_matrices_bounded(fname):
     "ccf_results.csv", "ccf_results_diff.csv", "ccf_results_prewhitened.csv",
 ])
 def test_ccf_results_bounded(fname):
-    df = pd.read_csv(ROOT / "results" / fname)
+    df = pd.read_csv(RESULTS / fname)
     assert df["spearman_r"].between(-1.0001, 1.0001).all(), f"{fname}: spearman_r outside [-1,1]"
     assert df["p_value"].between(-0.0001, 1.0001).all(), f"{fname}: p_value outside [0,1]"
     assert (df["n"] > 0).all(), f"{fname}: non-positive sample size 'n'"
@@ -322,7 +323,7 @@ def test_mhw_monthly_matches_recomputation_from_sst_daily():
 # ---------------------------------------------------------------------------
 
 def test_cu_speciation_carbonate_ion_plausible():
-    df = pd.read_csv(ROOT / "results" / "cu_speciation_decomposition.csv")
+    df = pd.read_csv(RESULTS / "cu_speciation_decomposition.csv")
     co3_umol = df["CO3"] * 1e6
     assert co3_umol.between(150.0, 300.0).all(), (
         f"Carbonate ion outside plausible NW-Mediterranean surface range "
@@ -332,7 +333,7 @@ def test_cu_speciation_carbonate_ion_plausible():
 
 
 def test_cu_speciation_correction_is_small():
-    df = pd.read_csv(ROOT / "results" / "cu_speciation_decomposition.csv")
+    df = pd.read_csv(RESULTS / "cu_speciation_decomposition.csv")
     # Per-month amplification varies with monthly pH; wide bound catches only
     # gross bugs (e.g. a factor-of-two error), not real seasonal pH swings.
     for col in ["fCu_amplification", "fCu_amplification_lit"]:
@@ -341,13 +342,13 @@ def test_cu_speciation_correction_is_small():
         )
     # What the decomposition actually uses: the era-mean amplification stays close
     # to 1 because the realized pH change between eras is only ~0.01 units.
-    s = json.loads((ROOT / "results" / "cu_speciation_summary.json").read_text())
+    s = json.loads((RESULTS / "cu_speciation_summary.json").read_text())
     for key in ["fCu_amplification_post_carbonate", "fCu_amplification_post_literature"]:
         assert 0.95 <= s[key] <= 1.10, f"{key}={s[key]:.3f} — era-mean amplification too far from 1."
 
 
 def test_cu_speciation_decline_is_mostly_biological():
-    s = json.loads((ROOT / "results" / "cu_speciation_summary.json").read_text())
+    s = json.loads((RESULTS / "cu_speciation_summary.json").read_text())
     assert abs(s["geochemical_share_literature_pct"]) < 15.0, (
         f"Ocean-acidification (Cu speciation) now explains "
         f"{s['geochemical_share_literature_pct']:.1f}% of the EC50 decline (was ~3%). "
@@ -368,7 +369,7 @@ def test_cu_speciation_decline_is_mostly_biological():
 # ---------------------------------------------------------------------------
 
 def test_thermal_legacy_dose_positive_and_finite():
-    df = pd.read_csv(ROOT / "results" / "thermal_legacy.csv")
+    df = pd.read_csv(RESULTS / "thermal_legacy.csv")
     dose_cols = [c for c in df.columns if c.startswith("dose_")]
     assert dose_cols, "no thermal-dose columns in thermal_legacy.csv"
     for c in dose_cols:
@@ -378,7 +379,7 @@ def test_thermal_legacy_dose_positive_and_finite():
 
 
 def test_thermal_legacy_verdict_and_cotrend():
-    s = json.loads((ROOT / "results" / "thermal_legacy_summary.json").read_text())
+    s = json.loads((RESULTS / "thermal_legacy_summary.json").read_text())
     assert s["verdict"] in {
         "supported_all_windows",
         "supported_narrow_window",
@@ -425,13 +426,13 @@ def test_thermal_legacy_verdict_and_cotrend():
 # ---------------------------------------------------------------------------
 
 def test_regime_shift_changepoints_valid():
-    df = pd.read_csv(ROOT / "results" / "regime_shift_changepoints.csv")
+    df = pd.read_csv(RESULTS / "regime_shift_changepoints.csv")
     assert df["p_value"].between(0.0, 1.0).all(), "Pettitt p-value outside [0,1]"
     assert df["break_year"].between(2003, 2026).all(), "changepoint year outside record"
 
 
 def test_regime_shift_summary_sane():
-    s = json.loads((ROOT / "results" / "regime_shift_summary.json").read_text())
+    s = json.loads((RESULTS / "regime_shift_summary.json").read_text())
     ve = s["multifactorial_stress_index"]["pc1_variance_explained"]
     assert 0.0 <= ve <= 1.0, f"PC1 variance explained {ve} not a fraction in [0,1]"
     assert isinstance(s["critical_slowing_down_detected"], bool)
@@ -449,7 +450,7 @@ def test_regime_shift_summary_sane():
 # ---------------------------------------------------------------------------
 
 def test_mhw_lag_annual_grid_bounded():
-    g = pd.read_csv(ROOT / "results" / "mhw_lag_annual.csv")
+    g = pd.read_csv(RESULTS / "mhw_lag_annual.csv")
     for c in ["rho_raw", "rho_detrended"]:
         assert g[c].between(-1.0001, 1.0001).all(), f"{c} outside [-1,1]"
     for c in ["p_raw", "p_detrended", "p_detrended_fdr"]:
@@ -457,7 +458,7 @@ def test_mhw_lag_annual_grid_bounded():
 
 
 def test_mhw_lag_annual_duration_not_count():
-    s = json.loads((ROOT / "results" / "mhw_lag_annual_summary.json").read_text())
+    s = json.loads((RESULTS / "mhw_lag_annual_summary.json").read_text())
     assert s["verdict"] in {
         "confirmatory_survives_fdr", "exploratory_suggestive", "no_signal_beyond_trend",
     }, f"unexpected verdict: {s['verdict']}"

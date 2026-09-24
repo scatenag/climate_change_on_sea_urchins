@@ -31,6 +31,7 @@ v2.1/provider-adapters and a later decision, respectively (see docs/adr/
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -188,6 +189,25 @@ def load_study(path: str | Path) -> StudySpec:
         return StudySpec.model_validate(raw)
     except ValidationError as e:
         raise StudySpecError(f"{path}: invalid study spec:\n{e}") from e
+
+
+DEFAULT_STUDY_PATH = (Path(__file__).resolve().parent.parent.parent
+                      / "examples" / "livorno_paracentrotus" / "study.yaml")
+
+
+def load_selected_study() -> StudySpec:
+    """The study this process runs: the study.yaml named by the CCSU_STUDY
+    environment variable, or DEFAULT_STUDY_PATH (Livorno) if unset. The one
+    place the selection happens -- config.py and common.py both call this
+    (common.py can't import config.py: config imports this package, whose
+    __init__ imports common)."""
+    env = os.environ.get("CCSU_STUDY")
+    try:
+        return load_study(env or DEFAULT_STUDY_PATH)
+    except StudySpecError as e:
+        if env:
+            raise StudySpecError(f"CCSU_STUDY={env!r}: {e}") from e
+        raise
 
 
 def export_schema(out_path: str | Path) -> None:

@@ -49,6 +49,11 @@ if (length(script_flag) > 0) {
   ROOT <- normalizePath(".")
 }
 cat("ROOT:", ROOT, "\n")
+# Output directory: first argument if given (the workflow passes Python's
+# common.RESULTS, the one resolver of where results live), else results/.
+trailing <- commandArgs(trailingOnly=TRUE)
+RESULTS_DIR <- if (length(trailing) >= 1) trailing[1] else file.path(ROOT, "results")
+cat("RESULTS_DIR:", RESULTS_DIR, "\n")
 
 DATA     <- read_csv(file.path(ROOT, "data", "data_extended.csv"),    show_col_types=FALSE)
 MONTHLY  <- read_csv(file.path(ROOT, "data", "mhw_monthly.csv"),      show_col_types=FALSE)
@@ -112,7 +117,7 @@ surface_df <- expand.grid(intensity=intensity_vals, lag=0:MAX_LAG)
 surface_df$fit  <- as.vector(pred$matfit)
 surface_df$low  <- as.vector(pred$matlow)
 surface_df$high <- as.vector(pred$mathigh)
-write_csv(surface_df, file.path(ROOT, "results", "dlnm_results.csv"))
+write_csv(surface_df, file.path(RESULTS_DIR, "dlnm_results.csv"))
 cat("Saved dlnm_results.csv\n")
 
 # Cumulative lag response at mean non-zero MHW intensity
@@ -126,7 +131,7 @@ lag_profile <- data.frame(
   ci_upper      = as.numeric(pred$cumhigh[nearest_idx, ]),
   intensity_ref = mean_int
 )
-write_csv(lag_profile, file.path(ROOT, "results", "dlnm_lag_profile.csv"))
+write_csv(lag_profile, file.path(RESULTS_DIR, "dlnm_lag_profile.csv"))
 cat("Saved dlnm_lag_profile.csv — mean MHW intensity:", round(mean_int, 3), "°C\n")
 
 # Slice at fixed lags: dose-response at lag 0, 3, 6, 9, 12
@@ -143,8 +148,8 @@ slice_df <- do.call(rbind, lapply(slice_lags, function(l) {
     high      = pred$mathigh[, lag_idx]
   )
 }))
-write_csv(slice_df, file.path(ROOT, "results", "dlnm_slice_lag.csv"))
+write_csv(slice_df, file.path(RESULTS_DIR, "dlnm_slice_lag.csv"))
 cat("Saved dlnm_slice_lag.csv\n")
 
 cat("\n✅ DLNM analysis complete.\n")
-cat("Outputs in results/: dlnm_results.csv, dlnm_lag_profile.csv, dlnm_slice_lag.csv\n")
+cat("Outputs in", RESULTS_DIR, ": dlnm_results.csv, dlnm_lag_profile.csv, dlnm_slice_lag.csv\n")

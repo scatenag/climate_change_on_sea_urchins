@@ -5,8 +5,20 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+from .study_spec import load_selected_study
+
 ROOT    = Path(__file__).resolve().parent.parent.parent
-RESULTS = ROOT / "results"
+
+
+def results_dir(study_id: str) -> Path:
+    """Where a study's results live -- the only place this path is built
+    (dashboard, tests and the R script all resolve through it). study_id is
+    not used yet: every study still shares results/, until the move to a
+    per-study directory, which is then a change to this function alone."""
+    return ROOT / "results"
+
+
+RESULTS = results_dir(load_selected_study().id)
 RESULTS.mkdir(exist_ok=True)
 
 # EC50 pre/post regime-shift boundary. Full date, not just a year: the
@@ -144,6 +156,11 @@ def load_ec50_monthly() -> pd.DataFrame:
     monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"])
     monthly = monthly.rename(columns={"EC50": RESPONSE_COL})
     return monthly.sort_values("Datetime").reset_index(drop=True)
+
+
+def load_mhw_annual() -> pd.DataFrame:
+    """Annual MHW metrics, data/mhw_annual.csv (written by mhw_detection)."""
+    return pd.read_csv(ROOT / "data" / "mhw_annual.csv")
 
 
 def default_response_spec():

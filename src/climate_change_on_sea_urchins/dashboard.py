@@ -36,7 +36,7 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
-from .common import SPLIT_DATE
+from .common import SPLIT_DATE, RESULTS
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
@@ -58,7 +58,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-RESULTS = ROOT / "results"
 
 EXPORT_URL = EC50_EXPORT_URL
 

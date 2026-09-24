@@ -63,9 +63,8 @@ def golden_pipeline_results(tmp_path_factory):
     of the fixture's data/, not the committed fixture read in place -- the
     committed fixture must stay untouched between runs.
 
-    RESULTS is deliberately nested as ROOT/"results" (not an unrelated tmp
-    dir) because forecast.py derives its own input path as
-    RESULTS.parent / "data".
+    RESULTS is nested as ROOT/"results" to mirror the real layout; the R
+    script, run against the copied tree, also writes there by default.
     """
     from climate_change_on_sea_urchins import common, pipeline
 

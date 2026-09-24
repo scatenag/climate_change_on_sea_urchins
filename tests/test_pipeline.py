@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not in the instal
 
 from climate_change_on_sea_urchins.common import (
     load_data, ENV_COLS, ALL_COLS, MHW_COLS, SPLIT_DATE, SPLIT_YEAR, TAU_MAX,
-    RESPONSE_COL, IMPUTED_COL,
+    RESPONSE_COL, IMPUTED_COL, RESULTS,
 )
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
 
@@ -59,7 +59,7 @@ def test_period_split_uses_configured_split_date():
     # for EC50 directly from SPLIT_DATE and compare against period_split's
     # own precomputed output.
     import json
-    stats_path = ROOT / "results" / "kruskal_stats.json"
+    stats_path = RESULTS / "kruskal_stats.json"
     if not stats_path.exists():
         pytest.skip("results/kruskal_stats.json not generated yet")
     ec50_stats = json.loads(stats_path.read_text())["EC50"]
@@ -180,7 +180,7 @@ def test_monthly_dataframe_has_mhw_cols():
     "changepoint_ec50.json",
 ])
 def test_results_files_exist(fname):
-    path = ROOT / "results" / fname
+    path = RESULTS / fname
     assert path.exists(), (
         f"Missing results file: results/{fname}. "
         "Run `python analysis/run_all.py` to generate it."
@@ -188,12 +188,12 @@ def test_results_files_exist(fname):
 
 
 def test_ccf_results_has_lag_column():
-    df = pd.read_csv(ROOT / "results" / "ccf_results.csv")
+    df = pd.read_csv(RESULTS / "ccf_results.csv")
     assert "lag" in df.columns
 
 
 def test_forecast_bad_longer_than_training():
-    df = pd.read_csv(ROOT / "results" / "forecast_bad.csv")
+    df = pd.read_csv(RESULTS / "forecast_bad.csv")
     assert len(df) >= 12, "Forecast should cover at least 12 future months"
 
 

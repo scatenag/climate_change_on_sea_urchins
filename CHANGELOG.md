@@ -77,6 +77,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are unchanged. A bad path fails naming `CCSU_STUDY`. `config.STUDY_ID` exported. Not yet
   safe to run the pipeline with another study: data and results are still read from and
   written to the shared `data/`/`results/` until per-study namespacing lands.
+- **One resolver for where results live** (V2.2 prerequisite): `common.results_dir(study_id)`,
+  still returning `results/` for every study, so moving to a per-study directory becomes a
+  change to that function alone. `common.RESULTS`, the dashboard, `tests/test_pipeline.py`,
+  `tests/test_data_quality.py` and the R DLNM script (new optional output-directory argument,
+  passed by the auto-update workflow from Python's resolver) all go through it;
+  `tests/test_results_dir.py` fails if any module builds the path itself. Study selection moved
+  from `config.py` to `study_spec.load_selected_study()` so `common.py` can use it too
+  (importing `config` from `common` would be circular). No output changes.
 
 ### Changed
 
@@ -123,6 +131,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- `forecast.py` read `data/mhw_annual.csv` as `RESULTS.parent / "data"`: a direct data read
+  the single-boundary search had missed (it doesn't spell `ROOT / "data"`), and one that would
+  have broken as soon as results moved under a subdirectory. Now `common.load_mhw_annual()`.
 - EC50 unit labeled `mg/L` instead of `µg/L` throughout the dashboard (23 occurrences: axis
   titles, hover templates, metrics, captions) — a factor-1000 error visible on the public app
   (issue #3). The values were always µg/L (the manuscript reports 46.54 µg/L); only the label
