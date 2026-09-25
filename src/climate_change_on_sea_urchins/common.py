@@ -189,6 +189,15 @@ SPLIT_DATE = _response_split_date(_study.responses[0])
 SPLIT_YEAR = str(SPLIT_DATE.year)  # kept for callers that only need the year (e.g. axis labels)
 
 
+def default_results_dir() -> Path:
+    """Fallback for a module's `results` parameter when a caller doesn't
+    pass one (`python -m module`, ad-hoc use); pipeline.py always passes
+    one. Same shape and same reason as default_response_spec() below: a
+    module reaching this can only write the selected study's whole-record
+    results, never a window's. Read at call time, never bound at import."""
+    return RESULTS
+
+
 def default_response_spec():
     """Loads config.RESPONSE_SPEC -- the one place this happens outside
     pipeline.py's own explicit load. Fallback for a module's `response`

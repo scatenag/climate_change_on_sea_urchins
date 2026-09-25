@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Where to write is a `run()` parameter, not a module constant** (V2.2 PR 5a): the 15 analysis
+  modules no longer import `common.RESULTS`; each `run()` takes `results=` and `pipeline.main()`
+  resolves the directory once and passes it to every module (except `mhw_detection`, which
+  writes `data_dir`, never results) — same pattern as `response=` in V2.1. Needed because one
+  pipeline execution will write several windows' results into sibling directories, which a
+  single process-wide constant cannot express. No behaviour change: golden master 66/66, no
+  drift, no new tolerance. `common.default_results_dir()` is the fallback for callers that pass
+  nothing (`python -m module`), mirroring `default_response_spec()`. Two local variables named
+  `results` renamed (`period_split.py` → `kruskal`, `stationarity.py` → `tested`) to free the
+  name; internal only. `tests/test_results_dir.py` fails if an analysis module reads the
+  constant again or a pipeline module's `run()` lacks the parameter.
+  `tests/conftest.py::golden_pipeline_results` now also records, **per module**, which ones
+  change `data_dir` while they run and fails if any module other than `mhw_detection` does
+  (the whole-run snapshot of the real directories could say that something wrote, not who).
+  Verified by sabotage: a write into `data_dir` added to `correlations.run()` fails the fixture
+  naming `correlations`, and lands in the temporary copy, not in the real `data/`.
+
 - **`results/` is per-study now** (ADR-0008, V2.2 prerequisite): `common.results_dir(study_id)`
   (introduced already-generic in "one resolver" above) returns `results/<study_id>/` instead of
   always `results/` — a second study's pipeline run can no longer overwrite Livorno's. The 64

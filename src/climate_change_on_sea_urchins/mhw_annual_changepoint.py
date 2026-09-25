@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 
 from .changepoint import DEFAULT_B, DEFAULT_SEED, TRIM, qlr_ar1_changepoint
-from .common import RESULTS, load_mhw_annual
+from .common import default_results_dir, load_mhw_annual
 
 # The four annual MHW descriptors section 2.3.3 defines (same columns
 # mhw_lag_annual.py's PREDICTORS sweeps individually over lags).
@@ -98,7 +98,8 @@ def _variant(series, metric_label, range_label, B, seed):
     }
 
 
-def run(B=DEFAULT_B, seed=DEFAULT_SEED):
+def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
+    results = results if results is not None else default_results_dir()
     ann = load_mhw_annual().set_index("year")
 
     variants = []
@@ -150,7 +151,7 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED):
         ),
     }
 
-    with (RESULTS / "mhw_annual_changepoint.json").open("w") as f:
+    with (results / "mhw_annual_changepoint.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(

@@ -30,7 +30,7 @@ import json
 import numpy as np
 import pandas as pd
 import statsmodels.formula.api as smf
-from .common import load_data, RESULTS, RESPONSE_COL, default_response_spec
+from .common import load_data, default_results_dir, RESPONSE_COL, default_response_spec
 
 LAG_MIN, LAG_MAX = -6, 12
 N_BOOT = 999
@@ -176,7 +176,8 @@ def run_mixed_effects(df_real: pd.DataFrame, events: pd.DataFrame, response=None
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(response=None) -> None:
+def run(response=None, results=None) -> None:
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
 
@@ -184,15 +185,15 @@ def run(response=None) -> None:
 
     print("── SEA (Python port, real response only) ───────────────────────────")
     sea = run_sea(df_real, events)
-    sea.to_csv(RESULTS / "sea_results.csv", index=False)
+    sea.to_csv(results / "sea_results.csv", index=False)
     n_sig = int(sea["significant"].sum())
     print(f"✓ SEA: {n_sig}/{len(sea)} lags nominally significant (bootstrap p<0.05) — "
           f"{'diffuse across most lags (trend-confounding signature)' if n_sig > len(sea) * 0.7 else 'localized'}")
 
     print("\n── Mixed-effects model (Python port, corrected time-indexing) ─────")
     predictions, summary = run_mixed_effects(df_real, events, response=response)
-    predictions.to_csv(RESULTS / "mixed_effects_predictions.csv", index=False)
-    (RESULTS / "mixed_effects_summary.json").write_text(json.dumps(summary, indent=2))
+    predictions.to_csv(results / "mixed_effects_predictions.csv", index=False)
+    (results / "mixed_effects_summary.json").write_text(json.dumps(summary, indent=2))
     p_lag = summary["pvalues"].get("lag_post_end", float("nan"))
     print(f"✓ mixed-effects: lag_post_end p={p_lag:.4f} "
           f"({'nominally significant' if p_lag < 0.05 else 'not significant'} at alpha=0.05)")

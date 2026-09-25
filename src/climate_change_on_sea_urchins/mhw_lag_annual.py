@@ -33,7 +33,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, RESULTS, RESPONSE_COL, load_mhw_annual
+from .common import load_data, default_results_dir, RESPONSE_COL, load_mhw_annual
 
 PREDICTORS = ["event_count", "total_mhw_days", "cum_intensity_sum", "max_intensity"]
 LAGS = [0, 1, 2, 3]
@@ -45,7 +45,8 @@ def _detrend(s: pd.Series) -> pd.Series:
                      index=s.index)
 
 
-def run():
+def run(results=None):
+    results = results if results is not None else default_results_dir()
     _, df_real, _, _ = load_data()
     real = df_real.dropna(subset=[RESPONSE_COL])
     ec = real.assign(y=real["Datetime"].dt.year).groupby("y")[RESPONSE_COL].mean()
@@ -68,7 +69,7 @@ def run():
     grid = pd.DataFrame(rows)
     # Benjamini-Hochberg FDR across the whole detrended grid
     grid["p_detrended_fdr"] = multipletests(grid["p_detrended"], method="fdr_bh")[1]
-    grid.to_csv(RESULTS / "mhw_lag_annual.csv", index=False)
+    grid.to_csv(results / "mhw_lag_annual.csv", index=False)
 
     # Best signal = smallest detrended p among the biologically expected (negative) ones
     cand = grid[grid["rho_detrended"] < 0].sort_values("p_detrended")
@@ -122,7 +123,7 @@ def run():
             "with a delayed (not acute) mechanism, unlike the 2025 acute-exposure experiment."
         ).format(best["rho_detrended"], best["p_detrended"]),
     }
-    with (RESULTS / "mhw_lag_annual_summary.json").open("w") as f:
+    with (results / "mhw_lag_annual_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ mhw_lag_annual: best = {best['predictor']} lag {int(best['lag_years'])}yr "
