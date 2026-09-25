@@ -4,15 +4,14 @@ predictors, VIF = 1/(1 - r**2) where r is the dose_time_collinearity
 already computed there.
 """
 import json
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+from climate_change_on_sea_urchins.common import RESULTS
 
 
 def _per_window():
-    path = ROOT / "results" / "thermal_legacy_summary.json"
+    path = RESULTS / "thermal_legacy_summary.json"
     if not path.exists():
         pytest.skip("results/thermal_legacy_summary.json not generated yet")
     return json.loads(path.read_text())["per_window"]

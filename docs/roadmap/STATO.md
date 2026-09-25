@@ -148,8 +148,13 @@ piano originale: `mhw_detection.py` legava i percorsi di `data/` una sola volta 
 `common.ROOT`, invisibile al monkeypatch dei fixture — ogni golden master leggeva/scriveva
 silenziosamente i file reali invece della fixture congelata, rimasto verde solo perché il
 rilevamento MHW è deterministico e i dati reali non erano cambiati nel frattempo (dettagli:
-`tests/test_data_boundary.py`, `tests/conftest.py`, ADR-0007 per `split_date`). 4. Spostamento
-di Livorno in `results/<study_id>/` con `git mv` (golden master indipendente dal percorso) + ADR.
+`tests/test_data_boundary.py`, `tests/conftest.py`, ADR-0007 per `split_date`). **PR #17 fusa
+25/9** (confronto richiesto degli `mhw_*.csv`/`sst_daily.csv` fixture-vs-reale: byte-identici,
+nessuna deriva del riferimento). 4. Spostamento di Livorno in `results/<study_id>/` con
+`git mv` (golden master indipendente dal percorso) + ADR — **fatto (ADR-0008), PR aperta,
+CI in corso**. `results_dir()` restituisce ora `results/<study_id>/`; i 64 file esistenti
+spostati; `README.md` (4 link) e `tests/test_thermal_legacy_vif.py` (costruiva il percorso da
+sé, lo stesso tipo di problema del punto 3) aggiornati di conseguenza.
 5. Meccanismo delle finestre temporali (le finestre si decidono alla PR 5, non prima). 6. Script di
 download per studio + sei `study.yaml` con coordinate segnaposto — **il download lo fa l'utente in
 locale**, dopo aver scelto su mappa le celle in mare; istantanee committate con manifest di
@@ -247,6 +252,13 @@ l'utente decide quando fondere.
   perché fuori dal pacchetto installabile (CLAUDE.md) e nessun fixture li monkeypatcha, quindi
   non a rischio nello stesso modo. Se `scripts/` dovesse mai entrare nel pacchetto o in un
   fixture di test, va rifatto lo stesso controllo.
+- **Lo spostamento di `results/` in `results/<study_id>/` (ADR-0008) ha reso stale
+  `scripts/make_regime_shift_figure.py`, `make_mhw_lag_annual_figure.py`,
+  `make_speciation_figure.py`, `make_thermal_legacy_figure.py`, `build_narrative_notebook.py`**:
+  costruiscono ancora `ROOT / "results"` da soli e non troveranno più i file di Livorno.
+  Lasciati intatti (fuori dal pacchetto, nessun test li esercita) — se servono di nuovo per
+  produrre figure del manoscritto, vanno aggiornati a `results/livorno-paracentrotus/` (o meglio,
+  a `common.RESULTS`) prima di rilanciarli.
 
 ---
 

@@ -208,9 +208,9 @@ reproduce the published values for:
 
 | Section | Output | What it checks |
 |---|---|---|
-| 3.1 (trial-level pre/post contrast) | [`results/period_contrast_raw.json`](results/period_contrast_raw.json) | n/mean/SD/median/Mann-Whitney on the 295 individual EC50 determinations, split at `SPLIT_DATE` |
-| 3.6 (negative control) | [`results/negative_control.json`](results/negative_control.json) | Trend, pre/post level and dispersion, and an independent QLR/AR(1) changepoint search on the assay's own negative-control series — plus a data-quality check for single-replicate outliers |
-| Table S2 (thermal threshold sensitivity) | [`results/thermal_threshold_sensitivity.csv`](results/thermal_threshold_sensitivity.csv) | Same detrended/partial tests as the primary 24°C thermal-legacy analysis, swept over 22–26°C |
+| 3.1 (trial-level pre/post contrast) | [`results/period_contrast_raw.json`](results/livorno-paracentrotus/period_contrast_raw.json) | n/mean/SD/median/Mann-Whitney on the 295 individual EC50 determinations, split at `SPLIT_DATE` |
+| 3.6 (negative control) | [`results/negative_control.json`](results/livorno-paracentrotus/negative_control.json) | Trend, pre/post level and dispersion, and an independent QLR/AR(1) changepoint search on the assay's own negative-control series — plus a data-quality check for single-replicate outliers |
+| Table S2 (thermal threshold sensitivity) | [`results/thermal_threshold_sensitivity.csv`](results/livorno-paracentrotus/thermal_threshold_sensitivity.csv) | Same detrended/partial tests as the primary 24°C thermal-legacy analysis, swept over 22–26°C |
 
 Not every published number is reproduced exactly — where a check surfaced a real discrepancy
 (a stale split-date carried over from an earlier draft, an unresolved metric definition), the
@@ -221,7 +221,7 @@ For exact numerical reproduction (not just the pattern/tolerance `test_paper_val
 use [`requirements-lock.txt`](requirements-lock.txt) — the frozen environment this release's own
 `results/` was generated and verified in — alongside the frozen data fixture above.
 
-[`results/mhw_annual_changepoint.json`](results/mhw_annual_changepoint.json) applied the same
+[`results/mhw_annual_changepoint.json`](results/livorno-paracentrotus/mhw_annual_changepoint.json) applied the same
 changepoint procedure to the annual MHW exposure metric, investigated for a manuscript
 paragraph that no (metric, year-range) variant tried ended up reproducing — that paragraph was
 removed from the manuscript as a result. The output is kept (`cited_in_manuscript: false`) as a
