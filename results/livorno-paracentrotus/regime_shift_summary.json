@@ -1,29 +1,29 @@
 {
   "ec50_regime_shift": {
     "break": "2016-05-01",
-    "p": 1.6176494741534486e-22,
+    "p": 8.582563560305142e-23,
     "pre_mean": 46.67564157706093,
-    "post_mean": 26.816119047619043
+    "post_mean": 26.643075117370888
   },
   "mhw_exposure_break_year": 2013,
   "exposure_precedes_response_years": 3,
   "multifactorial_stress_index": {
-    "pc1_variance_explained": 0.7103105561791445,
+    "pc1_variance_explained": 0.7103105561791444,
     "pc1_loadings_stress_oriented": {
-      "Temperature": 0.47904863791892854,
+      "Temperature": 0.4790486379189284,
       "Salinity": 0.28413289337617187,
-      "CO2": 0.5030669141111426,
-      "O2": 0.41108408889149717,
-      "pH": 0.5174112998347107
+      "CO2": 0.5030669141111427,
+      "O2": 0.41108408889149706,
+      "pH": 0.5174112998347108
     },
     "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated climate-change axis. Correlation with EC50 is co-trended, not causal."
   },
   "early_warning_signals": {
-    "variance_kendall_tau": -0.5244080350129053,
-    "variance_p": 2.513236166786279e-19,
-    "ar1_kendall_tau": 0.13949051733812143,
-    "ar1_p": 0.01681055096560299
+    "variance_kendall_tau": -0.5069098949695965,
+    "variance_p": 2.745998015272938e-18,
+    "ar1_kendall_tau": 0.13941404090657822,
+    "ar1_p": 0.016455926372748352
   },
   "critical_slowing_down_detected": false,
-  "verdict": "Regime shift in EC50 confirmed ~2016 (Pettitt p=1.6e-22). MHW exposure shifts ~2013, ~3 yr BEFORE the biological collapse \u2014 consistent with multi-year population-scale accumulation, not an acute lag. Environmental stress is multifactorial (PC1 = 71% of T/S/CO2/O2/pH variance). Canonical critical-slowing-down early-warning signals are NOT present (absolute variance falls, AR(1) not rising) \u2014 this is a documented regime shift, not a demonstrated dynamical tipping point."
+  "verdict": "Regime shift in EC50 confirmed ~2016 (Pettitt p=8.6e-23). MHW exposure shifts ~2013, ~3 yr BEFORE the biological collapse \u2014 consistent with multi-year population-scale accumulation, not an acute lag. Environmental stress is multifactorial (PC1 = 71% of T/S/CO2/O2/pH variance). Canonical critical-slowing-down early-warning signals are NOT present (absolute variance falls, AR(1) not rising) \u2014 this is a documented regime shift, not a demonstrated dynamical tipping point."
 }
