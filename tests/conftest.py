@@ -3,10 +3,10 @@ Shared fixtures for tests/test_paper_values.py and tests/test_golden_master.py,
 both built on the same frozen data snapshot in tests/fixtures/paper_mpb_2026/data/
 -- no second fixture is created (see docs/adr/0004).
 
-No analysis module is modified: each module's own ROOT/DATA/RESULTS
-module-level path constants (imported from common.py) are monkeypatched for
-the duration of a fixture, exactly the way any other caller would set them,
-then restored. Frozen fixture in, throwaway output out; the real project
+No analysis module is modified: where to write is passed to run() as
+`results`, exactly as pipeline.py passes it; where to read (common.DATA,
+plus any module's own ROOT/DATA) is monkeypatched for the duration of a
+fixture, then restored. Frozen fixture in, throwaway output out; the real project
 tree (data/, results/) is untouched either way -- golden_pipeline_results
 below actively verifies that last claim (see its own docstring for why).
 """
@@ -35,12 +35,26 @@ def _snapshot_tree(path: Path) -> dict[str, tuple[int, int]]:
     }
 
 
+def _tracking_data_writes(label, run, data_dir, writers):
+    """Wraps a module's run() to record `label` in `writers` if data_dir
+    changed while it ran -- per module, unlike the whole-run snapshot of
+    the real directories below, which can say that something wrote but
+    not who."""
+    def wrapped(*args, **kwargs):
+        before = _snapshot_tree(data_dir)
+        out = run(*args, **kwargs)
+        if _snapshot_tree(data_dir) != before:
+            writers.append(label)
+        return out
+    return wrapped
+
+
 @pytest.fixture(scope="session")
 def paper_results(tmp_path_factory):
     """Runs the four manuscript-value modules only (negative_control,
     period_split, thermal_legacy, mhw_annual_changepoint) -- see
     test_paper_values.py. Output goes to an unrelated throwaway dir (these
-    four modules never write outside RESULTS)."""
+    four modules never write outside their `results` argument)."""
     from climate_change_on_sea_urchins import (
         common, mhw_annual_changepoint, negative_control, period_split,
         thermal_legacy,
@@ -58,12 +72,11 @@ def paper_results(tmp_path_factory):
                 mp.setattr(mod, "ROOT", FIXTURE_ROOT)
             if hasattr(mod, "DATA"):
                 mp.setattr(mod, "DATA", fixture_data)
-            mp.setattr(mod, "RESULTS", results_dir)
 
-        negative_control.run()
-        period_split.run()
-        thermal_legacy.run()
-        mhw_annual_changepoint.run()
+        negative_control.run(results=results_dir)
+        period_split.run(results=results_dir)
+        thermal_legacy.run(results=results_dir)
+        mhw_annual_changepoint.run(results=results_dir)
     finally:
         mp.undo()
 
@@ -82,8 +95,9 @@ def golden_pipeline_results(tmp_path_factory):
     of the fixture's data/, not the committed fixture read in place -- the
     committed fixture must stay untouched between runs.
 
-    RESULTS is nested as ROOT/"results" to mirror the real layout; the R
-    script, run against the copied tree, also writes there.
+    Results go to ROOT/"results", passed to pipeline.main(results=...), to
+    mirror the real layout; the R script, run against the copied tree, also
+    writes there.
 
     --- Why this fixture snapshots and re-checks the REAL data/ and
     results/ directories, not just the copied ones ---
@@ -135,17 +149,28 @@ def golden_pipeline_results(tmp_path_factory):
     try:
         mp.setattr(common, "ROOT", tmp_root)
         mp.setattr(common, "DATA", tmp_data)
-        for _label, mod in pipeline._MODULES:
+        data_writers = []
+        for label, mod in pipeline._MODULES:
             if hasattr(mod, "ROOT"):
                 mp.setattr(mod, "ROOT", tmp_root)
             if hasattr(mod, "DATA"):
                 mp.setattr(mod, "DATA", tmp_data)
-            if hasattr(mod, "RESULTS"):
-                mp.setattr(mod, "RESULTS", results_dir)
+            mp.setattr(mod, "run", _tracking_data_writes(label, mod.run, tmp_data, data_writers))
 
-        pipeline.main()
+        pipeline.main(results=results_dir)
     finally:
         mp.undo()
+
+    assert set(data_writers) <= {"mhw_detection"}, (
+        f"module(s) {sorted(set(data_writers) - {'mhw_detection'})} wrote into data_dir. Only "
+        "mhw_detection may (it regenerates the MHW catalogue from the whole SST record, once "
+        "per run); analysis modules write results only -- with several windows per run, "
+        "anything else they wrote into the shared data_dir would overwrite each other."
+    )
+    assert "mhw_detection" in data_writers, (
+        "mhw_detection wrote nothing into the redirected data_dir -- it is writing somewhere "
+        "else (the bug described above), or the write guard itself stopped seeing it."
+    )
 
     assert _snapshot_tree(REPO_ROOT / "data") == real_data_before, (
         "golden_pipeline_results wrote into the REAL data/ directory -- the fixture's "
@@ -154,7 +179,7 @@ def golden_pipeline_results(tmp_path_factory):
     )
     assert _snapshot_tree(REPO_ROOT / "results") == real_results_before, (
         "golden_pipeline_results wrote into the REAL results/ directory -- the fixture's "
-        "RESULTS redirection did not reach every module."
+        "`results` argument did not reach every module."
     )
 
     r_script = shutil.which("Rscript")

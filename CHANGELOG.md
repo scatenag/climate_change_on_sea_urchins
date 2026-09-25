@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Where to write is a `run()` parameter, not a module constant** (V2.2 PR 5a): the 15 analysis
+  modules no longer import `common.RESULTS`; each `run()` takes `results=` and `pipeline.main()`
+  resolves the directory once and passes it to every module (except `mhw_detection`, which
+  writes `data_dir`, never results) — same pattern as `response=` in V2.1. Needed because one
+  pipeline execution will write several windows' results into sibling directories, which a
+  single process-wide constant cannot express. No behaviour change: golden master 66/66, no
+  drift, no new tolerance. `common.default_results_dir()` is the fallback for callers that pass
+  nothing (`python -m module`), mirroring `default_response_spec()`. Two local variables named
+  `results` renamed (`period_split.py` → `kruskal`, `stationarity.py` → `tested`) to free the
+  name; internal only. `tests/test_results_dir.py` fails if an analysis module reads the
+  constant again or a pipeline module's `run()` lacks the parameter.
+  `tests/conftest.py::golden_pipeline_results` now also records, **per module**, which ones
+  change `data_dir` while they run and fails if any module other than `mhw_detection` does
+  (the whole-run snapshot of the real directories could say that something wrote, not who).
+  Verified by sabotage: a write into `data_dir` added to `correlations.run()` fails the fixture
+  naming `correlations`, and lands in the temporary copy, not in the real `data/`.
+
 - **`results/` is per-study now** (ADR-0008, V2.2 prerequisite): `common.results_dir(study_id)`
   (introduced already-generic in "one resolver" above) returns `results/<study_id>/` instead of
   always `results/` — a second study's pipeline run can no longer overwrite Livorno's. The 64
@@ -195,6 +212,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     this driver.
 
 ### Fixed
+
+- **`tests/test_mhw_analysis.py` read the real `data/`, not the frozen fixture, since #17.** Its
+  fixture redirected `common.ROOT` only; since #17, `load_data()` reads `common.DATA`, no longer
+  derived from `ROOT`. Green while the real `data/` equalled the fixture; broke when the
+  2026-09-25 auto-update added one EC50 month (n 163 -> 164 at lag 0; fixture: 163 real months,
+  real data: 164). Main was red on this test from that commit on, unseen: auto-update commits skip
+  CI. Fixed by redirecting `common.DATA` too. `tests/test_data_boundary.py` gains a static guard
+  over `tests/`: any test redirecting `common.ROOT` must also redirect `common.DATA` (the existing
+  search only covered `src/`). #17 had fixed the same omission in `test_pipeline.py` but missed
+  this file.
 
 - `forecast.py` read `data/mhw_annual.csv` as `RESULTS.parent / "data"`: a direct data read
   the single-boundary search had missed (it doesn't spell `ROOT / "data"`), and one that would
