@@ -16,7 +16,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   commit, and runs daily (the update workflow is scheduled daily and completes even when no data
   changed). A failure opens an issue that @-mentions the repository owner, or comments on the
   open one: GitHub documents notifications for runs you trigger and for scheduled runs, not for
-  runs triggered by another workflow's completion.
+  runs triggered by another workflow's completion. Permissions are explicit, never the
+  repository default (which can be broader than needed, or too narrow to open the issue, and
+  then the alarm would fail silently): `contents: read` for the workflow, plus `issues: write`
+  for the notification job only. A `workflow_dispatch` trigger with a `simulate_failure` input
+  fails the test job on purpose, to exercise the whole alarm path once by hand; the drill opens
+  an issue with its own title (`[simulated] ...`), so it never absorbs a real alarm.
 
 - **`results/` is per-study now** (ADR-0008, V2.2 prerequisite): `common.results_dir(study_id)`
   (introduced already-generic in "one resolver" above) returns `results/<study_id>/` instead of
