@@ -23,14 +23,14 @@ DATA = Path(_study.data_dir)
 
 def results_dir(study_id: str) -> Path:
     """Where a study's results live -- the only place this path is built
-    (dashboard, tests and the R script all resolve through it). study_id is
-    not used yet: every study still shares results/, until the move to a
-    per-study directory, which is then a change to this function alone."""
-    return ROOT / "results"
+    (dashboard, tests and the R script all resolve through it). One
+    directory per study under results/ (results/<study_id>/), so a second
+    study's pipeline run can never overwrite Livorno's -- see docs/adr/0008."""
+    return ROOT / "results" / study_id
 
 
 RESULTS = results_dir(_study.id)
-RESULTS.mkdir(exist_ok=True)
+RESULTS.mkdir(parents=True, exist_ok=True)
 
 TAU_MAX = 12
 

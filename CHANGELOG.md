@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`results/` is per-study now** (ADR-0008, V2.2 prerequisite): `common.results_dir(study_id)`
+  (introduced already-generic in "one resolver" above) returns `results/<study_id>/` instead of
+  always `results/` — a second study's pipeline run can no longer overwrite Livorno's. The 64
+  existing files moved with `git mv` to `results/livorno-paracentrotus/`, content unchanged; the
+  golden master is unaffected (its fixtures assign `RESULTS` directly per module, independent of
+  what `results_dir()` would compute for a real run — the same property already relied on for the
+  `results_dir()` PR). `README.md`'s four links to specific manuscript-reproduction output files
+  updated to the new path; `tests/test_thermal_legacy_vif.py` built its path as `ROOT / "results"`
+  instead of reading `common.RESULTS` — silently switched to `pytest.skip()` under the old path,
+  now fixed to use the resolver. `scripts/make_*_figure.py` and `build_narrative_notebook.py`
+  still build `ROOT / "results"` themselves and will not find Livorno's files after this move —
+  left as-is (out of the installable package, no test exercises them, same treatment as the
+  twin `data/` pattern found in `scripts/*.py` during the previous PR); noted in
+  `docs/roadmap/STATO.md`.
+
 - `tests/test_golden_master.py`: regression test for the entire `results/` directory (64
   files), not just the ~15 manuscript-cited numbers `test_paper_values.py` covers. Reruns the
   full pipeline (all 16 Python modules, plus the R DLNM script when available) against the
