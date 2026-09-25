@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, SPLIT_YEAR, RESPONSE_COL, default_response_spec, load_mhw_annual
+from .common import load_data, default_results_dir, SPLIT_YEAR, RESPONSE_COL, default_response_spec, load_mhw_annual
 
 ENV = ["Temperature", "Salinity", "CO2", "O2", "pH"]
 # Sign of each variable along the climate-change stress axis (stress increases
@@ -101,7 +101,8 @@ def _ews(ec_series):
     }
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for the response series below
@@ -141,11 +142,11 @@ def run(response=None):
                      "break_year": int(s.index[kk]), "p_value": pp,
                      "pre_mean": float(s.iloc[:kk].mean()), "post_mean": float(s.iloc[kk:].mean())})
 
-    pd.DataFrame(rows).to_csv(RESULTS / "regime_shift_changepoints.csv", index=False)
+    pd.DataFrame(rows).to_csv(results / "regime_shift_changepoints.csv", index=False)
 
     # --- multifactorial stress index ---
     stress_idx, var_expl, loadings = _stress_index(df_full)
-    stress_idx.to_csv(RESULTS / "regime_shift_stress_index.csv", index=False)
+    stress_idx.to_csv(results / "regime_shift_stress_index.csv", index=False)
 
     # --- early-warning signals ---
     ews = _ews(r.set_index("Datetime")[RESPONSE_COL])
@@ -184,7 +185,7 @@ def run(response=None):
         ).format(label=label, yr=ec50_break.year, p=p, mhw=mhw_break_year,
                  lag=exposure_lag, ve=var_expl * 100),
     }
-    with (RESULTS / "regime_shift_summary.json").open("w") as f:
+    with (results / "regime_shift_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ regime_shift: {label} break {ec50_break.date()} (p={p:.1e}); MHW exposure "

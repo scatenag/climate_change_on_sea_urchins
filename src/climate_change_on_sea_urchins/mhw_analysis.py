@@ -24,7 +24,7 @@ from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.stats.diagnostic import acorr_ljungbox
 from statsmodels.stats.multitest import multipletests
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, TAU_MAX, RESPONSE_COL, IMPUTED_COL, default_response_spec
+from .common import load_data, default_results_dir, ALL_COLS, MHW_COLS, TAU_MAX, RESPONSE_COL, IMPUTED_COL, default_response_spec
 
 
 # ── 1. CCF ────────────────────────────────────────────────────────────────────
@@ -322,7 +322,8 @@ def _relabel_variable(frame: pd.DataFrame, label: str) -> pd.DataFrame:
     return frame
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for "variable" fields below
@@ -341,7 +342,7 @@ def run(response=None):
     #     lags come out significant with no peak — the signature of spurious
     #     correlation, not a localized biological effect). Kept only for comparison.
     ccf_df = _relabel_variable(compute_ccf(df_ccf, driver, targets), label)
-    ccf_df.to_csv(RESULTS / "ccf_results.csv", index=False)
+    ccf_df.to_csv(results / "ccf_results.csv", index=False)
     _print_best_lags(ccf_df, "raw levels")
 
     # 1b. CCF — first differences (Method C: primary robust result). Differencing
@@ -351,7 +352,7 @@ def run(response=None):
     df_diff = difference_series(df, [driver] + targets)
     df_diff[RESPONSE_COL] = _mask_imputed(df, RESPONSE_COL, df_diff[RESPONSE_COL].values)
     ccf_diff_df = _relabel_variable(compute_ccf(df_diff, driver, targets), label)
-    ccf_diff_df.to_csv(RESULTS / "ccf_results_diff.csv", index=False)
+    ccf_diff_df.to_csv(results / "ccf_results_diff.csv", index=False)
     _print_best_lags(ccf_diff_df, "first differences")
 
     # 1c. CCF — ARIMA pre-whitening (Method E), cross-checked against the two
@@ -368,8 +369,8 @@ def run(response=None):
 
     if prewhiten_parts:
         pw_all = pd.concat(prewhiten_parts, ignore_index=True)
-        pw_all.to_csv(RESULTS / "ccf_results_prewhitened.csv", index=False)
-        (RESULTS / "prewhitening_diagnostics.json").write_text(json.dumps(diagnostics_all, indent=2))
+        pw_all.to_csv(results / "ccf_results_prewhitened.csv", index=False)
+        (results / "prewhitening_diagnostics.json").write_text(json.dumps(diagnostics_all, indent=2))
         print(f"\n✓ CCF (ARIMA pre-whitening) — best lag, driver → {label}:")
         for alt_driver, diag in diagnostics_all.items():
             sub = pw_all[(pw_all["driver"] == alt_driver) & (pw_all["variable"] == label)]
@@ -385,7 +386,7 @@ def run(response=None):
     # Output identity: a per-variable dict keyed by display name, never the
     # internal RESPONSE_COL (see common.py).
     granger = {(label if var == RESPONSE_COL else var): data for var, data in granger.items()}
-    (RESULTS / "granger_results.json").write_text(json.dumps(granger, indent=2))
+    (results / "granger_results.json").write_text(json.dumps(granger, indent=2))
     print(f"\n✓ Granger causality saved for {len(granger)} variables")
     for var, lag_data in granger.items():
         if isinstance(lag_data, dict) and lag_data and "error" not in lag_data:
@@ -398,7 +399,7 @@ def run(response=None):
     # 3. ARDL
     ardl_df = compute_ardl(df_real, df)
     if not ardl_df.empty:
-        ardl_df.to_csv(RESULTS / "ardl_response.csv", index=False)
+        ardl_df.to_csv(results / "ardl_response.csv", index=False)
         print(f"\n✓ ARDL response saved ({len(ardl_df)} lags)")
 
 

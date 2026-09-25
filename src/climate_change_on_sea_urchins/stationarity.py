@@ -6,7 +6,7 @@ import json
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller, kpss
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL, default_response_spec
+from .common import load_data, default_results_dir, ALL_COLS, MHW_COLS, RESPONSE_COL, default_response_spec
 
 
 def test_series(series: pd.Series, name: str) -> dict:
@@ -41,14 +41,15 @@ def test_series(series: pd.Series, name: str) -> dict:
     }
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
 
     df, df_real, _, _ = load_data()
 
     # For the response use real measurements only (no imputed values)
-    results = []
+    tested = []
     for col in ALL_COLS + MHW_COLS:
         if col not in df.columns:
             continue
@@ -56,12 +57,12 @@ def run(response=None):
         # Output identity: the response's "variable" name is its display
         # label, never the internal RESPONSE_COL (see common.py).
         name = response.label if col == RESPONSE_COL else col
-        results.append(test_series(src[col], name))
+        tested.append(test_series(src[col], name))
 
-    (RESULTS / "stationarity_results.json").write_text(json.dumps(results, indent=2))
+    (results / "stationarity_results.json").write_text(json.dumps(tested, indent=2))
 
-    print(f"✓ stationarity: {len(results)} variables tested")
-    for r in results:
+    print(f"✓ stationarity: {len(tested)} variables tested")
+    for r in tested:
         if "error" not in r:
             print(f"  {r['variable']:25s}  ADF p={r['adf_p']:.3f}  KPSS p={r['kpss_p']:.3f}  → {r['conclusion']}")
 

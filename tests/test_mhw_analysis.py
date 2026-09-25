@@ -62,6 +62,7 @@ EXPECTED = [
 def fixture_df():
     mp = pytest.MonkeyPatch()
     mp.setattr(common, "ROOT", FIXTURE_ROOT)
+    mp.setattr(common, "DATA", FIXTURE_ROOT / "data")
     try:
         df_full, _df_real, _events, _monthly = common.load_data()
     finally:

@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from scipy import stats
-from .common import load_data, load_mhw_annual, RESULTS, TAU_MAX, RESPONSE_COL, default_response_spec
+from .common import load_data, load_mhw_annual, default_results_dir, TAU_MAX, RESPONSE_COL, default_response_spec
 
 
 FORECAST_YEARS = 15
@@ -149,7 +149,8 @@ def project_mhw(mhw_annual: pd.DataFrame, n_months: int,
     return pd.Series(trend * seasonal * scale, index=future_dates)
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for the forecast column below
@@ -223,7 +224,7 @@ def run(response=None):
         # Save env projections (used by mechanistic model in notebook)
         env_out = exog_future.copy()
         env_out.index.name = "Datetime"
-        env_out.reset_index().to_csv(RESULTS / f"forecast_env_{scenario}.csv", index=False)
+        env_out.reset_index().to_csv(results / f"forecast_env_{scenario}.csv", index=False)
 
         # --- SARIMAX forecast ---
         try:
@@ -284,14 +285,14 @@ def run(response=None):
             "Temp_proj":     Temp_future.values,
             "mhw_proj":      MHW_future.values,
         })
-        out.to_csv(RESULTS / f"forecast_{scenario}.csv", index=False)
+        out.to_csv(results / f"forecast_{scenario}.csv", index=False)
         meta["scenarios"][scenario] = {
             "final_mean":     float(fc_mean[-1]),
             "final_ci_lower": float(fc_lo[-1]),
             "final_ci_upper": float(fc_hi[-1]),
         }
 
-    (RESULTS / "forecast_meta.json").write_text(json.dumps(meta, indent=2))
+    (results / "forecast_meta.json").write_text(json.dumps(meta, indent=2))
     print(f"✓ forecast: 3 scenarios × {n_months} months ({last_year+1}–{last_year+FORECAST_YEARS})")
     for sc, v in meta["scenarios"].items():
         print(f"  {sc}: EC50 final = {v['final_mean']:.2f} "

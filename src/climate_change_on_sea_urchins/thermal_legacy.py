@@ -69,7 +69,7 @@ from scipy import stats
 import statsmodels.api as sm
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, RESULTS, RESPONSE_COL, default_response_spec, load_sst_daily
+from .common import load_data, default_results_dir, RESPONSE_COL, default_response_spec, load_sst_daily
 
 THRESHOLD_C = 24.0                 # C, chronic gametogenesis-blocking threshold
                                     # for P. lividus (Amato et al. 2025) -- the
@@ -102,7 +102,8 @@ def _detrended_corr(x, y, t):
     return float(r), float(p)
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for thermal_legacy.csv's column below
@@ -152,7 +153,7 @@ def run(response=None):
             "partial_p_dose_given_time": float(fit_td.pvalues[2]),
         })
 
-    out.to_csv(RESULTS / "thermal_legacy.csv", index=False)
+    out.to_csv(results / "thermal_legacy.csv", index=False)
     res = pd.DataFrame(rows)
 
     # BH-FDR and Bonferroni correction across the 5 windows — non-independent
@@ -214,14 +215,14 @@ def run(response=None):
             "if any, explicitly as unconfirmed by the cross-check."
         ),
     }
-    with (RESULTS / "thermal_legacy_summary.json").open("w") as f:
+    with (results / "thermal_legacy_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ thermal_legacy (24C threshold, {len(WINDOWS)} windows): "
           f"robust(both tests)={_fmt(robust)}  suggestive(rank-only)={_fmt(suggestive)}  "
           f"not-surviving={_fmt(not_surviving)} → {verdict}")
 
-    run_threshold_sensitivity()  # Table S2 -- see its own docstring
+    run_threshold_sensitivity(results=results)  # Table S2 -- see its own docstring
 
 
 def _sensitivity_row(real, sst, t, y, window, thr):
@@ -244,7 +245,7 @@ def _sensitivity_row(real, sst, t, y, window, thr):
     }
 
 
-def run_threshold_sensitivity(thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITIVITY_WINDOW_MONTHS):
+def run_threshold_sensitivity(*, results, thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITIVITY_WINDOW_MONTHS):
     """Table S2: sweep threshold_C at the fixed 24-month window, Bonferroni-
     correcting across the len(thresholds) tests -- same "survives only if
     both the rank and the parametric test clear Bonferroni" rule run() uses
@@ -266,7 +267,7 @@ def run_threshold_sensitivity(thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITI
     correct_sign = (res["detrended_spearman_r"] < 0) & (res["dose_coef_given_time"] < 0)
     res["bonferroni_survives"] = correct_sign & (res["p_bonferroni"] < 0.05) & (res["partial_p_bonferroni"] < 0.05)
 
-    res.to_csv(RESULTS / "thermal_threshold_sensitivity.csv", index=False)
+    res.to_csv(results / "thermal_threshold_sensitivity.csv", index=False)
 
     survived = ", ".join(f"{int(t)}C" for t in res.loc[res["bonferroni_survives"], "threshold_C"])
     print(f"✓ thermal_threshold_sensitivity ({window}m window, {len(thresholds)} thresholds): "

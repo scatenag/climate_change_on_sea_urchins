@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from .common import (
-    load_data, load_ec50_raw, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL,
+    load_data, load_ec50_raw, default_results_dir, ALL_COLS, MHW_COLS, RESPONSE_COL,
     SPLIT_DATE, default_response_spec,
 )
 
@@ -51,7 +51,8 @@ def _raw_trial_contrast():
     }
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for output filenames/keys below
@@ -66,7 +67,7 @@ def run(response=None):
     pre_ec50  = df_real[df_real["Datetime"] <  SPLIT_DATE][RESPONSE_COL]
     post_ec50 = df_real[df_real["Datetime"] >= SPLIT_DATE][RESPONSE_COL]
 
-    results = {}
+    kruskal = {}
     for col in ALL_COLS:
         if col == RESPONSE_COL:
             a, b = pre_ec50.dropna(), post_ec50.dropna()
@@ -78,7 +79,7 @@ def run(response=None):
         # Output identity: a per-variable dict keyed by display name, never
         # the internal RESPONSE_COL (see common.py).
         key = label if col == RESPONSE_COL else col
-        results[key] = {
+        kruskal[key] = {
             "kruskal_stat": float(kw.statistic),
             "kruskal_p":    float(kw.pvalue),
             "mannwhitney_stat": float(mwu.statistic),
@@ -91,7 +92,7 @@ def run(response=None):
             "median_post": float(b.median()),
         }
 
-    (RESULTS / "kruskal_stats.json").write_text(json.dumps(results, indent=2))
+    (results / "kruskal_stats.json").write_text(json.dumps(kruskal, indent=2))
 
     # Period means table
     rows = []
@@ -105,12 +106,12 @@ def run(response=None):
         rows.append({"variable": var_name, "mean_all": all_val,
                      "mean_pre": pre_val, "mean_post": post_val,
                      "change_pct": 100*(post_val - pre_val)/abs(pre_val) if pre_val else np.nan})
-    pd.DataFrame(rows).to_csv(RESULTS / "period_means.csv", index=False)
+    pd.DataFrame(rows).to_csv(results / "period_means.csv", index=False)
 
     # Trial-level (295 individual determinations) pre/post contrast --
     # manuscript section 3.1, secondary to the monthly-series test above.
     raw_contrast = _raw_trial_contrast()
-    (RESULTS / "period_contrast_raw.json").write_text(json.dumps(raw_contrast, indent=2))
+    (results / "period_contrast_raw.json").write_text(json.dumps(raw_contrast, indent=2))
 
     # Distribution data for boxplots (Streamlit). Filename AND column header
     # built from the response's display label, never RESPONSE_COL -- for
@@ -124,10 +125,10 @@ def run(response=None):
         post_label = f"{SPLIT_DATE:%Y-%m}–2025"
         out["period"] = np.where(out["Datetime"] < SPLIT_DATE, pre_label, post_label)
         file_id = label if col == RESPONSE_COL else col
-        out.to_csv(RESULTS / f"dist_{file_id}.csv", index=False)
+        out.to_csv(results / f"dist_{file_id}.csv", index=False)
 
     print(f"✓ period_split: stats saved for {len(ALL_COLS)} variables")
-    ec50_res = results[label]
+    ec50_res = kruskal[label]
     print(f"  {label} KW p={ec50_res['kruskal_p']:.2e}  "
           f"pre_mean={ec50_res['mean_pre']:.2f}  post_mean={ec50_res['mean_post']:.2f}")
     print(f"  {label} raw trials: n={raw_contrast['n_pre']}/{raw_contrast['n_post']}  "

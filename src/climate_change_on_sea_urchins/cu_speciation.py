@@ -44,7 +44,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, RESPONSE_COL, IMPUTED_COL, SPLIT_DATE, default_response_spec
+from .common import load_data, default_results_dir, RESPONSE_COL, IMPUTED_COL, SPLIT_DATE, default_response_spec
 
 # Representative NW-Mediterranean surface total alkalinity (mol/kg-SW), scaled by
 # salinity. The decomposition uses only the RELATIVE carbonate-ion ratio, which is
@@ -102,7 +102,8 @@ def _decline_pct(pre, post):
     return (pre.mean() - post.mean()) / pre.mean() * 100.0
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for output columns below
@@ -143,7 +144,7 @@ def run(response=None):
     out = d[["Datetime", "pH", "Temperature", "Salinity", "CO3",
              "fCu_amplification", "fCu_amplification_lit",
              RESPONSE_COL, bio_col, bio_lit_col]].rename(columns={RESPONSE_COL: label})
-    out.to_csv(RESULTS / "cu_speciation_decomposition.csv", index=False)
+    out.to_csv(results / "cu_speciation_decomposition.csv", index=False)
 
     # ---- Decomposition summary ----
     ec50_pre, ec50_post = d.loc[pre_mask, RESPONSE_COL], d.loc[post_mask, RESPONSE_COL]
@@ -184,7 +185,7 @@ def run(response=None):
         "biological_residual_mannwhitney_p": float(p_bio_carb),
         "biological_residual_mannwhitney_p_literature": float(p_bio_lit),
     }
-    with (RESULTS / "cu_speciation_summary.json").open("w") as f:
+    with (results / "cu_speciation_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(f"✓ cu_speciation: nominal EC50 decline {dec_nom:.1f}% | "

@@ -70,7 +70,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import RESULTS, RESPONSE_COL, load_ec50_raw, load_ec50_monthly
+from .common import default_results_dir, RESPONSE_COL, load_ec50_raw, load_ec50_monthly
 
 DEFAULT_B = 3000
 DEFAULT_SEED = 0
@@ -241,7 +241,8 @@ def _apply_to_dated_series(dates, values, B, seed, ordering=None):
     return out
 
 
-def run(B=DEFAULT_B, seed=DEFAULT_SEED):
+def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
+    results = results if results is not None else default_results_dir()
     # (Datetime, ID), not Datetime alone -- see module docstring: ~110 of
     # 295 rows tie on Datetime, and that tie order changes phi/F/the winning
     # break by enough to matter (measured: phi 0.246-0.315, break split
@@ -270,7 +271,7 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED):
         ),
     }
 
-    with (RESULTS / "changepoint_ec50.json").open("w") as f:
+    with (results / "changepoint_ec50.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     o, m = summary["ordinal_sequence"], summary["monthly_series"]

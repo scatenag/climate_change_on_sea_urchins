@@ -73,7 +73,7 @@ import pandas as pd
 from scipy import stats
 
 from .changepoint import DEFAULT_B, DEFAULT_SEED, qlr_ar1_changepoint
-from .common import RESULTS, SPLIT_DATE, load_ec50_raw
+from .common import default_results_dir, SPLIT_DATE, load_ec50_raw
 
 REPLICA_COLS = ["ctrl_neg_rep1", "ctrl_neg_rep2", "ctrl_neg_rep3"]
 
@@ -164,7 +164,8 @@ def _changepoint_at(ctrl, trim, B, seed):
     }
 
 
-def run(B=DEFAULT_B, seed=DEFAULT_SEED):
+def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
+    results = results if results is not None else default_results_dir()
     ctrl, n_total = _load_negative_control()
     n_with = len(ctrl)
 
@@ -257,7 +258,7 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED):
         },
     }
 
-    with (RESULTS / "negative_control.json").open("w") as f:
+    with (results / "negative_control.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     print(
