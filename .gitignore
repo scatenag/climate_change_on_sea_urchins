@@ -40,6 +40,3 @@ CLAUDE.local.md
 # Local drafts (papers, notes) — not for public repo
 drafts/
 
-# Internal working docs (status, roadmap, deferred decisions) — not for public repo
-docs/roadmap/
-docs/adr/0000-decisioni-rimandate.md

@@ -148,6 +148,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `.gitignore` no longer excludes `docs/roadmap/` and `docs/adr/0000-decisioni-rimandate.md`.
+  Both rules silently excluded new documents created there (it happened to `STATO.md` and to
+  ADR-0000, each then force-added one at a time). Nothing under `docs/` is ignored now; the
+  other files in `docs/roadmap/` stay untracked until someone decides to add them.
+
 - **ARIMA order selection discards candidates that don't converge, and the golden master
   stops pinning numeric values it can't reproduce (issue #9, branch `fix/arima-convergence`)**.
   - `_best_arima_order()` (`mhw_analysis.py`) used to pick the lowest-AIC candidate
