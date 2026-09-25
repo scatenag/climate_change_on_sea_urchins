@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from statsmodels.tsa.seasonal import seasonal_decompose
-from .common import load_data, RESULTS, ALL_COLS, MHW_COLS, RESPONSE_COL, SPLIT_DATE, default_response_spec
+from .common import load_data, default_results_dir, ALL_COLS, MHW_COLS, RESPONSE_COL, SPLIT_DATE, default_response_spec
 
 
 def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.DataFrame:
@@ -69,7 +69,8 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
     return r_df, p_df
 
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for the response row/column below
@@ -109,8 +110,8 @@ def run(response=None):
         # label, never the internal RESPONSE_COL (see common.py).
         r_df = r_df.rename(index={RESPONSE_COL: label}, columns={RESPONSE_COL: label})
         p_df = p_df.rename(index={RESPONSE_COL: label}, columns={RESPONSE_COL: label})
-        r_df.to_csv(RESULTS / f"corr_{period}.csv")
-        p_df.to_csv(RESULTS / f"corr_pval_{period}.csv")
+        r_df.to_csv(results / f"corr_{period}.csv")
+        p_df.to_csv(results / f"corr_pval_{period}.csv")
 
     print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {len(all_cols)} vars)")
 

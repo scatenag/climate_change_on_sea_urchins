@@ -37,7 +37,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import r2_score
-from .common import load_data, RESULTS, TAU_MAX, RESPONSE_COL, IMPUTED_COL
+from .common import load_data, default_results_dir, TAU_MAX, RESPONSE_COL, IMPUTED_COL
 from .mhw_analysis import compute_ccf, difference_series, compute_ccf_prewhitened, _mask_imputed
 
 RNG_SEED = 0
@@ -247,37 +247,38 @@ def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dic
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run() -> None:
+def run(results=None) -> None:
+    results = results if results is not None else default_results_dir()
     df_full, df_real, events, monthly = load_data()
 
     print("── Robustness battery: 5 independent checks on the MHW->EC50 lag hypothesis ──")
 
     severe, severe_note = run_severe_ccf(df_full, events)
-    severe.to_csv(RESULTS / "robustness_severe_ccf.csv", index=False)
-    (RESULTS / "robustness_severe_ccf_note.json").write_text(json.dumps(severe_note, indent=2))
+    severe.to_csv(results / "robustness_severe_ccf.csv", index=False)
+    (results / "robustness_severe_ccf_note.json").write_text(json.dumps(severe_note, indent=2))
     print(f"✓ 1/5 Severe/Extreme-only CCF ({len(events[events.category.isin(['Severe','Extreme'])])} events) "
           f"-- ARIMA arm marked not applicable, see robustness_severe_ccf_note.json")
 
     summer = run_summer_temp(df_full, df_real)
-    summer.to_csv(RESULTS / "robustness_summer_temp.csv", index=False)
+    summer.to_csv(results / "robustness_summer_temp.csv", index=False)
     print("✓ 2/5 Direct summer-temperature CCF")
 
     imp_df, ml_summary = run_ml_battery(df_full)
-    imp_df.to_csv(RESULTS / "robustness_ml_importance.csv", index=False)
-    (RESULTS / "robustness_ml_cv_r2.json").write_text(json.dumps(ml_summary, indent=2))
+    imp_df.to_csv(results / "robustness_ml_importance.csv", index=False)
+    (results / "robustness_ml_cv_r2.json").write_text(json.dumps(ml_summary, indent=2))
     print(f"✓ 3/5 ML battery (RF/GBM, {ml_summary['n_obs']} obs, "
           f"MHW {'helps' if ml_summary['mhw_helps_out_of_sample'] else 'does NOT help'} out-of-sample)")
 
     try:
         ccm_df = run_ccm(df_full)
-        ccm_df.to_csv(RESULTS / "robustness_ccm.csv", index=False)
+        ccm_df.to_csv(results / "robustness_ccm.csv", index=False)
         print("✓ 4/5 Convergent Cross Mapping")
     except ImportError:
         print("⚠ 4/5 Convergent Cross Mapping skipped (skccm not installed)")
 
     try:
         wct = run_wavelet_coherence(df_full)
-        (RESULTS / "robustness_wavelet.json").write_text(json.dumps(wct, indent=2))
+        (results / "robustness_wavelet.json").write_text(json.dumps(wct, indent=2))
         print(f"✓ 5/5 Wavelet coherence (1-8mo band, surrogate p={wct['p_value']:.3f})")
     except ImportError:
         print("⚠ 5/5 Wavelet coherence skipped (pycwt not installed)")

@@ -1,5 +1,8 @@
 """Run all analysis modules in sequence, populating results/."""
+from pathlib import Path
+
 import config
+from . import common
 from . import (
     mhw_detection, timeseries, period_split, correlations, stationarity,
     mhw_analysis, mhw_lag_extra, mhw_robustness, cu_speciation, thermal_legacy,
@@ -44,16 +47,26 @@ _MODULES = [
 ]
 
 
-def main() -> None:
+def main(results: Path | None = None) -> None:
+    """`results`: where every analysis module writes. Defaults to the
+    selected study's directory (common.results_dir); passed to each module
+    explicitly rather than read by it from a shared constant, so one run
+    can later target several directories (one per window). mhw_detection
+    is the exception: it writes data_dir, never results."""
     response = config.RESPONSE_SPEC
+    if results is None:
+        results = common.results_dir(config.STUDY_ID)
+    results.mkdir(parents=True, exist_ok=True)
     for label, module in _MODULES:
         print(f"\n{'=' * 60}")
         print(f"  Running {label}")
         print(f"{'=' * 60}")
-        if label in _NEEDS_RESPONSE:
-            module.run(response=response)
-        else:
+        if label == "mhw_detection":
             module.run()
+        elif label in _NEEDS_RESPONSE:
+            module.run(response=response, results=results)
+        else:
+            module.run(results=results)
 
     print("\n✓ All analysis modules complete — results/ populated")
 

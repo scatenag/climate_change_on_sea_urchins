@@ -151,11 +151,26 @@ rilevamento MHW è deterministico e i dati reali non erano cambiati nel frattemp
 `tests/test_data_boundary.py`, `tests/conftest.py`, ADR-0007 per `split_date`). **PR #17 fusa
 25/9** (confronto richiesto degli `mhw_*.csv`/`sst_daily.csv` fixture-vs-reale: byte-identici,
 nessuna deriva del riferimento). 4. Spostamento di Livorno in `results/<study_id>/` con
-`git mv` (golden master indipendente dal percorso) + ADR — **fatto (ADR-0008), PR aperta,
-CI in corso**. `results_dir()` restituisce ora `results/<study_id>/`; i 64 file esistenti
+`git mv` (golden master indipendente dal percorso) + ADR — **fatto (ADR-0008), #18 fusa
+25/9**. `results_dir()` restituisce ora `results/<study_id>/`; i 64 file esistenti
 spostati; `README.md` (4 link) e `tests/test_thermal_legacy_vif.py` (costruiva il percorso da
 sé, lo stesso tipo di problema del punto 3) aggiornati di conseguenza.
-5. Meccanismo delle finestre temporali (le finestre si decidono alla PR 5, non prima). 6. Script di
+5. Meccanismo delle finestre temporali, **spezzato in due PR** (25/9). Le finestre si
+dichiarano in `StudySpec.windows`, **non** con una variabile d'ambiente: una sola esecuzione le
+percorre tutte, risultati in `results/<study_id>/<window_id>/` (directory sorelle lette dalla
+tabella di confronto); Livorno, senza finestre, resta in `results/<study_id>/` (finestra
+implicita, ADR-0000 voce 7). MHW e climatologia: una volta sull'intero record, in `data_dir`,
+prima del ciclo sulle finestre; solo `mhw_detection` scrive in `data_dir`.
+**5a** `results=` parametro di `run()` al posto della costante `RESULTS`, nessun cambio di
+comportamento — **fatta, PR aperta**; il golden master ora verifica per modulo chi scrive in
+`data_dir`. **5b** `window=` parametro di `run()`, con due vincoli: (1) un modulo che riceve una
+finestra e non sa applicarla fallisce con errore esplicito, mai la ignora; (2) regola di
+default: i dati si costruiscono sull'intero record, la finestra seleziona i punti su cui si
+calcola la statistica — ritardi e dosi cumulate possono usare la storia prima dell'inizio
+della finestra; detrend, fit, decomposizioni e changepoint solo sui punti della finestra. Per
+ogni modulo documentare nel codice cosa è costruzione e cosa è statistica; dove non è ovvio,
+fermarsi e chiedere. Da disambiguare in `thermal_legacy.py`: `WINDOWS`/`window=` sono già la
+finestra di dose in mesi, concetto diverso. 6. Script di
 download per studio + sei `study.yaml` con coordinate segnaposto — **il download lo fa l'utente in
 locale**, dopo aver scelto su mappa le celle in mare; istantanee committate con manifest di
 provenienza, la CI non tocca mai la rete. 7. Celle spostate: 50/200/500 km in **due direzioni**

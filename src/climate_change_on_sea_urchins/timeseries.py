@@ -9,14 +9,15 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import pairwise_distances
-from .common import load_data, RESULTS, ALL_COLS, RESPONSE_COL, SPLIT_DATE, default_response_spec
+from .common import load_data, default_results_dir, ALL_COLS, RESPONSE_COL, SPLIT_DATE, default_response_spec
 
 def decompose_series(df, col):
     s = df.set_index("Datetime")[col].dropna()
     result = seasonal_decompose(s, model="multiplicative", period=12, extrapolate_trend="freq")
     return result.trend, result.seasonal, result.resid
 
-def run(response=None):
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     resp_label = response.label  # display identity for the response variable below
@@ -34,10 +35,10 @@ def run(response=None):
         trends[var_name] = trend
         out = pd.DataFrame({"Datetime": trend.index, "trend": trend.values,
                             "seasonal": seasonal.values, "residual": resid.values})
-        out.to_csv(RESULTS / f"trend_{var_name}.csv", index=False)
+        out.to_csv(results / f"trend_{var_name}.csv", index=False)
 
     trend_df = pd.DataFrame(trends).reset_index().rename(columns={"Datetime": "Datetime"})
-    trend_df.to_csv(RESULTS / "trends_all.csv", index=False)
+    trend_df.to_csv(results / "trends_all.csv", index=False)
 
     # ── Pre/Post split decompositions ──────────────────────────────────────
     for period_label, mask in [("pre", df["Datetime"] < SPLIT_DATE),
@@ -52,7 +53,7 @@ def run(response=None):
                     rows.append({"Datetime": dt, "variable": var_name, "trend": tv})
             except Exception:
                 pass
-        pd.DataFrame(rows).to_csv(RESULTS / f"trends_{period_label}.csv", index=False)
+        pd.DataFrame(rows).to_csv(results / f"trends_{period_label}.csv", index=False)
 
     # ── PCA anomaly detection ──────────────────────────────────────────────
     X = df[ALL_COLS].values
@@ -73,7 +74,7 @@ def run(response=None):
 
     anomaly = pd.DataFrame({"Datetime": rec_dates, "reconstruction_error": rec_errors})
     anomaly = anomaly.groupby("Datetime").mean().reset_index().sort_values("Datetime")
-    anomaly.to_csv(RESULTS / "pca_anomaly.csv", index=False)
+    anomaly.to_csv(results / "pca_anomaly.csv", index=False)
 
     print(f"✓ timeseries: {len(df)} months decomposed, PCA anomaly saved")
 
