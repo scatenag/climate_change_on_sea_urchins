@@ -85,6 +85,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `tests/test_results_dir.py` fails if any module builds the path itself. Study selection moved
   from `config.py` to `study_spec.load_selected_study()` so `common.py` can use it too
   (importing `config` from `common` would be circular). No output changes.
+- **`data_dir`, `split_date`, `mhw_climatology` join the study spec** (V2.2 prerequisite, ADR-0007
+  for `split_date`): the same "one resolver, value unchanged" treatment as `RESULTS` above,
+  applied to `data/`.
+  - `StudySpec.data_dir` (relative to the study.yaml itself, resolved to an absolute, validated-
+    to-exist path by `load_study()`) and the new `common.DATA` constant. Every `data/` read in
+    `src/` now goes through `common.DATA` or one of `common.py`'s `load_*()` functions
+    (`load_data`, `load_ec50_raw`, `load_ec50_monthly`, `load_mhw_annual`, new `load_sst_daily`)
+    instead of `ROOT / "data"` — `regime_shift.py`, `mhw_lag_annual.py`,
+    `mhw_annual_changepoint.py`, `thermal_legacy.py`, `dashboard.py` migrated.
+    `tests/test_data_boundary.py::test_no_module_builds_the_data_path_itself` fails if any
+    module in `src/` builds the path itself again.
+  - **This search found (and this PR fixes) a real, live bug**: `mhw_detection.py` computed
+    `SST_PATH`/`OUT_EVENTS`/`OUT_MONTHLY`/`OUT_ANNUAL` once, at import time, from `common.ROOT`.
+    `tests/conftest.py`'s fixtures redirect `ROOT`/`DATA` for the frozen golden-master fixture
+    *after* import, which had no effect on those already-bound paths: every golden-master run
+    silently read the **real** `data/sst_daily.csv` and overwrote the **real**
+    `data/mhw_events.csv`/`mhw_monthly.csv`/`mhw_annual.csv`, while the rest of the pipeline
+    (correctly redirected) used the frozen fixture's own static copies instead. The golden
+    master stayed green throughout — not because the redirection worked, but because MHW
+    detection is deterministic and the real `data/sst_daily.csv` had not changed since the
+    fixture was frozen (verified byte-identical, 2026-09-25); a single auto-update in that
+    window would have gone undetected. Fixed by computing these paths from `common.DATA`
+    *inside* `run()`, at call time, never bound to a separate module-level name — the same
+    bug class as three earlier incidents this project has had (`.gitignore`, golden-master
+    tolerances, `#4`→`#9`), now with two dedicated regression tests
+    (`tests/test_data_boundary.py`) instead of only a fixed instance: one exercises
+    `mhw_detection.run()` against a deliberately-wrong directory with synthetic content and
+    checks both that the output came from it and that the real `data/` was untouched; the
+    other is a minimal, self-contained demonstration of why the bug shape is dangerous, for
+    whoever adds the next `data/`-touching module. `tests/conftest.py::golden_pipeline_results`
+    also gained its own general-purpose guard: it snapshots the real `data/` and `results/`
+    directories before running and asserts they're byte-for-byte, mtime-for-mtime unchanged
+    after — independent of which module or mechanism would cause a write.
+  - `StudySpec.mhw_climatology` (`baseline_start_year`/`baseline_end_year`): the MHW-detection
+    climatology baseline period (Hobday et al. 2016), previously `mhw_detection.py`'s own
+    `CLIM_START`/`CLIM_END` — a scientific choice, not a code default (CLAUDE.md invariant #6).
+  - `ResponseSpec.split_date` (ADR-0007): `common.SPLIT_DATE` is no longer a bare module
+    constant — it's per-response (a second response series has its own regime shift) and
+    **validated at `common.py`'s load time against the actual response series' date range**,
+    rejecting the spec with an explicit message if `split_date` would leave `period_split.py`
+    (or anything else slicing on it) with an empty or single-point pre/post side, instead of
+    surfacing that downstream in the pipeline. `docs/adr/0000` entry 5 (this exact deferred
+    decision) is closed and folded into ADR-0007.
+  - `tests/test_pipeline.py`'s synthetic-different-site test and `tests/test_study_selection.py`
+    updated for `data_dir` (both were written before this field existed).
 
 ### Changed
 

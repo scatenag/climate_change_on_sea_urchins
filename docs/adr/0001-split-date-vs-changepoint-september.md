@@ -29,6 +29,7 @@ giugno-settembre (calo EC50 43.0% con giugno, 43.2% con settembre).
 ## Conseguenze
 
 Chi legge il codice senza il contesto del paper vede un'apparente incoerenza tra `common.py`
-e `changepoint.py`. Serve un commento esplicito accanto a `SPLIT_DATE` in `common.py` che
-rimandi a questo ADR — **non ancora scritto**, vedi `docs/roadmap/STATO.md`. Non unificare le
-due stime senza discuterne prima.
+e `changepoint.py`. Serve un commento esplicito che rimandi a questo ADR — **fatto** (ADR-0007):
+`SPLIT_DATE` non è più una costante di `common.py` ma `ResponseSpec.split_date`, con il
+rimando scritto nel commento YAML di `study.yaml` accanto al valore. Non unificare le due
+stime senza discuterne prima.

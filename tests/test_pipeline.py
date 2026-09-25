@@ -309,6 +309,7 @@ def test_load_data_on_synthetic_different_site_dataset(tmp_path, monkeypatch):
     events.to_csv(data_dir / "mhw_events.csv", index=False)
 
     monkeypatch.setattr(common, "ROOT", tmp_path)
+    monkeypatch.setattr(common, "DATA", data_dir)
 
     df_full, df_real, loaded_events, loaded_monthly = common.load_data()
 

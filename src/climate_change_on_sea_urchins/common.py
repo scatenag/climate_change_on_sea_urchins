@@ -1,13 +1,24 @@
-"""Shared data loading for all analysis modules."""
-import re
-import warnings
+"""Shared data loading for all analysis modules -- the single boundary for
+reading data/ and writing results/ (CLAUDE.md invariant #5). No other
+module in src/ should build a data/ or results/ path itself; if one needs
+data this file doesn't already expose, add a function here instead."""
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
-from .study_spec import load_selected_study
+from .study_spec import StudySpecError, load_selected_study
 
-ROOT    = Path(__file__).resolve().parent.parent.parent
+ROOT  = Path(__file__).resolve().parent.parent.parent
+_study = load_selected_study()
+
+# Where this study's data/ lives -- resolved to an absolute, existing
+# directory by load_study() from the spec's data_dir (relative to the
+# study.yaml itself). For Livorno this is today's data/. Read through this
+# name, never rebuilt as ROOT / "data": a module that binds a path derived
+# from DATA to a SEPARATE constant at import time (rather than computing it
+# inside a function, from this name, at call time) breaks test fixtures
+# that redirect DATA -- this is exactly the bug fixed in mhw_detection.py,
+# see its module docstring and tests/test_data_boundary.py.
+DATA = Path(_study.data_dir)
 
 
 def results_dir(study_id: str) -> Path:
@@ -18,32 +29,17 @@ def results_dir(study_id: str) -> Path:
     return ROOT / "results"
 
 
-RESULTS = results_dir(load_selected_study().id)
+RESULTS = results_dir(_study.id)
 RESULTS.mkdir(exist_ok=True)
 
-# EC50 pre/post regime-shift boundary. Full date, not just a year: the
-# manuscript's changepoint (QLR/AR(1), see changepoint.py) lands mid-year,
-# not on January 1st, so every module below needs the exact date, not the
-# implicit "1 Jan of this year" that an earlier, year-only version of this
-# constant produced.
-_SPLIT_CONFIG = "2016-06-01"
+TAU_MAX = 12
 
-
-def _parse_split_date(value):
-    if re.fullmatch(r"\d{4}", str(value)):
-        warnings.warn(
-            "SPLIT_YEAR/split configuration given as a bare year is "
-            "deprecated; use a full date (e.g. '2016-06-01'). Falling back "
-            "to January 1st of that year.",
-            DeprecationWarning, stacklevel=3,
-        )
-        return pd.Timestamp(f"{value}-01-01")
-    return pd.Timestamp(value)
-
-
-SPLIT_DATE = _parse_split_date(_SPLIT_CONFIG)
-SPLIT_YEAR = str(SPLIT_DATE.year)  # kept for callers that only need the year (e.g. axis labels)
-TAU_MAX    = 12
+# The daily-SST baseline period Marine Heatwave detection computes its
+# threshold from (Hobday et al. 2016) -- a scientific choice declared in
+# the spec (StudySpec.mhw_climatology), not a code default (CLAUDE.md
+# invariant #6). Used by mhw_detection.py.
+MHW_CLIM_START = _study.mhw_climatology.baseline_start_year
+MHW_CLIM_END   = _study.mhw_climatology.baseline_end_year
 
 # Canonical response-series column names. Every module downstream of
 # load_data() reads the response column through these two constants, never
@@ -60,6 +56,7 @@ TAU_MAX    = 12
 RESPONSE_COL = "response"
 IMPUTED_COL  = "response_imputed"
 
+
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Returns:
@@ -68,12 +65,12 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
         mhw_events
         mhw_monthly
     """
-    data    = pd.read_csv(ROOT / "data" / "data_extended.csv",  parse_dates=["Datetime"])
+    data    = pd.read_csv(DATA / "data_extended.csv",  parse_dates=["Datetime"])
     data    = data.rename(columns={"EC50": RESPONSE_COL})
-    ci_df   = pd.read_csv(ROOT / "data" / "data_ec50_ci.csv",   parse_dates=["Datetime"])
+    ci_df   = pd.read_csv(DATA / "data_ec50_ci.csv",   parse_dates=["Datetime"])
     ci_df   = ci_df.rename(columns={"EC50_imputed": IMPUTED_COL})
-    monthly = pd.read_csv(ROOT / "data" / "mhw_monthly.csv",    parse_dates=["Datetime"])
-    events  = pd.read_csv(ROOT / "data" / "mhw_events.csv",
+    monthly = pd.read_csv(DATA / "mhw_monthly.csv",    parse_dates=["Datetime"])
+    events  = pd.read_csv(DATA / "mhw_events.csv",
                           parse_dates=["start_date","end_date","peak_date"])
 
     # Merge MHW monthly metrics
@@ -97,7 +94,7 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
 
     # Fill Temperature gaps (after Copernicus monthly ends) from daily SST monthly averages.
     # Without this, 2024 rows show only Jan–Apr (winter avg ~14°C), breaking trend analysis.
-    sst_path = ROOT / "data" / "sst_daily.csv"
+    sst_path = DATA / "sst_daily.csv"
     if sst_path.exists():
         sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
         sst["month"] = sst["Datetime"].dt.to_period("M").dt.to_timestamp()
@@ -133,7 +130,7 @@ def load_ec50_raw() -> pd.DataFrame:
     changepoint.py's module docstring) -- ID (the source sheet's row order)
     is what makes the sequence reproducible.
     """
-    raw = pd.read_csv(ROOT / "data" / "ec50_raw.csv", parse_dates=["Datetime"])
+    raw = pd.read_csv(DATA / "ec50_raw.csv", parse_dates=["Datetime"])
     raw = raw.rename(columns={"EC50": RESPONSE_COL})
     if "ID" not in raw.columns:
         raise ValueError(
@@ -153,14 +150,43 @@ def load_ec50_monthly() -> pd.DataFrame:
     of it. Its dates are unique (one row per month), unlike ec50_raw.csv's.
     Response value column renamed to RESPONSE_COL, same as load_ec50_raw().
     """
-    monthly = pd.read_csv(ROOT / "data" / "ec50_sheets.csv", parse_dates=["Datetime"])
+    monthly = pd.read_csv(DATA / "ec50_sheets.csv", parse_dates=["Datetime"])
     monthly = monthly.rename(columns={"EC50": RESPONSE_COL})
     return monthly.sort_values("Datetime").reset_index(drop=True)
 
 
 def load_mhw_annual() -> pd.DataFrame:
     """Annual MHW metrics, data/mhw_annual.csv (written by mhw_detection)."""
-    return pd.read_csv(ROOT / "data" / "mhw_annual.csv")
+    return pd.read_csv(DATA / "mhw_annual.csv")
+
+
+def load_sst_daily() -> pd.DataFrame:
+    """Daily SST, data/sst_daily.csv -- mhw_detection's own input, and
+    thermal_legacy's cumulative-dose predictor."""
+    return pd.read_csv(DATA / "sst_daily.csv", parse_dates=["Datetime"])
+
+
+def _response_split_date(response) -> pd.Timestamp:
+    """response.split_date (ISO string, see ResponseSpec and ADR-0007),
+    validated against the response series' own date range -- rejects a
+    split_date that would leave period_split.py (or anything else slicing
+    on it) with an empty or single-point pre/post side, at load time, with
+    an explicit message, instead of downstream in the pipeline."""
+    split_date = pd.Timestamp(response.split_date)
+    monthly = load_ec50_monthly()
+    series_min, series_max = monthly["Datetime"].min(), monthly["Datetime"].max()
+    if not (series_min < split_date < series_max):
+        raise StudySpecError(
+            f"response {response.id!r}: split_date {response.split_date!r} does not fall "
+            f"strictly within the response series' date range "
+            f"({series_min.date()}..{series_max.date()}) -- pre/post analyses would run "
+            "with an empty or single-point side. Fix split_date in the study spec."
+        )
+    return split_date
+
+
+SPLIT_DATE = _response_split_date(_study.responses[0])
+SPLIT_YEAR = str(SPLIT_DATE.year)  # kept for callers that only need the year (e.g. axis labels)
 
 
 def default_response_spec():

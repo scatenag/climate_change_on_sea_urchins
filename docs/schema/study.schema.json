@@ -1,5 +1,24 @@
 {
   "$defs": {
+    "MhwClimatologySpec": {
+      "description": "The daily-SST baseline period Marine Heatwave detection (Hobday et\nal. 2016) computes its per-day-of-year threshold from. A scientific\nchoice, not a code default (CLAUDE.md invariant #6) -- previously\nmhw_detection.py's own CLIM_START/CLIM_END module constants.",
+      "properties": {
+        "baseline_start_year": {
+          "title": "Baseline Start Year",
+          "type": "integer"
+        },
+        "baseline_end_year": {
+          "title": "Baseline End Year",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "baseline_start_year",
+        "baseline_end_year"
+      ],
+      "title": "MhwClimatologySpec",
+      "type": "object"
+    },
     "ResponseAggregationSpec": {
       "description": "How the per-trial source above rolls up into a period-level series.\nA distinct representation from the source itself: the count this\nproduces exists only here, never per trial -- it counts trials\naggregated into a period, not a biological sample size.",
       "properties": {
@@ -139,6 +158,11 @@
           "title": "Unit",
           "type": "string"
         },
+        "split_date": {
+          "description": "ISO date (YYYY-MM-DD): the pre/post regime-shift boundary estimated for THIS response series (docs/adr/0001 -- a rank-based estimate, deliberately not reconciled with changepoint.py's own QLR/AR(1) estimate on the same series). Per-response, not a shared constant: a second response series has its own regime shift, possibly at a different date. Validated at common.py's load time against the actual response series' date range, not here (this module never reads data/).",
+          "title": "Split Date",
+          "type": "string"
+        },
         "source": {
           "$ref": "#/$defs/ResponseSourceSpec"
         },
@@ -152,6 +176,7 @@
         "nature",
         "adverse_direction",
         "unit",
+        "split_date",
         "source",
         "aggregation"
       ],
@@ -262,6 +287,14 @@
       "title": "Description",
       "type": "string"
     },
+    "data_dir": {
+      "description": "Where this study's data/ lives, relative to this study.yaml's own location. Resolved to an absolute path by load_study(), which also checks it exists -- callers (common.py) always see an absolute, existing directory.",
+      "title": "Data Dir",
+      "type": "string"
+    },
+    "mhw_climatology": {
+      "$ref": "#/$defs/MhwClimatologySpec"
+    },
     "sites": {
       "items": {
         "$ref": "#/$defs/SiteSpec"
@@ -294,6 +327,8 @@
   "required": [
     "id",
     "description",
+    "data_dir",
+    "mhw_climatology",
     "sites",
     "responses"
   ],

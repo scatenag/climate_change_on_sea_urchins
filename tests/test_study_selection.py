@@ -32,8 +32,14 @@ def test_default_is_the_livorno_study():
 
 
 def test_ccsu_study_selects_another_study(tmp_path):
+    # data_dir made absolute (pointing at the real data/) rather than kept
+    # as "../../data": that was relative to study.yaml's ORIGINAL location,
+    # not this copy's tmp_path -- irrelevant to what this test checks
+    # (that CCSU_STUDY switches id/site), so pointing it at real data is
+    # simpler than also faking a data/ directory here.
     other = tmp_path / "study.yaml"
     text = LIVORNO.read_text().replace("id: livorno-paracentrotus", "id: other-study") \
+                              .replace("data_dir: ../../data", f"data_dir: {REPO_ROOT / 'data'}") \
                               .replace("lat: 43.4278", "lat: 42.0") \
                               .replace("lon: 10.3956", "lon: 9.5")
     other.write_text(text)

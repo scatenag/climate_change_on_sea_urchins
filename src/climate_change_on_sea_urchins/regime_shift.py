@@ -37,7 +37,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import load_data, RESULTS, ROOT, SPLIT_YEAR, RESPONSE_COL, default_response_spec
+from .common import load_data, RESULTS, SPLIT_YEAR, RESPONSE_COL, default_response_spec, load_mhw_annual
 
 ENV = ["Temperature", "Salinity", "CO2", "O2", "pH"]
 # Sign of each variable along the climate-change stress axis (stress increases
@@ -120,7 +120,7 @@ def run(response=None):
                  "pre_mean": float(r[RESPONSE_COL][:k].mean()), "post_mean": float(r[RESPONSE_COL][k:].mean())})
 
     # --- MHW exposure changepoints (annual) ---
-    ann = pd.read_csv(ROOT / "data" / "mhw_annual.csv")
+    ann = load_mhw_annual()
     mhw_break_year = None
     for c in ["total_mhw_days", "cum_intensity_sum", "max_intensity"]:
         s = ann[c].dropna()

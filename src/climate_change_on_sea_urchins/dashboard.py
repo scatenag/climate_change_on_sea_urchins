@@ -36,7 +36,7 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
-from .common import SPLIT_DATE, RESULTS
+from .common import SPLIT_DATE, RESULTS, DATA
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
@@ -175,7 +175,7 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         with st.sidebar:
             st.error(f"EC50 live fetch failed: {_exc}")
         # Fallback: use the static CSV committed to the repo
-        ci_path = ROOT / "data" / "data_ec50_ci.csv"
+        ci_path = DATA / "data_ec50_ci.csv"
         fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
         fallback["EC50_imputed"] = fallback["EC50_imputed"].astype(bool)
         real = fallback[~fallback["EC50_imputed"]].copy()
@@ -192,17 +192,17 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
 def load_env_data():
     """Load static environmental data (Copernicus CSVs). Cached indefinitely — changes only
     when the nightly GitHub Actions workflow pushes new data_extended.csv."""
-    df   = pd.read_csv(ROOT / "data" / "data_extended.csv",  parse_dates=["Datetime"])
-    mhwm = pd.read_csv(ROOT / "data" / "mhw_monthly.csv",    parse_dates=["Datetime"])
-    mhwe = pd.read_csv(ROOT / "data" / "mhw_events.csv",
+    df   = pd.read_csv(DATA / "data_extended.csv",  parse_dates=["Datetime"])
+    mhwm = pd.read_csv(DATA / "mhw_monthly.csv",    parse_dates=["Datetime"])
+    mhwe = pd.read_csv(DATA / "mhw_events.csv",
                        parse_dates=["start_date","end_date","peak_date"])
-    mhwa = pd.read_csv(ROOT / "data" / "mhw_annual.csv")
+    mhwa = pd.read_csv(DATA / "mhw_annual.csv")
     # Drop stale EC50 columns — will be replaced with live data
     stale = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
              if c in df.columns]
     df = df.drop(columns=stale)
     # Fill Temperature gaps from daily SST
-    sst_path = ROOT / "data" / "sst_daily.csv"
+    sst_path = DATA / "sst_daily.csv"
     if sst_path.exists():
         sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
         sst["month"] = sst["Datetime"].dt.to_period("M").dt.to_timestamp()
