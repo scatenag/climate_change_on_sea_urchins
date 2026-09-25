@@ -1,15 +1,15 @@
 {
   "split_date": "2016-06-01",
   "n_pre": 176,
-  "n_post": 119,
+  "n_post": 120,
   "mean_pre": 46.537670454545456,
-  "mean_post": 26.525966386554632,
+  "mean_post": 26.426,
   "sd_pre": 7.63703635296399,
-  "sd_post": 5.544254824427047,
+  "sd_post": 5.628467469073635,
   "median_pre": 46.315,
-  "median_post": 26.49,
-  "diff_abs": 20.011704067990824,
-  "decline_pct": 43.00108680243626,
-  "mannwhitney_p": 1.5233482969720763e-43,
+  "median_post": 26.479999999999997,
+  "diff_abs": 20.111670454545457,
+  "decline_pct": 43.21589425966013,
+  "mannwhitney_p": 8.638739790624032e-44,
   "note": "The split point (SPLIT_DATE) is estimated from this same data, and the 295 trials are serially correlated (not independent draws) -- this Mann-Whitney p-value is descriptive, not inferential. The monthly-series contrast in period_means.csv/kruskal_stats.json is this module's primary pre/post test; this is a secondary, trial-level view of the same contrast, reported in the manuscript alongside it."
 }
