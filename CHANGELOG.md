@@ -191,6 +191,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`tests/test_mhw_analysis.py` read the real `data/`, not the frozen fixture, since #17.** Its
+  fixture redirected `common.ROOT` only; since #17, `load_data()` reads `common.DATA`, no longer
+  derived from `ROOT`. Green while the real `data/` equalled the fixture; broke when the
+  2026-09-25 auto-update added one EC50 month (n 163 -> 164 at lag 0; fixture: 163 real months,
+  real data: 164). Main was red on this test from that commit on, unseen: auto-update commits skip
+  CI. Fixed by redirecting `common.DATA` too. `tests/test_data_boundary.py` gains a static guard
+  over `tests/`: any test redirecting `common.ROOT` must also redirect `common.DATA` (the existing
+  search only covered `src/`). #17 had fixed the same omission in `test_pipeline.py` but missed
+  this file.
+
 - `forecast.py` read `data/mhw_annual.csv` as `RESULTS.parent / "data"`: a direct data read
   the single-boundary search had missed (it doesn't spell `ROOT / "data"`), and one that would
   have broken as soon as results moved under a subdirectory. Now `common.load_mhw_annual()`.

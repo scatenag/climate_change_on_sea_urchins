@@ -118,3 +118,20 @@ def test_a_module_level_path_bound_at_import_time_would_not_be_caught_by_patchin
         "reassigning the name it was built from -- which is not how Python works, so "
         "this documents an invariant, not a live risk."
     )
+
+
+def test_every_test_that_redirects_root_also_redirects_data():
+    """Since common.DATA stopped being derived from common.ROOT (it comes
+    from the spec's data_dir), redirecting ROOT alone no longer redirects
+    what load_data() reads. tests/test_mhw_analysis.py's fixture did exactly
+    that and silently read the REAL data/ instead of the frozen fixture --
+    green until the 2026-09-25 auto-update added one EC50 month (n 163 ->
+    164 at lag 0). The search above covers src/ only; this one covers the
+    tests that redirect it."""
+    offenders = []
+    for path in (REPO_ROOT / "tests").glob("*.py"):
+        code = path.read_text()
+        if re.search(r"""setattr\(\s*common\s*,\s*["']ROOT["']""", code) and \
+           not re.search(r"""setattr\(\s*common\s*,\s*["']DATA["']""", code):
+            offenders.append(path.name)
+    assert not offenders, "redirects common.ROOT but not common.DATA: " + ", ".join(offenders)
