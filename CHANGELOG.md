@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Tests also run after every auto-update** (`.github/workflows/tests.yml`, `workflow_run` on
+  completion of "Auto-update data"; the update workflow itself is unchanged). Auto-update commits
+  carry `[skip ci]`, which suppresses `push`/`pull_request` triggers only, so these commits
+  (the ones bringing new data) were never tested: on 2026-09-25 main stayed red, unseen, from
+  the morning's update until a PR's CI hit the same test. The new trigger tests main's latest
+  commit, and runs daily (the update workflow is scheduled daily and completes even when no data
+  changed). A failure opens an issue that @-mentions the repository owner, or comments on the
+  open one: GitHub documents notifications for runs you trigger and for scheduled runs, not for
+  runs triggered by another workflow's completion. Permissions are explicit, never the
+  repository default (which can be broader than needed, or too narrow to open the issue, and
+  then the alarm would fail silently): `contents: read` for the workflow, plus `issues: write`
+  for the notification job only. A `workflow_dispatch` trigger with a `simulate_failure` input
+  fails the test job on purpose, to exercise the whole alarm path once by hand; the drill opens
+  an issue with its own title (`[simulated] ...`), so it never absorbs a real alarm.
+
 - **Where to write is a `run()` parameter, not a module constant** (V2.2 PR 5a): the 15 analysis
   modules no longer import `common.RESULTS`; each `run()` takes `results=` and `pipeline.main()`
   resolves the directory once and passes it to every module (except `mhw_detection`, which

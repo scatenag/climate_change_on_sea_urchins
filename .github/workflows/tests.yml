@@ -5,11 +5,42 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Auto-update commits carry [skip ci], which suppresses the push trigger
+  # above -- yet they are exactly the commits that bring new data, able to
+  # expose both tests pointed at the wrong directory and anomalies in the
+  # data. workflow_run is a separate event, not covered by [skip ci] (which
+  # applies to push/pull_request only). It fires only from this file's copy
+  # on the default branch, and tests the default branch's latest commit.
+  workflow_run:
+    workflows: ["Auto-update data"]
+    types: [completed]
+  # Manual run from the Actions tab. simulate_failure exercises the failure
+  # notification end to end (issue opened, owner mentioned) without breaking
+  # anything -- the alarm path is otherwise untested until a real failure.
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Fail the test job on purpose, to check that the failure issue is opened and the mention arrives"
+        type: boolean
+        default: false
+
+# Explicit, never the repository default: the default can be broader than
+# needed, or too narrow to open the issue -- and then the alarm would fail
+# silently exactly when it must fire. Jobs that declare their own block get
+# only what they list.
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Simulated failure (workflow_dispatch input)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure }}
+        run: |
+          echo "::error::simulate_failure=true -- failing on purpose to exercise the notification path"
+          exit 1
+
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -22,3 +53,38 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  # A failed run triggered by workflow_run is otherwise visible only in the
+  # Actions tab: GitHub documents notifications for runs you trigger and for
+  # scheduled runs, not for runs triggered by another workflow's completion.
+  # An issue that @-mentions the owner always notifies. One open issue per
+  # title: later failures comment on it instead of opening duplicates; a
+  # simulated failure gets its own title, so closing the test issue is
+  # optional and never swallows a real alarm.
+  notify-failure:
+    needs: test
+    if: ${{ failure() && (github.event_name == 'workflow_run' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ inputs.simulate_failure && '[simulated] Tests failing on main' || 'Tests failing on main after auto-update' }}
+          BODY: |
+            @${{ github.repository_owner }} the test suite failed on `${{ github.ref_name }}` (event: `${{ github.event_name }}`${{ inputs.simulate_failure && ', simulate_failure=true: this is a drill' || '' }}).
+
+            - Tests run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Auto-update run: ${{ github.event.workflow_run.html_url || 'n/a (manual run)' }} (conclusion: `${{ github.event.workflow_run.conclusion || 'n/a' }}`)
+            - Commit tested: `${{ github.sha }}`
+        run: |
+          existing=$(gh issue list --state open --limit 100 --json number,title \
+                       --jq '.[] | select(.title == env.TITLE) | .number' | head -n1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
