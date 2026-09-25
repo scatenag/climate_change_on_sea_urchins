@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Tests also run after every auto-update** (`.github/workflows/tests.yml`, `workflow_run` on
+  completion of "Auto-update data"; the update workflow itself is unchanged). Auto-update commits
+  carry `[skip ci]`, which suppresses `push`/`pull_request` triggers only, so these commits
+  (the ones bringing new data) were never tested: on 2026-09-25 main stayed red, unseen, from
+  the morning's update until a PR's CI hit the same test. The new trigger tests main's latest
+  commit, and runs daily (the update workflow is scheduled daily and completes even when no data
+  changed). A failure opens an issue that @-mentions the repository owner, or comments on the
+  open one: GitHub documents notifications for runs you trigger and for scheduled runs, not for
+  runs triggered by another workflow's completion.
+
 - **`results/` is per-study now** (ADR-0008, V2.2 prerequisite): `common.results_dir(study_id)`
   (introduced already-generic in "one resolver" above) returns `results/<study_id>/` instead of
   always `results/` — a second study's pipeline run can no longer overwrite Livorno's. The 64

@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Auto-update commits carry [skip ci], which suppresses the push trigger
+  # above -- yet they are exactly the commits that bring new data, able to
+  # expose both tests pointed at the wrong directory and anomalies in the
+  # data. workflow_run is a separate event, not covered by [skip ci] (which
+  # applies to push/pull_request only). It fires only from this file's copy
+  # on the default branch, and tests the default branch's latest commit.
+  workflow_run:
+    workflows: ["Auto-update data"]
+    types: [completed]
 
 jobs:
   test:
@@ -22,3 +31,34 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v
+
+  # A failed run triggered by workflow_run is otherwise visible only in the
+  # Actions tab: GitHub documents notifications for runs you trigger and for
+  # scheduled runs, not for runs triggered by another workflow's completion.
+  # An issue that @-mentions the owner always notifies. One open issue at a
+  # time: later failures comment on it instead of opening duplicates.
+  notify-failure-after-auto-update:
+    needs: test
+    if: failure() && github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: "Tests failing on main after auto-update"
+          BODY: |
+            @${{ github.repository_owner }} the test suite failed on `main` after an auto-update run.
+
+            - Tests run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            - Auto-update run: ${{ github.event.workflow_run.html_url }} (conclusion: `${{ github.event.workflow_run.conclusion }}`)
+            - Commit tested: `${{ github.sha }}`
+        run: |
+          existing=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
