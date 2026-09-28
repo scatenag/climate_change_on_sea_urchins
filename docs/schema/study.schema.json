@@ -253,17 +253,21 @@
       "type": "object"
     },
     "WindowSpec": {
-      "description": "A named temporal window of the study. Declared for completeness; not\nyet consumed anywhere -- see module docstring and docs/adr/0000.",
+      "description": "A named temporal window of the study: one pipeline run computes each\ndeclared window's statistics into results/<study_id>/<window_id>/.\nChecked here against itself only; overlap with the actual data is\nchecked in common.py (this module never reads data/).",
       "properties": {
         "id": {
+          "description": "Becomes a directory name under results/<study_id>/, hence a lowercase slug.",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
           "title": "Id",
           "type": "string"
         },
         "start": {
+          "format": "date",
           "title": "Start",
           "type": "string"
         },
         "end": {
+          "format": "date",
           "title": "End",
           "type": "string"
         }

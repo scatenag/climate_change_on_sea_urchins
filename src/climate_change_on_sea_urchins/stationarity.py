@@ -8,6 +8,10 @@ import pandas as pd
 from statsmodels.tsa.stattools import adfuller, kpss
 from .common import load_data, default_results_dir, ALL_COLS, MHW_COLS, RESPONSE_COL, default_response_spec
 
+# Windows (V2.2): ADF/KPSS are statistic only -- computed on the window's
+# points alone; nothing here is a construction step.
+SUPPORTS_WINDOW = True
+
 
 def test_series(series: pd.Series, name: str) -> dict:
     s = series.dropna()
@@ -41,12 +45,12 @@ def test_series(series: pd.Series, name: str) -> dict:
     }
 
 
-def run(response=None, results=None):
+def run(response=None, results=None, window=None):
     results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
 
-    df, df_real, _, _ = load_data()
+    df, df_real, _, _ = load_data(window=window)
 
     # For the response use real measurements only (no imputed values)
     tested = []

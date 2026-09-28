@@ -176,3 +176,50 @@ def test_committed_schema_is_up_to_date():
     import json
     committed = Path(__file__).parent.parent / "docs" / "schema" / "study.schema.json"
     assert json.loads(committed.read_text()) == StudySpec.model_json_schema()
+
+
+# --- windows (V2.2 5b-1): the id becomes a directory name under
+# results/<study_id>/, so it is validated as a slug; dates are real dates. ---
+
+def _with_windows(tmp_path, windows_yaml: str) -> Path:
+    text = EXAMPLE.read_text().replace(
+        "data_dir: ../../data", f"data_dir: {EXAMPLE.parent.parent.parent / 'data'}"
+    ).replace("windows: []", windows_yaml)
+    p = tmp_path / "study.yaml"
+    p.write_text(text)
+    return p
+
+
+def test_windows_parse_with_real_dates(tmp_path):
+    import datetime as dt
+    p = _with_windows(tmp_path, textwrap.dedent("""\
+        windows:
+          - id: early
+            start: 2004-01-01
+            end: 2015-12-31
+        """))
+    (w,) = load_study(p).windows
+    assert (w.id, w.start, w.end) == ("early", dt.date(2004, 1, 1), dt.date(2015, 12, 31))
+
+
+@pytest.mark.parametrize("bad_id", ["Early", "with space", "../escape", "-lead", ""])
+def test_window_id_must_be_a_slug(tmp_path, bad_id):
+    p = _with_windows(tmp_path, f'windows:\n  - {{id: "{bad_id}", start: 2004-01-01, end: 2015-12-31}}\n')
+    with pytest.raises(StudySpecError):
+        load_study(p)
+
+
+def test_window_start_must_precede_end(tmp_path):
+    p = _with_windows(tmp_path, "windows:\n  - {id: w, start: 2015-12-31, end: 2004-01-01}\n")
+    with pytest.raises(StudySpecError, match="start"):
+        load_study(p)
+
+
+def test_window_ids_must_be_unique(tmp_path):
+    p = _with_windows(tmp_path, textwrap.dedent("""\
+        windows:
+          - {id: w, start: 2004-01-01, end: 2010-12-31}
+          - {id: w, start: 2011-01-01, end: 2015-12-31}
+        """))
+    with pytest.raises(StudySpecError, match="unique"):
+        load_study(p)

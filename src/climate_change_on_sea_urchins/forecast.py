@@ -43,6 +43,16 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from scipy import stats
 from .common import load_data, load_mhw_annual, default_results_dir, TAU_MAX, RESPONSE_COL, default_response_spec
 
+# Not run for temporal windows (V2.2): a forecast has no sensible
+# per-window meaning here -- its training period starts at a date fixed in
+# code (see docs/adr/0000) and it projects beyond the record by design --
+# and it is excluded from the V2.2 comparison table.
+SUPPORTS_WINDOW = False
+WINDOW_UNSUPPORTED_REASON = (
+    "forecast: training period fixed in code from 2016-01-01 and projection beyond the "
+    "record by design; excluded from the V2.2 comparison table"
+)
+
 
 FORECAST_YEARS = 15
 CI_GROWTH_RATE = 0.03   # reduced: post-2016 training window → use conservative CI growth

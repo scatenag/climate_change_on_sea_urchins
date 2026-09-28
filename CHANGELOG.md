@@ -8,6 +8,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Temporal windows, infrastructure and contract** (V2.2 PR 5b-1 of 4). `StudySpec.windows` is
+  now consumed: one pipeline run computes each declared window into
+  `results/<study_id>/<window_id>/`, alongside the whole-record results. Livorno declares none,
+  so nothing changes for it.
+  - `WindowSpec`: `id` validated as a slug (it becomes a directory name), unique, `start <
+    end`, real dates. `common.py` rejects only a window with no overlap at all with the
+    response series. A partial overlap is accepted and its effective coverage recorded.
+  - The rule (tests/test_windows.py): (a) no value after the window's end enters a window
+    statistic; (b) everything estimated from the data (fits, detrending, smoothing,
+    imputation, climatologies, references) is estimated inside the window; (c) lagged values
+    may come from before its start. The MHW climatology, a declared parameter, stays computed
+    once on the whole record; `mhw_detection` is not re-run per window.
+  - Explicit support: a module declares `SUPPORTS_WINDOW = True`; anything else counts as
+    unsupported, and such modules do not run for a window at all, neither with the window nor
+    on the whole record. Supported now: `thermal_legacy`, `changepoint`, `stationarity`,
+    `period_split`, each documenting in code which steps are construction and which are
+    statistic. Declared unsupported, with the reason: `forecast`, `mhw_annual_changepoint`.
+    The other nine modules are not migrated yet (5b-2..5b-4).
+  - `window.json` in each window directory: the window, provenance (code commit, study-spec
+    SHA-256), effective coverage (first and last real response month, count), whether
+    `split_date` leaves both a pre and a post side, and each module's status: run with its
+    outputs, skipped with the reason (e.g. pre/post without the split), or not run.
+  - `load_data(window=...)` re-imputes the response from the window's real values alone, never
+    reading the imputations stored in `data/`. The imputation moved from
+    `scripts/build_dataset.py` to `common.impute_response`, which the script now imports;
+    regenerating `data/` stays byte-identical. The whole-record path in effect imputes twice
+    (build_dataset, then `load_data`); the window reproduces both passes, both inside the
+    window (docs/adr/0000 item 8).
+  - Tests: a rule-(a) test on the frozen fixture with two windows (one containing
+    `split_date`, one excluding it) multiplies by 1000 every response value after the window's
+    end, at the source, regenerates the derived datasets with `build_dataset.py`, and requires
+    every window output to stay byte-identical; it also checks that the same perturbation does
+    change the whole-record result, and that counts written in output text match the window's
+    real months (sabotage-verified: a literal `163` in the changepoint note fails it). An
+    equivalence test requires a whole-record window to reproduce the run without a window,
+    within the golden master's tolerances.
+  - `thermal_legacy.py`: the dose window renamed in code (`WINDOWS` -> `DOSE_WINDOWS_MONTHS`,
+    parameter `window` -> `dose_window_months`), so `window` means the study's temporal
+    window everywhere; output keys unchanged. The threshold in its output text now comes from
+    `THRESHOLD_C`.
+  - Counts, years and dates in output text now come from the data: the note in
+    `changepoint_ec50.json` (months, trials sharing a date, trials, break year) and the trial
+    count in `period_contrast_raw.json`, identical on the whole record. **Golden-master
+    reference updated, with approval, for the six `dist_*.csv` files, `period` column only**:
+    labels are the first and last month present in each file on each side of the split, year
+    and month at both ends. Before: `2003–2016-05` / `2016-06–2025`. After: `2003-02–2016-05` /
+    `2016-06–2026-05` for EC50, and `2003-01–2016-05` / `2016-06–2026-07` for the environmental
+    variables. The fixed `2025` was already wrong for the record, which runs into 2026.
+
 - **Tests also run after every auto-update** (`.github/workflows/tests.yml`, `workflow_run` on
   completion of "Auto-update data"; the update workflow itself is unchanged). Auto-update commits
   carry `[skip ci]`, which suppresses `push`/`pull_request` triggers only, so these commits

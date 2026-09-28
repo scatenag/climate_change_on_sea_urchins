@@ -167,8 +167,8 @@ def _reference_files():
     return sorted(p.name for p in REFERENCE_DIR.iterdir())
 
 
-def _assert_csv_matches(name, actual_dir, tol):
-    ref = pd.read_csv(REFERENCE_DIR / name)
+def _assert_csv_matches(name, actual_dir, tol, ref_dir=REFERENCE_DIR):
+    ref = pd.read_csv(ref_dir / name)
     act = pd.read_csv(actual_dir / name)
     overrides = {col: t for (fname, col), t in COLUMN_TOLERANCE_OVERRIDES.items() if fname == name}
 
@@ -215,8 +215,8 @@ def _assert_json_value_matches(ref, act, tol, path):
         assert ref == act, f"{path}: {act!r} != {ref!r}"
 
 
-def _assert_json_matches(name, actual_dir, tol):
-    ref = json.loads((REFERENCE_DIR / name).read_text())
+def _assert_json_matches(name, actual_dir, tol, ref_dir=REFERENCE_DIR):
+    ref = json.loads((ref_dir / name).read_text())
     act = json.loads((actual_dir / name).read_text())
     _assert_json_value_matches(ref, act, tol, path=name)
 

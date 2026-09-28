@@ -70,7 +70,12 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from .common import default_results_dir, RESPONSE_COL, load_ec50_raw, load_ec50_monthly
+from .common import default_results_dir, RESPONSE_COL, in_window, load_ec50_raw, load_ec50_monthly
+
+# Windows (V2.2): the QLR/AR(1) search -- AR(1) fit, F statistics,
+# bootstrap -- is statistic, computed on the window's observations alone
+# (monthly series and per-trial sequence); nothing here is construction.
+SUPPORTS_WINDOW = True
 
 DEFAULT_B = 3000
 DEFAULT_SEED = 0
@@ -241,7 +246,7 @@ def _apply_to_dated_series(dates, values, B, seed, ordering=None):
     return out
 
 
-def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
+def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None, window=None):
     results = results if results is not None else default_results_dir()
     # (Datetime, ID), not Datetime alone -- see module docstring: ~110 of
     # 295 rows tie on Datetime, and that tie order changes phi/F/the winning
@@ -251,22 +256,30 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
     # to RESPONSE_COL.
     raw = load_ec50_raw()
     monthly = load_ec50_monthly()  # months are unique, no tie issue
+    raw = raw[in_window(raw["Datetime"], window)].reset_index(drop=True)
+    monthly = monthly[in_window(monthly["Datetime"], window)].reset_index(drop=True)
 
+    ordinal = _apply_to_dated_series(
+        raw["Datetime"], raw[RESPONSE_COL].values, B, seed, ordering="Datetime, then ID")
+    monthly_res = _apply_to_dated_series(monthly["Datetime"], monthly[RESPONSE_COL].values, B, seed)
+    # Counts and the break year in the note come from the data actually
+    # analysed (the window's, when there is one), never from literals.
+    n_tied = int(raw["Datetime"].duplicated(keep=False).sum())
+    break_year = monthly_res["break_date"][:4]
     summary = {
-        "ordinal_sequence": _apply_to_dated_series(
-            raw["Datetime"], raw[RESPONSE_COL].values, B, seed, ordering="Datetime, then ID"),
-        "monthly_series": _apply_to_dated_series(monthly["Datetime"], monthly[RESPONSE_COL].values, B, seed),
+        "ordinal_sequence": ordinal,
+        "monthly_series": monthly_res,
         "note": (
-            "The monthly series is the primary changepoint analysis: its 163 "
+            f"The monthly series is the primary changepoint analysis: its {len(monthly)} "
             "dates are unique, so its order (and therefore phi/F/break) is "
             "unambiguous and fully reproducible. The ordinal (full-resolution) "
-            "sequence is a secondary check only: ~110 of its 295 rows share a "
+            f"sequence is a secondary check only: ~{n_tied} of its {len(raw)} rows share a "
             "Datetime (many determinations record only the month), so its "
             "order is not implied by the data and requires the explicit "
             "(Datetime, ID) tiebreak above to even be reproducible -- with "
             "that fixed, it still does not resolve the break-MONTH (it is "
             "sensitive to which of many equally-valid tie orders is chosen; "
-            "see module docstring), only the YEAR (2016) is a stable finding "
+            f"see module docstring), only the YEAR ({break_year}) is a stable finding "
             "across representations and orderings tested."
         ),
     }

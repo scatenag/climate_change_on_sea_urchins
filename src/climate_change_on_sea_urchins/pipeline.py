@@ -1,4 +1,5 @@
 """Run all analysis modules in sequence, populating results/."""
+import json
 from pathlib import Path
 
 import config
@@ -69,6 +70,61 @@ def main(results: Path | None = None) -> None:
             module.run(results=results)
 
     print("\n✓ All analysis modules complete — results/ populated")
+
+    if common.WINDOWS:
+        prov = common.provenance()
+        for window in common.WINDOWS:
+            run_window(window, results / window.id, response=response, provenance=prov)
+
+
+def run_window(window, results: Path, response=None, provenance: dict | None = None) -> dict:
+    """Runs one declared window into `results` (results/<study_id>/<window_id>/)
+    and writes window.json there. Only modules declaring SUPPORTS_WINDOW =
+    True run, and they receive the window; every other module does not run
+    AT ALL for the window -- neither with the window nor on the whole
+    record, whose results would otherwise sit under the window's label --
+    and window.json says so. mhw_detection is not re-run: the MHW catalogue
+    is computed once, on the whole record, by design (its climatology is a
+    parameter declared in the spec, not a per-window estimate).
+
+    A module may return {"skipped": "<reason>"} instead of producing output
+    (e.g. pre/post analyses when SPLIT_DATE is outside the window)."""
+    results.mkdir(parents=True, exist_ok=True)
+    report = {}
+    for label, module in _MODULES:
+        if label == "mhw_detection":
+            continue
+        if not common.supports_window(module):
+            report[label] = {
+                "status": "not_run",
+                "reason": getattr(module, "WINDOW_UNSUPPORTED_REASON",
+                                  "no window support declared (module not migrated yet)"),
+            }
+            continue
+        print(f"\n  [{window.id}] Running {label}")
+        before = {p.name for p in results.iterdir()}
+        kwargs = {"results": results, "window": window}
+        if label in _NEEDS_RESPONSE:
+            kwargs["response"] = response
+        outcome = module.run(**kwargs) or {}
+        written = sorted({p.name for p in results.iterdir()} - before)
+        if "skipped" in outcome:
+            report[label] = {"status": "skipped", "reason": outcome["skipped"], "outputs": written}
+        else:
+            report[label] = {"status": "run", "outputs": written}
+
+    manifest = {
+        "window": {"id": window.id, "start": window.start.isoformat(), "end": window.end.isoformat()},
+        "provenance": provenance if provenance is not None else common.provenance(),
+        "coverage": common.response_coverage(window),
+        "split_date": common.SPLIT_DATE.date().isoformat(),
+        "split_date_in_window": common.split_date_in_window(window),
+        "modules": report,
+    }
+    (results / "window.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"✓ window {window.id}: {sum(r['status'] == 'run' for r in report.values())} modules run, "
+          f"{sum(r['status'] != 'run' for r in report.values())} not run or skipped — see window.json")
+    return manifest
 
 
 if __name__ == "__main__":

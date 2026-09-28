@@ -174,7 +174,15 @@ calcola la statistica — ritardi e dosi cumulate possono usare la storia prima 
 della finestra; detrend, fit, decomposizioni e changepoint solo sui punti della finestra. Per
 ogni modulo documentare nel codice cosa è costruzione e cosa è statistica; dove non è ovvio,
 fermarsi e chiedere. Da disambiguare in `thermal_legacy.py`: `WINDOWS`/`window=` sono già la
-finestra di dose in mesi, concetto diverso. 6. Script di
+finestra di dose in mesi, concetto diverso. **5b spezzata in quattro PR (28/9)**: 5b-1 infrastruttura e contratto
+(`window.json`, supporto dichiarato esplicitamente, test regola (a) e test di equivalenza, moduli
+`thermal_legacy`/`changepoint`/`stationarity`/`period_split`) — **fatta, PR aperta**; 5b-2
+`timeseries`/`correlations`/`cu_speciation`/`negative_control`; 5b-3
+`mhw_analysis`/`mhw_robustness`/`mhw_lag_extra`; 5b-4 `mhw_lag_annual` (regola degli anni completi
+al posto di `YEAR_MIN`/`YEAR_MAX`, deve restituire 2004–2025 per Livorno) e `regime_shift`. Regola
+precisata: (a) nessun valore dopo la fine della finestra, (b) tutto ciò che si stima dai dati solo
+dentro la finestra, (c) i ritardi possono venire da prima. In ogni modulo migrato: cercare
+conteggi, anni e date scritti a mano nei testi di output e ricavarli dai dati. 6. Script di
 download per studio + sei `study.yaml` con coordinate segnaposto — **il download lo fa l'utente in
 locale**, dopo aver scelto su mappa le celle in mare; istantanee committate con manifest di
 provenienza, la CI non tocca mai la rete. 7. Celle spostate: 50/200/500 km in **due direzioni**
