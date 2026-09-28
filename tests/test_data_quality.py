@@ -146,6 +146,33 @@ def test_ec50_n_at_least_one_for_real_measurements():
         "A 'real' (non-imputed) EC50 row must be backed by at least one raw measurement"
 
 
+def test_monthly_series_is_the_monthly_aggregation_of_the_per_trial_series():
+    """ec50_sheets.csv (monthly) and ec50_raw.csv (per trial) are two
+    representations of the same source sheet, written by the same fetch:
+    the monthly series must equal the per-trial series aggregated by month
+    (same months, mean EC50, trial count). If one is updated and the other
+    is not, this fails -- and since the test suite now runs after every
+    auto-update, the alarm fires instead of the drift being found by chance.
+    It was found by chance on 2026-09-28: the auto-update committed the
+    monthly file but never the per-trial one, left at 295 trials while the
+    source had 296 and a corrected replicate."""
+    monthly = _read("ec50_sheets.csv").set_index("Datetime")
+    raw = _read("ec50_raw.csv")
+    agg = raw.groupby(raw["Datetime"].dt.to_period("M").dt.to_timestamp())["EC50"].agg(["mean", "count"])
+
+    only_monthly = sorted(set(monthly.index) - set(agg.index))
+    only_raw = sorted(set(agg.index) - set(monthly.index))
+    assert not only_monthly and not only_raw, (
+        f"months only in ec50_sheets.csv: {[d.strftime('%Y-%m') for d in only_monthly]}; "
+        f"only in ec50_raw.csv: {[d.strftime('%Y-%m') for d in only_raw]}"
+    )
+    agg = agg.loc[monthly.index]
+    bad_n = monthly.index[monthly["EC50_n"].values != agg["count"].values]
+    assert bad_n.empty, f"trial count differs in: {[d.strftime('%Y-%m') for d in bad_n]}"
+    bad_mean = monthly.index[~np.isclose(monthly["EC50"].values, agg["mean"].values, rtol=1e-9, atol=1e-9)]
+    assert bad_mean.empty, f"monthly mean differs in: {[d.strftime('%Y-%m') for d in bad_mean]}"
+
+
 def test_mhw_events_dates_ordered():
     df = pd.read_csv(ROOT / "data" / "mhw_events.csv", parse_dates=["start_date", "end_date", "peak_date"])
     assert (df["start_date"] <= df["peak_date"]).all(), "An MHW event's peak precedes its start"
