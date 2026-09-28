@@ -9,17 +9,25 @@ import pandas as pd
 from scipy import stats
 from .common import (
     load_data, load_ec50_raw, default_results_dir, ALL_COLS, MHW_COLS, RESPONSE_COL,
-    SPLIT_DATE, default_response_spec,
+    SPLIT_DATE, default_response_spec, in_window, split_date_in_window,
 )
 
+# Windows (V2.2): the whole module is a pre/post contrast -- statistic only,
+# on the window's points alone (monthly series, per-trial determinations,
+# and the response re-imputed inside the window for the env-means rows).
+# When SPLIT_DATE does not leave both a pre and a post side inside the
+# window, the module is skipped for that window and writes nothing.
+SUPPORTS_WINDOW = True
 
-def _raw_trial_contrast():
+
+def _raw_trial_contrast(window=None):
     """Pre/post SPLIT_DATE contrast on the 295 individual EC50 bioassay
     determinations (data/ec50_raw.csv), as opposed to the monthly series
     used elsewhere in this module. Manuscript section 3.1 reports this
     trial-level contrast alongside the monthly one.
     """
     raw = load_ec50_raw()
+    raw = raw[in_window(raw["Datetime"], window)]
 
     pre = raw.loc[raw["Datetime"] < SPLIT_DATE, RESPONSE_COL]
     post = raw.loc[raw["Datetime"] >= SPLIT_DATE, RESPONSE_COL]
@@ -41,7 +49,7 @@ def _raw_trial_contrast():
         "mannwhitney_p": float(p_mwu),
         "note": (
             "The split point (SPLIT_DATE) is estimated from this same "
-            "data, and the 295 trials are serially correlated (not "
+            f"data, and the {len(pre) + len(post)} trials are serially correlated (not "
             "independent draws) -- this Mann-Whitney p-value is "
             "descriptive, not inferential. The monthly-series contrast in "
             "period_means.csv/kruskal_stats.json is this module's primary "
@@ -51,13 +59,16 @@ def _raw_trial_contrast():
     }
 
 
-def run(response=None, results=None):
+def run(response=None, results=None, window=None):
     results = results if results is not None else default_results_dir()
+    if window is not None and not split_date_in_window(window):
+        return {"skipped": f"split_date {SPLIT_DATE.date()} does not leave both a pre and a post "
+                           f"side of real response months inside window {window.id!r}"}
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for output filenames/keys below
 
-    df, df_real, events, _ = load_data()
+    df, df_real, events, _ = load_data(window=window)
     df = df.dropna(subset=ALL_COLS)
 
     pre  = df[df["Datetime"] <  SPLIT_DATE]
@@ -110,19 +121,28 @@ def run(response=None, results=None):
 
     # Trial-level (295 individual determinations) pre/post contrast --
     # manuscript section 3.1, secondary to the monthly-series test above.
-    raw_contrast = _raw_trial_contrast()
+    raw_contrast = _raw_trial_contrast(window)
     (results / "period_contrast_raw.json").write_text(json.dumps(raw_contrast, indent=2))
 
     # Distribution data for boxplots (Streamlit). Filename AND column header
     # built from the response's display label, never RESPONSE_COL -- for
     # Livorno label == "EC50", so dist_EC50.csv is unchanged.
+    # Period labels from the data, never literals, FILE BY FILE: first and
+    # last month actually present in this file's rows on each side of the
+    # split, year AND month at both ends. A label must be true of every row
+    # it is attached to: the response (real months only) and the
+    # environmental variables cover different months, so their labels may
+    # differ; the window-level response coverage is in window.json.
+    def _span(months):
+        return f"{months.min():%Y-%m}–{months.max():%Y-%m}"
     for col in ALL_COLS:
         src = df_real if col == RESPONSE_COL else df
         out = src[["Datetime", col]].copy()
         if col == RESPONSE_COL:
             out = out.rename(columns={RESPONSE_COL: label})
-        pre_label  = f"2003–{(SPLIT_DATE - pd.Timedelta(days=1)):%Y-%m}"
-        post_label = f"{SPLIT_DATE:%Y-%m}–2025"
+        months = out["Datetime"]
+        pre_label = _span(months[months < SPLIT_DATE])
+        post_label = _span(months[months >= SPLIT_DATE])
         out["period"] = np.where(out["Datetime"] < SPLIT_DATE, pre_label, post_label)
         file_id = label if col == RESPONSE_COL else col
         out.to_csv(results / f"dist_{file_id}.csv", index=False)

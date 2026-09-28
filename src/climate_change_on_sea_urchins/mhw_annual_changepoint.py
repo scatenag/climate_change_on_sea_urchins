@@ -48,6 +48,15 @@ import pandas as pd
 from .changepoint import DEFAULT_B, DEFAULT_SEED, TRIM, qlr_ar1_changepoint
 from .common import default_results_dir, load_mhw_annual
 
+# Not run for temporal windows (V2.2): this module iterates its own fixed
+# year ranges (YEAR_RANGES below) and is kept only as a record of an
+# investigation no longer cited in the manuscript.
+SUPPORTS_WINDOW = False
+WINDOW_UNSUPPORTED_REASON = (
+    "mhw_annual_changepoint: iterates its own fixed year ranges; kept as a record of an "
+    "investigation no longer cited in the manuscript"
+)
+
 # The four annual MHW descriptors section 2.3.3 defines (same columns
 # mhw_lag_annual.py's PREDICTORS sweeps individually over lags).
 DESCRIPTOR_COLS = ["event_count", "total_mhw_days", "max_intensity", "cum_intensity_sum"]

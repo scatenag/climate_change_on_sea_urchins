@@ -21,12 +21,15 @@ _study = load_selected_study()
 DATA = Path(_study.data_dir)
 
 
-def results_dir(study_id: str) -> Path:
+def results_dir(study_id: str, window_id: str | None = None) -> Path:
     """Where a study's results live -- the only place this path is built
     (dashboard, tests and the R script all resolve through it). One
     directory per study under results/ (results/<study_id>/), so a second
-    study's pipeline run can never overwrite Livorno's -- see docs/adr/0008."""
-    return ROOT / "results" / study_id
+    study's pipeline run can never overwrite Livorno's -- see docs/adr/0008.
+    A declared window's results go one level down, in a sibling of the
+    other windows: results/<study_id>/<window_id>/."""
+    base = ROOT / "results" / study_id
+    return base if window_id is None else base / window_id
 
 
 RESULTS = results_dir(_study.id)
@@ -57,13 +60,42 @@ RESPONSE_COL = "response"
 IMPUTED_COL  = "response_imputed"
 
 
-def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+# The response imputation: months without a real measurement filled with a
+# centered rolling mean. The one implementation, shared with
+# scripts/build_dataset.py (which imports it). Its parameters are a
+# scientific choice still written in code, not yet in the spec -- recorded
+# in docs/adr/0000 (with the fact that, in effect, it is applied twice:
+# once by build_dataset.py, once more by load_data() below).
+IMPUTE_WINDOW_MONTHS = 12
+IMPUTE_MIN_PERIODS = 3
+
+
+def impute_response(values: pd.Series) -> pd.Series:
+    """Fill NaNs with the centered rolling mean of `values` itself --
+    whatever `values` covers is all the imputation ever sees."""
+    return values.fillna(
+        values.rolling(window=IMPUTE_WINDOW_MONTHS, min_periods=IMPUTE_MIN_PERIODS, center=True).mean()
+    )
+
+
+def load_data(window=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Returns:
         df_full   — all months (response includes rolling-mean imputations)
         df_real   — only months with real response bioassay measurements
         mhw_events
         mhw_monthly
+
+    With a `window` (a WindowSpec): df_full/df_real hold only the window's
+    months, and the response is RE-IMPUTED from the window's real values
+    alone -- the imputations already stored in data/ are never read, since
+    at the window's edges they were estimated with values from outside it
+    (rule (b), tests/test_windows.py). Both imputation passes of the
+    whole-record path are reproduced, both inside the window, so a window
+    covering the whole record gives the same series. mhw_events and
+    mhw_monthly are returned whole: the MHW catalogue is computed once on
+    the whole record by design, and events before the window may enter a
+    window statistic as lagged predictors (rule (c)).
     """
     data    = pd.read_csv(DATA / "data_extended.csv",  parse_dates=["Datetime"])
     data    = data.rename(columns={"EC50": RESPONSE_COL})
@@ -87,10 +119,13 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
                   on="Datetime", how="left")
     df[IMPUTED_COL] = df[IMPUTED_COL].fillna(True)
 
+    if window is not None:
+        df = df[in_window(df["Datetime"], window)].reset_index(drop=True)
+        observed = df[RESPONSE_COL].where(~df[IMPUTED_COL].astype(bool))
+        df[RESPONSE_COL] = impute_response(observed)  # build_dataset.py's pass, inside the window
+
     # Rolling-mean impute the response for df_full (mirrors original notebook approach)
-    df[RESPONSE_COL] = df[RESPONSE_COL].fillna(
-        df[RESPONSE_COL].rolling(window=12, min_periods=3, center=True).mean()
-    )
+    df[RESPONSE_COL] = impute_response(df[RESPONSE_COL])
 
     # Fill Temperature gaps (after Copernicus monthly ends) from daily SST monthly averages.
     # Without this, 2024 rows show only Jan–Apr (winter avg ~14°C), breaking trend analysis.
@@ -187,6 +222,93 @@ def _response_split_date(response) -> pd.Timestamp:
 
 SPLIT_DATE = _response_split_date(_study.responses[0])
 SPLIT_YEAR = str(SPLIT_DATE.year)  # kept for callers that only need the year (e.g. axis labels)
+
+
+def in_window(dates: pd.Series, window) -> pd.Series:
+    """Boolean mask of `dates` inside `window` (both ends inclusive); all
+    True when window is None."""
+    if window is None:
+        return pd.Series(True, index=dates.index)
+    return (dates >= pd.Timestamp(window.start)) & (dates <= pd.Timestamp(window.end))
+
+
+def supports_window(module) -> bool:
+    """Window support is declared explicitly by a module-level
+    `SUPPORTS_WINDOW = True`; anything else -- False, a missing
+    declaration, a truthy non-True value -- counts as unsupported, so a
+    module not yet migrated is excluded from windows instead of receiving
+    one and ignoring it."""
+    return getattr(module, "SUPPORTS_WINDOW", False) is True
+
+
+def response_coverage(window=None) -> dict:
+    """First and last month with a real response measurement (and their
+    count), inside `window` if given -- the window's effective coverage,
+    which can be narrower than its declared start/end."""
+    _, real, _, _ = load_data()
+    months = real.loc[in_window(real["Datetime"], window), "Datetime"]
+    return {
+        "first_real_response_month": months.min().date().isoformat() if len(months) else None,
+        "last_real_response_month": months.max().date().isoformat() if len(months) else None,
+        "n_real_response_months": int(len(months)),
+    }
+
+
+def check_window_overlaps_data(window) -> None:
+    """Rejects only a window with no real response month at all; a partial
+    overlap is accepted, and window.json records the effective coverage."""
+    if response_coverage(window)["n_real_response_months"] == 0:
+        raise StudySpecError(
+            f"window {window.id!r} ({window.start}..{window.end}) has no overlap with the "
+            "response series: no real measurement falls inside it."
+        )
+
+
+def split_date_in_window(window) -> bool:
+    """Whether SPLIT_DATE leaves a non-empty pre side AND post side of real
+    response months inside the window -- judged on the data, not on the
+    declared bounds alone, so a window starting a week before SPLIT_DATE
+    does not run a pre/post test on an empty side. When False, pre/post
+    analyses are skipped for that window and window.json says so."""
+    _, real, _, _ = load_data()
+    months = real.loc[in_window(real["Datetime"], window), "Datetime"]
+    return bool((months < SPLIT_DATE).any() and (months >= SPLIT_DATE).any())
+
+
+def provenance() -> dict:
+    """Code commit and study-spec hash (CLAUDE.md invariant #8), for
+    window.json. code_commit is None outside a git checkout."""
+    import hashlib
+    import subprocess
+    from .study_spec import selected_study_path
+
+    def _git(*args):
+        try:
+            return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            return None
+
+    commit = _git("rev-parse", "HEAD")
+    dirty = None if commit is None else bool(_git("status", "--porcelain", "--untracked-files=no"))
+    spec_path = selected_study_path()
+    return {
+        "code_commit": commit,
+        "code_dirty": dirty,
+        "study_spec": str(spec_path),
+        "study_spec_sha256": hashlib.sha256(spec_path.read_bytes()).hexdigest(),
+    }
+
+
+def _checked_windows(windows) -> tuple:
+    for w in windows:
+        check_window_overlaps_data(w)
+    return tuple(windows)
+
+
+# The selected study's declared windows, each checked against the data at
+# load time (as SPLIT_DATE is): a window with no overlap fails here, with
+# an explicit message, not halfway through the pipeline.
+WINDOWS = _checked_windows(_study.windows)
 
 
 def default_results_dir() -> Path:

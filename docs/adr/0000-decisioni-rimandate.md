@@ -94,3 +94,33 @@ golden master senza alcun guadagno per un caso che non ha finestre da confrontar
 studio che dichiara finestre, l'intero record è il termine di paragone naturale della tabella
 di confronto: lasciarlo implicito, in una directory di forma diversa dalle sorelle, è
 un'asimmetria da sciogliere quando arriva il primo studio con finestre.
+
+---
+
+## 8. Scelte scientifiche scritte nel codice invece che nella specifica
+
+**Domanda:** quando e come portare nella specifica di studio (`study.yaml`) le scelte sui dati
+che oggi vivono solo nel codice. Per l'invariante 6 di `CLAUDE.md` una trasformazione non
+leggibile nel file di studio è un difetto. Emerse leggendo i moduli per le finestre temporali
+(V2.2, 5b), rimandate perché portarle nella specifica cambia lo schema per ogni studio e non
+serve ai prerequisiti di V2.2.
+
+**Contesto, una voce per scelta:**
+- **Imputazione della risposta**: media mobile centrata di `IMPUTE_WINDOW_MONTHS = 12` mesi con
+  `IMPUTE_MIN_PERIODS = 3` (`common.impute_response`, condivisa da `scripts/build_dataset.py`).
+  È applicata **due volte**: una da `build_dataset.py` sui valori reali, una di nuovo da
+  `common.load_data()` sulla serie già imputata. La seconda passata riempie 8 mesi che la
+  prima non raggiunge (2007-06, 2007-07, 2007-09, 2007-12, 2009-08, 2009-09, 2022-11,
+  2023-06). Le finestre riproducono le due passate per restare equivalenti al percorso
+  sull'intero record, ma se la doppia passata sia voluta non è deciso.
+- **`forecast.py`**: addestramento da `2016-01-01`, fisso nel codice e diverso da
+  `split_date` (`2016-06-01`). Sembra un residuo del vecchio punto di taglio di gennaio, come
+  era successo al confronto pre/post del controllo negativo (`negative_control.py`, che lo
+  conserva ora esplicitamente come `PUBLISHED_SPLIT_DATE`).
+- **`correlations.py`**: media mobile centrata a 12 mesi applicata a *tutti* i valori della
+  risposta, reali compresi, prima della decomposizione.
+- **`mhw_lag_extra.py`**: un'osservazione della risposta è associata a un evento se dista
+  meno di 20 giorni dalla data attesa (`_nearest_ec50`).
+
+(`YEAR_MIN`/`YEAR_MAX` di `mhw_lag_annual.py` non è qui: si risolve in V2.2 5b-4 con la regola
+degli anni completi.)

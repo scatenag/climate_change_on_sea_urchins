@@ -71,28 +71,37 @@ from statsmodels.stats.multitest import multipletests
 
 from .common import load_data, default_results_dir, RESPONSE_COL, default_response_spec, load_sst_daily
 
+# Windows (V2.2). Construction: the cumulative thermal dose of each assay,
+# from daily SST over the dose window BEFORE it -- may reach back before
+# the window's start (rule (c): conditioning on the past), and never past
+# the assay date, which is inside the window (rule (a)). Statistic: which
+# assays enter (those inside the window), the time axis and its linear
+# detrending, Spearman, the time/time+dose OLS, VIF and the multiple-
+# testing corrections -- all on the window's assays alone (rule (b)).
+SUPPORTS_WINDOW = True
+
 THRESHOLD_C = 24.0                 # C, chronic gametogenesis-blocking threshold
                                     # for P. lividus (Amato et al. 2025) -- the
                                     # one a-priori primary threshold (Table S2's
                                     # other four values are a robustness check,
                                     # not alternatives on equal footing)
-WINDOWS = [12, 24, 36, 48, 60]      # months of cumulative thermal history
+DOSE_WINDOWS_MONTHS = [12, 24, 36, 48, 60]   # months of cumulative thermal history
 
 # Table S2 robustness check: does the 24-month window's result hold up across
 # nearby threshold choices, or is 24C a special-cased cutoff? Not a search for
 # a "better" threshold -- THRESHOLD_C stays fixed at 24C regardless of outcome.
 THRESHOLD_SENSITIVITY_C = [22.0, 23.0, 24.0, 25.0, 26.0]
-SENSITIVITY_WINDOW_MONTHS = 24      # the window thermal_legacy_summary.json's
+SENSITIVITY_DOSE_WINDOW_MONTHS = 24  # the window thermal_legacy_summary.json's
                                      # own verdict found robust to both tests
 
 
-def _thermal_dose(sst, assay_date, window_months, thr):
-    """Degree-days above `thr` over the `window_months` before `assay_date`,
+def _thermal_dose(sst, assay_date, dose_window_months, thr):
+    """Degree-days above `thr` over the `dose_window_months` before `assay_date`,
     normalised to a per-year rate so windows of different length are comparable."""
-    start = assay_date - pd.DateOffset(months=window_months)
+    start = assay_date - pd.DateOffset(months=dose_window_months)
     m = (sst["Datetime"] > start) & (sst["Datetime"] <= assay_date)
     exc = (sst.loc[m, "Temperature"] - thr).clip(lower=0)
-    return exc.sum() / window_months * 12.0
+    return exc.sum() / dose_window_months * 12.0
 
 
 def _detrended_corr(x, y, t):
@@ -102,13 +111,13 @@ def _detrended_corr(x, y, t):
     return float(r), float(p)
 
 
-def run(response=None, results=None):
+def run(response=None, results=None, window=None):
     results = results if results is not None else default_results_dir()
     if response is None:
         response = default_response_spec()
     label = response.label  # display identity for thermal_legacy.csv's column below
 
-    _, df_real, _, _ = load_data()
+    _, df_real, _, _ = load_data(window=window)
     real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
     sst = load_sst_daily()
@@ -121,7 +130,7 @@ def run(response=None, results=None):
     # for Livorno label == "EC50", so thermal_legacy.csv is unchanged.
     out = real.rename(columns={RESPONSE_COL: label})
     rows = []
-    for win in WINDOWS:
+    for win in DOSE_WINDOWS_MONTHS:
         col = f"dose_{int(THRESHOLD_C)}C_{win}m"
         dose = real["Datetime"].apply(lambda d: _thermal_dose(sst, d, win, THRESHOLD_C)).values
         out[col] = dose
@@ -190,12 +199,14 @@ def run(response=None, results=None):
         return ", ".join(f"{w}m" for w in ws) if ws else "none"
 
     summary = {
-        "hypothesis": "chronic cumulative heat stress (degree-days above 24C, the "
+        # The threshold in the text comes from THRESHOLD_C, the value the dose
+        # is computed with -- never typed by hand.
+        "hypothesis": f"chronic cumulative heat stress (degree-days above {THRESHOLD_C:g}C, the "
                       "gametogenesis-blocking threshold per Amato et al. 2025) on the "
                       "wild adult population drives the EC50 decline (copper is the "
                       "revealer, not the cause)",
         "threshold_C": THRESHOLD_C,
-        "windows_months": WINDOWS,
+        "windows_months": DOSE_WINDOWS_MONTHS,
         "verdict": verdict,
         "windows_robust": robust,
         "windows_suggestive_rank_only": suggestive,
@@ -218,26 +229,26 @@ def run(response=None, results=None):
     with (results / "thermal_legacy_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"✓ thermal_legacy (24C threshold, {len(WINDOWS)} windows): "
+    print(f"✓ thermal_legacy ({THRESHOLD_C:g}C threshold, {len(DOSE_WINDOWS_MONTHS)} windows): "
           f"robust(both tests)={_fmt(robust)}  suggestive(rank-only)={_fmt(suggestive)}  "
           f"not-surviving={_fmt(not_surviving)} → {verdict}")
 
-    run_threshold_sensitivity(results=results)  # Table S2 -- see its own docstring
+    run_threshold_sensitivity(results=results, window=window)  # Table S2 -- see its own docstring
 
 
-def _sensitivity_row(real, sst, t, y, window, thr):
+def _sensitivity_row(real, sst, t, y, dose_window_months, thr):
     """detrended Spearman + nested-OLS partial test for one (window,
     threshold) pair -- same two tests as run()'s per-window loop, factored
     out separately (not shared with it) so run()'s own logic/output stays
     untouched. See module docstring for the two outputs."""
-    dose = real["Datetime"].apply(lambda d: _thermal_dose(sst, d, window, thr)).values
+    dose = real["Datetime"].apply(lambda d: _thermal_dose(sst, d, dose_window_months, thr)).values
     det_r, det_p = _detrended_corr(dose, y, t)
     X_td = sm.add_constant(np.column_stack([t, dose]))
     fit_td = sm.OLS(y, X_td).fit()
     return {
         "threshold_C": thr,
         "is_primary_threshold": thr == THRESHOLD_C,
-        "window_months": window,
+        "window_months": dose_window_months,
         "detrended_spearman_r": det_r,
         "detrended_p": det_p,
         "dose_coef_given_time": float(fit_td.params[2]),
@@ -245,12 +256,13 @@ def _sensitivity_row(real, sst, t, y, window, thr):
     }
 
 
-def run_threshold_sensitivity(*, results, thresholds=THRESHOLD_SENSITIVITY_C, window=SENSITIVITY_WINDOW_MONTHS):
+def run_threshold_sensitivity(*, results, window=None, thresholds=THRESHOLD_SENSITIVITY_C,
+                              dose_window_months=SENSITIVITY_DOSE_WINDOW_MONTHS):
     """Table S2: sweep threshold_C at the fixed 24-month window, Bonferroni-
     correcting across the len(thresholds) tests -- same "survives only if
     both the rank and the parametric test clear Bonferroni" rule run() uses
     across windows, applied here across thresholds instead."""
-    _, df_real, _, _ = load_data()
+    _, df_real, _, _ = load_data(window=window)
     real = df_real.dropna(subset=[RESPONSE_COL]).reset_index(drop=True)[["Datetime", RESPONSE_COL]]
 
     sst = load_sst_daily()
@@ -259,7 +271,7 @@ def run_threshold_sensitivity(*, results, thresholds=THRESHOLD_SENSITIVITY_C, wi
     t = (real["Datetime"] - real["Datetime"].min()).dt.days.values.astype(float)
     y = real[RESPONSE_COL].values
 
-    res = pd.DataFrame([_sensitivity_row(real, sst, t, y, window, thr) for thr in thresholds])
+    res = pd.DataFrame([_sensitivity_row(real, sst, t, y, dose_window_months, thr) for thr in thresholds])
 
     res["p_bonferroni"] = multipletests(res["detrended_p"], method="bonferroni")[1]
     res["partial_p_bonferroni"] = multipletests(res["partial_p_dose_given_time"], method="bonferroni")[1]
@@ -270,7 +282,7 @@ def run_threshold_sensitivity(*, results, thresholds=THRESHOLD_SENSITIVITY_C, wi
     res.to_csv(results / "thermal_threshold_sensitivity.csv", index=False)
 
     survived = ", ".join(f"{int(t)}C" for t in res.loc[res["bonferroni_survives"], "threshold_C"])
-    print(f"✓ thermal_threshold_sensitivity ({window}m window, {len(thresholds)} thresholds): "
+    print(f"✓ thermal_threshold_sensitivity ({dose_window_months}m window, {len(thresholds)} thresholds): "
           f"Bonferroni-survives={survived or 'none'}")
 
 

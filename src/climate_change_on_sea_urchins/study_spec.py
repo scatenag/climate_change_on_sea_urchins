@@ -30,12 +30,13 @@ wired: common.py resolves and validates them at its own load time.
 """
 from __future__ import annotations
 
+import datetime as dt
 import os
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 
 class SiteSpec(BaseModel):
@@ -148,11 +149,23 @@ class VariableSpec(BaseModel):
 
 
 class WindowSpec(BaseModel):
-    """A named temporal window of the study. Declared for completeness; not
-    yet consumed anywhere -- see module docstring and docs/adr/0000."""
-    id: str
-    start: str
-    end: str
+    """A named temporal window of the study: one pipeline run computes each
+    declared window's statistics into results/<study_id>/<window_id>/.
+    Checked here against itself only; overlap with the actual data is
+    checked in common.py (this module never reads data/)."""
+    id: str = Field(
+        ..., pattern=r"^[a-z0-9][a-z0-9_-]*$",
+        description="Becomes a directory name under results/<study_id>/, "
+        "hence a lowercase slug."
+    )
+    start: dt.date
+    end: dt.date
+
+    @model_validator(mode="after")
+    def _start_before_end(self):
+        if not self.start < self.end:
+            raise ValueError(f"window {self.id!r}: start {self.start} must precede end {self.end}")
+        return self
 
 
 class MhwClimatologySpec(BaseModel):
@@ -181,6 +194,14 @@ class StudySpec(BaseModel):
     responses: list[ResponseSpec]
     environment: list[VariableSpec] = Field(default_factory=list)
     windows: list[WindowSpec] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _window_ids_unique(self):
+        ids = [w.id for w in self.windows]
+        dup = sorted({i for i in ids if ids.count(i) > 1})
+        if dup:
+            raise ValueError(f"window ids must be unique, repeated: {dup}")
+        return self
 
 
 class StudySpecError(Exception):
@@ -228,15 +249,20 @@ DEFAULT_STUDY_PATH = (Path(__file__).resolve().parent.parent.parent
                       / "examples" / "livorno_paracentrotus" / "study.yaml")
 
 
+def selected_study_path() -> Path:
+    """The study.yaml this process runs: named by the CCSU_STUDY environment
+    variable, or DEFAULT_STUDY_PATH (Livorno) if unset."""
+    return Path(os.environ.get("CCSU_STUDY") or DEFAULT_STUDY_PATH)
+
+
 def load_selected_study() -> StudySpec:
-    """The study this process runs: the study.yaml named by the CCSU_STUDY
-    environment variable, or DEFAULT_STUDY_PATH (Livorno) if unset. The one
-    place the selection happens -- config.py and common.py both call this
-    (common.py can't import config.py: config imports this package, whose
-    __init__ imports common)."""
+    """Loads selected_study_path() -- the one place the selection happens;
+    config.py and common.py both call this (common.py can't import
+    config.py: config imports this package, whose __init__ imports
+    common)."""
     env = os.environ.get("CCSU_STUDY")
     try:
-        return load_study(env or DEFAULT_STUDY_PATH)
+        return load_study(selected_study_path())
     except StudySpecError as e:
         if env:
             raise StudySpecError(f"CCSU_STUDY={env!r}: {e}") from e

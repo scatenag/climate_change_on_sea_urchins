@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import CO2_PA_TO_UATM
+from climate_change_on_sea_urchins.common import impute_response
 
 ROOT = Path(__file__).parent.parent
 ENV_PATH  = ROOT / "data" / "env_copernicus.csv"
@@ -91,10 +92,10 @@ def impute_ec50(monthly_full: pd.DataFrame, ec50: pd.DataFrame) -> pd.DataFrame:
 
     df["EC50_imputed"] = df["EC50"].isna()
 
-    # Fill missing EC50 with 12-month centered rolling mean (same as original notebook)
-    df["EC50"] = df["EC50"].fillna(
-        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
-    )
+    # Fill missing EC50 with the package's imputation (12-month centered
+    # rolling mean, same as the original notebook) -- one implementation,
+    # shared with the per-window re-imputation in common.load_data().
+    df["EC50"] = impute_response(df["EC50"])
 
     # CI bounds remain NaN for imputed months
     return df
