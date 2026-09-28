@@ -3,7 +3,7 @@
 > Si aggiorna alla fine di **ogni** sessione di lavoro, prima del merge.
 > Tenerlo corto: se supera una pagina, sposta il dettaglio in un ADR o in una issue.
 
-**Ultimo aggiornamento:** 25 settembre 2026
+**Ultimo aggiornamento:** 28 settembre 2026
 
 ---
 
@@ -98,9 +98,13 @@ differenza prima. `tests/test_mhw_analysis.py` (nuovo): copre fit/filter/correla
 fissato (1,0,1), indipendente dal problema di selezione. I quattro nuovi p<0.05 di `mhw_days`
 non sopravvivono a Bonferroni (soglia 0.00056, minimo 0.0052) e non sono riportati da nessuna
 parte (non riproducibili). **La issue è la [#9](https://github.com/scatenag/climate_change_on_sea_urchins/issues/9)**,
-non #4 come indicato nei riferimenti di codice durante la sessione — #4 non è mai esistita su
-GitHub, era solo un segnaposto di conversazione; tutti i riferimenti nel codice sono stati
-corretti prima della fusione.
+non #4 come indicato nei riferimenti di codice durante la sessione; tutti i riferimenti nel
+codice sono stati corretti prima della fusione. **Correzione (28/9):** qui c'era scritto che la
+#4 non è mai esistita su GitHub, ed era falso. La [#4](https://github.com/scatenag/climate_change_on_sea_urchins/issues/4)
+esisteva: l'assistente l'aveva aperta il 21/9 con la credenziale git, prima che quell'uso fosse
+vietato, sullo stesso problema (instabilità del prewhitening ARIMA fra macchine e con la scala).
+Chiusa il 28/9 come duplicato della #9, anche perché descriveva ancora la tolleranza
+`ARIMA_FIT`, ritirata con #7.
 
 **Astrazione della serie di risposta (#8, #10, #11, #12)**: `EC50` non è più un'identità
 cablata in nessun punto di `src/` fuori da `common.py` (l'unico posto autorizzato a conoscere
@@ -162,7 +166,7 @@ tabella di confronto); Livorno, senza finestre, resta in `results/<study_id>/` (
 implicita, ADR-0000 voce 7). MHW e climatologia: una volta sull'intero record, in `data_dir`,
 prima del ciclo sulle finestre; solo `mhw_detection` scrive in `data_dir`.
 **5a** `results=` parametro di `run()` al posto della costante `RESULTS`, nessun cambio di
-comportamento — **fatta, PR aperta**; il golden master ora verifica per modulo chi scrive in
+comportamento — **#19 fusa 25/9**; il golden master ora verifica per modulo chi scrive in
 `data_dir`. **5b** `window=` parametro di `run()`, con due vincoli: (1) un modulo che riceve una
 finestra e non sa applicarla fallisce con errore esplicito, mai la ignora; (2) regola di
 default: i dati si costruiscono sull'intero record, la finestra seleziona i punti su cui si
