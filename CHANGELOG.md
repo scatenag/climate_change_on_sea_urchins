@@ -277,6 +277,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **`data/ec50_raw.csv` was never committed by the auto-update.** `fetch_ec50.py` regenerates
+  it on every run, and the pipeline in the runner computed `results/` from that fresh copy, so
+  the committed results were correct. But the auto-update's commit step listed
+  `data/ec50_sheets.csv` and not `data/ec50_raw.csv`, so the repository's per-trial file stayed
+  at its 2026-09-07 state: 295 trials, trial 224 with negative-control replicates `14, 1, 14`.
+  The source sheet has 296 trials and `14, 11, 14` (the typo corrected at the source). The
+  committed `results/` could not be reproduced from the committed `data/`, and anything reading
+  the file locally used the stale copy. Fixed in `update_ec50.yml`: the file is committed, and
+  its changes also trigger the rebuild (a corrected replicate leaves the monthly means
+  unchanged, so checking `ec50_sheets.csv` alone would miss it). `data/ec50_raw.csv` refreshed
+  from the sheet. Regenerating the pipeline locally on it reproduces the committed `results/` up
+  to float noise (1e-8 or smaller), so `results/` is not touched. New check in
+  `tests/test_data_quality.py`: the monthly series must equal the per-trial series aggregated by
+  month (same months, mean, count); it fails if one file is updated and the other is not, and it
+  now runs after every auto-update. It failed on the stale file (month 2026-09 missing) and
+  passes on the frozen fixture.
+
 - **`tests/test_mhw_analysis.py` read the real `data/`, not the frozen fixture, since #17.** Its
   fixture redirected `common.ROOT` only; since #17, `load_data()` reads `common.DATA`, no longer
   derived from `ROOT`. Green while the real `data/` equalled the fixture; broke when the
