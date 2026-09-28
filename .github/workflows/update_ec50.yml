@@ -37,7 +37,10 @@ jobs:
       - name: Check if EC50 data changed
         id: check_ec50
         run: |
-          if git diff --quiet data/ec50_sheets.csv; then
+          # Both files written by fetch_ec50.py: the per-trial one can change
+          # on its own (e.g. a corrected negative-control replicate leaves the
+          # monthly means untouched), and must trigger the rebuild too.
+          if git diff --quiet data/ec50_sheets.csv data/ec50_raw.csv; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -136,7 +139,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/ec50_sheets.csv data/data_extended.csv data/data_ec50_ci.csv \
+          git add data/ec50_sheets.csv data/ec50_raw.csv data/data_extended.csv data/data_ec50_ci.csv \
                   data/env_copernicus.csv data/sst_daily.csv \
                   data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
                   results/

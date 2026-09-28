@@ -208,6 +208,13 @@ provenienza, la CI non tocca mai la rete. 7. Celle spostate: 50/200/500 km in **
   - Escluse: braccio ARIMA (issue #9, differenze del runner scambiate per distanza), Granger,
     forecast.
 
+**Dati per prova (28/9):** l'aggiornamento automatico non committava `data/ec50_raw.csv`
+(fermo al 7/9: 295 prove, prova 224 con `14, 1, 14`; il foglio ha 296 prove e `14, 11, 14`, refuso
+corretto alla sorgente). I `results/` committati erano però già calcolati sul file fresco del
+runner. Corretto il workflow; aggiunto un controllo di coerenza mensile/per prova. La prova 224
+è una questione chiusa: il valore 1 era un refuso, corretto nel foglio. Valori di §3.6 sulla
+fixture (con l'1) e sul dato corretto, da confrontare con il manoscritto finale: vedi la PR.
+
 **Issue aperte:**
 - [#3](https://github.com/scatenag/climate_change_on_sea_urchins/issues/3) — dashboard
   `mg/L`→`ug/L` (23 occorrenze, fattore 1000) + le due occorrenze residue dell'attribuzione
@@ -250,9 +257,10 @@ l'utente decide quando fondere.
   rank-based cade a giugno e i risultati sono insensibili alla scelta entro l'intervallo
   (calo 43.0% contro 43.2%). Chi legge il codice senza il paper vede solo un'incoerenza:
   serve ancora un commento esplicito in `common.py` accanto a `SPLIT_DATE` — non fatto.
-- **Riga ID 224 del foglio EC50 (2020-01, controllo negativo `14, 1, 14`): non è un errore di
-  trascrizione.** Confermato da Sartori (settembre 2026): sono due saggi distinti. Il modulo
-  `negative_control.py` lo lascia uncorretto di conseguenza; non riaprire la domanda.
+- **Prova ID 224 del foglio EC50 (2020-01-01, controllo negativo): chiusa.** Le due righe di
+  gennaio 2020 (ID 224 e 225) sono saggi distinti; il valore 1 della seconda replica della 224 era
+  un refuso, corretto nel foglio sorgente in `14, 11, 14` (verificato sul foglio il 28/9/2026).
+  La fixture congelata `tests/fixtures/paper_mpb_2026/` conserva ancora l'1.
 - `results/ccf_results_prewhitened.csv` non è invariante a un riscalamento lineare degli
   input (scoperto verificando il fix CO₂): l'ottimizzatore MLE dell'ARIMA di prewhitening
   converge in modo leggermente diverso a scale diverse. Nessun cambio di significatività
