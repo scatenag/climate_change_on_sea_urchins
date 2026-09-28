@@ -199,12 +199,15 @@ def run(response=None, results=None, window=None):
         return ", ".join(f"{w}m" for w in ws) if ws else "none"
 
     summary = {
-        # The threshold in the text comes from THRESHOLD_C, the value the dose
-        # is computed with -- never typed by hand.
-        "hypothesis": f"chronic cumulative heat stress (degree-days above {THRESHOLD_C:g}C, the "
-                      "gametogenesis-blocking threshold per Amato et al. 2025) on the "
-                      "wild adult population drives the EC50 decline (copper is the "
-                      "revealer, not the cause)",
+        # A description of the method, with the threshold and the response
+        # label taken from the values the computation uses -- never typed by
+        # hand. The biological hypothesis behind it, and the source of the
+        # threshold, are case documentation (examples/livorno_paracentrotus/NOTES.md).
+        "hypothesis": (
+            f"cumulative heat dose (degree-days above {THRESHOLD_C:g}C over the preceding "
+            f"{', '.join(str(m) for m in DOSE_WINDOWS_MONTHS)} months) as a predictor of {label}, "
+            "beyond the shared time trend"
+        ),
         "threshold_C": THRESHOLD_C,
         "windows_months": DOSE_WINDOWS_MONTHS,
         "verdict": verdict,
@@ -216,7 +219,7 @@ def run(response=None, results=None, window=None):
             f"Windows robust to BOTH the rank-based (Spearman, detrended) and the "
             f"parametric (OLS partial) Bonferroni-corrected test, in the biologically "
             f"expected (negative) direction ({_fmt(robust)}): a genuine, "
-            f"cross-validated effect of chronic heat dose on EC50 beyond the shared "
+            f"cross-validated effect of chronic heat dose on {label} beyond the shared "
             f"trend. Windows significant on the rank test alone but NOT corroborated "
             f"by the parametric partial test ({_fmt(suggestive)}) are fragile/"
             f"method-dependent and should be treated as suggestive, not established. "

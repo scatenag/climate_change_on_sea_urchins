@@ -155,35 +155,44 @@ def run(response=None, results=None):
 
     exposure_lag = (int(ec50_break.year) - mhw_break_year) if mhw_break_year else None
 
+    # Every sentence of the verdict is generated from values computed in this
+    # run: a fixed conclusion ("NOT present", "BEFORE the collapse") could
+    # contradict the flag written right next to it on other data.
+    if exposure_lag is None:
+        timing = f"no MHW-exposure break was found to compare with the {label} break"
+    elif exposure_lag > 0:
+        timing = f"the MHW-exposure break ({mhw_break_year}) precedes the {label} break by {exposure_lag} yr"
+    elif exposure_lag < 0:
+        timing = f"the MHW-exposure break ({mhw_break_year}) follows the {label} break by {-exposure_lag} yr"
+    else:
+        timing = f"the MHW-exposure break ({mhw_break_year}) falls in the same year as the {label} break"
+    verdict = (
+        f"Pettitt break in {label} at {ec50_break.date().isoformat()} (p={p:.1e}); {timing}. "
+        f"PC1 explains {var_expl * 100:.0f}% of the variance of the deseasonalised "
+        "T/S/CO2/O2/pH anomalies. Critical-slowing-down early-warning signals (rolling "
+        "variance AND lag-1 autocorrelation both rising, Kendall p<0.05): "
+        f"{'detected' if csd else 'not detected'} "
+        f"(variance tau={ews['variance_kendall_tau']:+.2f}, p={ews['variance_p']:.2g}; "
+        f"AR(1) tau={ews['ar1_kendall_tau']:+.2f}, p={ews['ar1_p']:.2g})."
+    )
+    # Generic key names (an output key is a schema the dashboard reads); the
+    # response's identity is recorded as a value, never in a key.
     summary = {
-        # Fixed schema key, not derived from RESPONSE_COL or label: unlike
-        # "series" above (one row per variable, where label belongs), this
-        # is a single, hardcoded field name describing its role -- it was
-        # never at risk of drifting when RESPONSE_COL's value changes later,
-        # so left as-is rather than renamed without being asked.
-        "ec50_regime_shift": {"break": ec50_break.date().isoformat(), "p": p,
-                              "pre_mean": float(r[RESPONSE_COL][:k].mean()),
-                              "post_mean": float(r[RESPONSE_COL][k:].mean())},
+        "response_label": label,
+        "response_regime_shift": {"break": ec50_break.date().isoformat(), "p": p,
+                                  "pre_mean": float(r[RESPONSE_COL][:k].mean()),
+                                  "post_mean": float(r[RESPONSE_COL][k:].mean())},
         "mhw_exposure_break_year": mhw_break_year,
         "exposure_precedes_response_years": exposure_lag,
         "multifactorial_stress_index": {
             "pc1_variance_explained": var_expl,
             "pc1_loadings_stress_oriented": loadings,
-            "note": f"PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated "
-                    f"climate-change axis. Correlation with {label} is co-trended, not causal.",
+            "note": f"PC1 of deseasonalised T/S/CO2/O2/pH anomalies. Its correlation with "
+                    f"{label} is co-trended, not causal.",
         },
         "early_warning_signals": ews,
         "critical_slowing_down_detected": bool(csd),
-        "verdict": (
-            "Regime shift in {label} confirmed ~{yr} (Pettitt p={p:.1e}). MHW exposure "
-            "shifts ~{mhw}, ~{lag} yr BEFORE the biological collapse — consistent with "
-            "multi-year population-scale accumulation, not an acute lag. Environmental "
-            "stress is multifactorial (PC1 = {ve:.0f}% of T/S/CO2/O2/pH variance). "
-            "Canonical critical-slowing-down early-warning signals are NOT present "
-            "(absolute variance falls, AR(1) not rising) — this is a documented regime "
-            "shift, not a demonstrated dynamical tipping point."
-        ).format(label=label, yr=ec50_break.year, p=p, mhw=mhw_break_year,
-                 lag=exposure_lag, ve=var_expl * 100),
+        "verdict": verdict,
     }
     with (results / "regime_shift_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)

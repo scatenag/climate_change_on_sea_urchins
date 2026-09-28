@@ -464,8 +464,8 @@ def test_regime_shift_summary_sane():
     assert 0.0 <= ve <= 1.0, f"PC1 variance explained {ve} not a fraction in [0,1]"
     assert isinstance(s["critical_slowing_down_detected"], bool)
     # The narrative fact: MHW exposure shifts no later than the EC50 response.
-    ec50_year = int(s["ec50_regime_shift"]["break"][:4])
-    assert s["mhw_exposure_break_year"] <= ec50_year, (
+    response_year = int(s["response_regime_shift"]["break"][:4])
+    assert s["mhw_exposure_break_year"] <= response_year, (
         "MHW exposure regime shift does not precede (or equal) the EC50 collapse — "
         "the accumulation-lag framing needs revisiting."
     )

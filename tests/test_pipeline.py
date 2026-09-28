@@ -177,7 +177,7 @@ def test_monthly_dataframe_has_mhw_cols():
     "forecast_good.csv",
     "stationarity_results.json",
     "granger_results.json",
-    "changepoint_ec50.json",
+    "changepoint_response.json",
 ])
 def test_results_files_exist(fname):
     path = RESULTS / fname

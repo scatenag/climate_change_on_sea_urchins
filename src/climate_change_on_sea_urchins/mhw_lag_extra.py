@@ -50,7 +50,7 @@ def _nearest_ec50(dates: pd.DatetimeIndex, obs_dates: pd.Series, obs_ec50: pd.Se
     return out
 
 
-def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
+def run_sea(df_real: pd.DataFrame, events: pd.DataFrame, label: str) -> pd.DataFrame:
     lags = np.arange(LAG_MIN, LAG_MAX + 1)
     obs_dates, obs_ec50 = df_real["Datetime"], df_real[RESPONSE_COL]
 
@@ -62,14 +62,16 @@ def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
             rows.append((lag, v))
     epoch_df = pd.DataFrame(rows, columns=["lag", RESPONSE_COL])
 
+    # Generic column names (an output key is a schema the dashboard reads);
+    # the response's identity is recorded as a value, never in a key.
     composite = (
         epoch_df.groupby("lag")[RESPONSE_COL]
-        .agg(n="count", mean_ec50="mean", sd_EC50="std")
+        .agg(n="count", mean_response="mean", sd_response="std")
         .reset_index()
     )
-    composite["se_EC50"]  = composite["sd_EC50"] / np.sqrt(composite["n"])
-    composite["ci_lower"] = composite["mean_ec50"] - 1.96 * composite["se_EC50"]
-    composite["ci_upper"] = composite["mean_ec50"] + 1.96 * composite["se_EC50"]
+    composite["se_response"] = composite["sd_response"] / np.sqrt(composite["n"])
+    composite["ci_lower"] = composite["mean_response"] - 1.96 * composite["se_response"]
+    composite["ci_upper"] = composite["mean_response"] + 1.96 * composite["se_response"]
 
     rng = np.random.default_rng(RNG_SEED)
     n_events = len(events)
@@ -83,7 +85,7 @@ def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
 
     boot_p = []
     for j in range(len(lags)):
-        obs = composite["mean_ec50"].iloc[j]
+        obs = composite["mean_response"].iloc[j]
         null = boot_means[:, j]
         null = null[~np.isnan(null)]
         p = 2 * min((null <= obs).mean(), (null >= obs).mean())
@@ -92,6 +94,7 @@ def run_sea(df_real: pd.DataFrame, events: pd.DataFrame) -> pd.DataFrame:
     composite["boot_p025"]  = np.nanquantile(boot_means, 0.025, axis=0)
     composite["boot_p975"]  = np.nanquantile(boot_means, 0.975, axis=0)
     composite["significant"] = composite["boot_p"] < 0.05
+    composite["response_label"] = label
     return composite
 
 
@@ -184,7 +187,7 @@ def run(response=None, results=None) -> None:
     df_full, df_real, events, monthly = load_data()
 
     print("── SEA (Python port, real response only) ───────────────────────────")
-    sea = run_sea(df_real, events)
+    sea = run_sea(df_real, events, response.label)
     sea.to_csv(results / "sea_results.csv", index=False)
     n_sig = int(sea["significant"].sum())
     print(f"✓ SEA: {n_sig}/{len(sea)} lags nominally significant (bootstrap p<0.05) — "

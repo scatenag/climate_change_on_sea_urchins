@@ -37,7 +37,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.inspection import permutation_importance
 from sklearn.metrics import r2_score
-from .common import load_data, default_results_dir, TAU_MAX, RESPONSE_COL, IMPUTED_COL
+from .common import load_data, default_results_dir, TAU_MAX, RESPONSE_COL, IMPUTED_COL, SPLIT_DATE, default_response_spec
 from .mhw_analysis import compute_ccf, difference_series, compute_ccf_prewhitened, _mask_imputed
 
 RNG_SEED = 0
@@ -45,21 +45,25 @@ RNG_SEED = 0
 
 # ── 1. Severe/Extreme-only driver ───────────────────────────────────────────
 
-# Why the ARIMA-prewhitened arm is marked not_applicable below -- see issue #9.
-_ARIMA_NOT_APPLICABLE_REASON = (
-    "13 of 17 nonzero months of mhw_severe_intensity fall after the 2016-06 "
-    "EC50 regime shift (SPLIT_DATE). The ARIMA filter is estimated on the "
-    "driver alone and does not remove that structural break from the "
-    "target, so the residual correlation is confounded by the shift rather "
-    "than reflecting a lagged response to severe events. With the shift "
-    "removed from EC50 (pre/post demeaned), significant lags (p<0.05) at "
-    "the best-converging order drop from 10/13 to 1/13. The "
-    "first-differenced arm (r_diff/p_diff) does not depend on an estimated "
-    "filter and is the retained result for this driver."
-)
+# Why the ARIMA-prewhitened arm is marked not_applicable below -- see issue
+# #9, where the investigation behind this choice is documented. The reason
+# written to the output is a method description plus counts computed in the
+# run, never figures from that investigation.
+def _arima_not_applicable_reason(driver_monthly: pd.Series, label: str) -> str:
+    nonzero = driver_monthly[driver_monthly > 0]
+    after = int((nonzero.index >= SPLIT_DATE).sum())
+    return (
+        f"{after} of {len(nonzero)} nonzero months of mhw_severe_intensity fall on or after "
+        f"the {label} split date ({SPLIT_DATE:%Y-%m}). The ARIMA filter is estimated on the "
+        "driver alone and does not remove a structural break in the target, so for an "
+        "event driver concentrated on one side of the break the residual correlation can "
+        "reflect the break rather than a lagged response. The first-differenced arm "
+        "(r_diff/p_diff) does not depend on an estimated filter and is the retained result "
+        "for this driver."
+    )
 
 
-def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame, label: str) -> tuple[pd.DataFrame, dict]:
     sev = events[events["category"].isin(["Severe", "Extreme"])].copy()
     sev["peak_month"] = pd.to_datetime(sev["peak_date"]).dt.to_period("M").dt.to_timestamp()
     sev_monthly = sev.groupby("peak_month")["intensity_max"].max().rename("mhw_severe_intensity")
@@ -92,7 +96,7 @@ def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame) -> tuple[pd.Data
         "driver": driver,
         "arm": "arima_prewhitened",
         "status": "not_applicable",
-        "reason": _ARIMA_NOT_APPLICABLE_REASON,
+        "reason": _arima_not_applicable_reason(df2.set_index("Datetime")["mhw_severe_intensity"], label),
         "diagnostics": diag,
     }
     return out, note
@@ -183,7 +187,7 @@ def run_ml_battery(df_full: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
 
 # ── 4. Convergent Cross Mapping ──────────────────────────────────────────────
 
-def run_ccm(df_full: pd.DataFrame) -> pd.DataFrame:
+def run_ccm(df_full: pd.DataFrame, label: str) -> pd.DataFrame:
     import skccm as ccm
     from skccm.utilities import train_test_split
 
@@ -204,10 +208,13 @@ def run_ccm(df_full: pd.DataFrame) -> pd.DataFrame:
     model.predict(x1te, x2te, lib_lengths=lib_lens)
     sc1, sc2 = model.score()
 
+    # Generic column names (an output key is a schema the dashboard reads);
+    # the response's identity is recorded as a value, never in a key.
     return pd.DataFrame({
         "lib_length": lib_lens,
-        "skill_mhw_to_ec50": sc1,   # EC50's manifold recovering MHW info -> evidence MHW drives EC50
-        "skill_ec50_to_mhw": sc2,   # reverse direction, should be weaker if causality is one-directional
+        "skill_mhw_to_response": sc1,  # response's manifold recovering MHW info -> evidence MHW drives the response
+        "skill_response_to_mhw": sc2,  # reverse direction, should be weaker if causality is one-directional
+        "response_label": label,
     })
 
 
@@ -247,13 +254,16 @@ def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dic
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def run(results=None) -> None:
+def run(response=None, results=None) -> None:
     results = results if results is not None else default_results_dir()
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for output text and values below
     df_full, df_real, events, monthly = load_data()
 
     print("── Robustness battery: 5 independent checks on the MHW->EC50 lag hypothesis ──")
 
-    severe, severe_note = run_severe_ccf(df_full, events)
+    severe, severe_note = run_severe_ccf(df_full, events, label)
     severe.to_csv(results / "robustness_severe_ccf.csv", index=False)
     (results / "robustness_severe_ccf_note.json").write_text(json.dumps(severe_note, indent=2))
     print(f"✓ 1/5 Severe/Extreme-only CCF ({len(events[events.category.isin(['Severe','Extreme'])])} events) "
@@ -270,7 +280,7 @@ def run(results=None) -> None:
           f"MHW {'helps' if ml_summary['mhw_helps_out_of_sample'] else 'does NOT help'} out-of-sample)")
 
     try:
-        ccm_df = run_ccm(df_full)
+        ccm_df = run_ccm(df_full, label)
         ccm_df.to_csv(results / "robustness_ccm.csv", index=False)
         print("✓ 4/5 Convergent Cross Mapping")
     except ImportError:

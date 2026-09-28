@@ -214,8 +214,10 @@ reproduce the published values for:
 
 Not every published number is reproduced exactly — where a check surfaced a real discrepancy
 (a stale split-date carried over from an earlier draft, an unresolved metric definition), the
-corresponding output records the discrepancy explicitly rather than silently matching it. See
-each output's own `note`/`status` fields for details.
+discrepancy is documented rather than silently matched. Module outputs hold only method
+descriptions, values computed in the run and identities taken from the study spec; the
+manuscript comparisons, and what each investigation found, are in
+[`examples/livorno_paracentrotus/NOTES.md`](examples/livorno_paracentrotus/NOTES.md).
 
 For exact numerical reproduction (not just the pattern/tolerance `test_paper_values.py` checks),
 use [`requirements-lock.txt`](requirements-lock.txt) — the frozen environment this release's own
@@ -224,5 +226,5 @@ use [`requirements-lock.txt`](requirements-lock.txt) — the frozen environment 
 [`results/mhw_annual_changepoint.json`](results/livorno-paracentrotus/mhw_annual_changepoint.json) applied the same
 changepoint procedure to the annual MHW exposure metric, investigated for a manuscript
 paragraph that no (metric, year-range) variant tried ended up reproducing — that paragraph was
-removed from the manuscript as a result. The output is kept (`cited_in_manuscript: false`) as a
-record of what was tried, but is no longer part of the reproduction check above.
+removed from the manuscript as a result. The module still computes every variant, but is no
+longer part of the reproduction check above; the comparison is recorded in `NOTES.md`.

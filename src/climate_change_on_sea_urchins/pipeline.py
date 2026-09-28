@@ -19,7 +19,7 @@ from . import (
 _NEEDS_RESPONSE = {
     "timeseries", "correlations", "stationarity", "regime_shift", "period_split",
     "cu_speciation", "thermal_legacy", "forecast",
-    "mhw_analysis", "mhw_lag_extra",
+    "mhw_analysis", "mhw_lag_extra", "mhw_robustness", "mhw_lag_annual",
 }
 
 _MODULES = [
