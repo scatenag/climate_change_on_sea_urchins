@@ -2,7 +2,7 @@
   "driver": "mhw_severe_intensity",
   "arm": "arima_prewhitened",
   "status": "not_applicable",
-  "reason": "13 of 17 nonzero months of mhw_severe_intensity fall after the 2016-06 EC50 regime shift (SPLIT_DATE). The ARIMA filter is estimated on the driver alone and does not remove that structural break from the target, so the residual correlation is confounded by the shift rather than reflecting a lagged response to severe events. With the shift removed from EC50 (pre/post demeaned), significant lags (p<0.05) at the best-converging order drop from 10/13 to 1/13. The first-differenced arm (r_diff/p_diff) does not depend on an estimated filter and is the retained result for this driver.",
+  "reason": "13 of 17 nonzero months of mhw_severe_intensity fall on or after the EC50 split date (2016-06). The ARIMA filter is estimated on the driver alone and does not remove a structural break in the target, so for an event driver concentrated on one side of the break the residual correlation can reflect the break rather than a lagged response. The first-differenced arm (r_diff/p_diff) does not depend on an estimated filter and is the retained result for this driver.",
   "diagnostics": {
     "driver": "mhw_severe_intensity",
     "order": [

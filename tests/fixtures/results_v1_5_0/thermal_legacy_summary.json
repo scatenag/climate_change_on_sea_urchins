@@ -1,5 +1,5 @@
 {
-  "hypothesis": "chronic cumulative heat stress (degree-days above 24C, the gametogenesis-blocking threshold per Amato et al. 2025) on the wild adult population drives the EC50 decline (copper is the revealer, not the cause)",
+  "hypothesis": "cumulative heat dose (degree-days above 24C over the preceding 12, 24, 36, 48, 60 months) as a predictor of EC50, beyond the shared time trend",
   "threshold_C": 24.0,
   "windows_months": [
     12,
