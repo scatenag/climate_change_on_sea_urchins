@@ -30,3 +30,9 @@ aggiornamento live.
 voluto (vedi la sezione "Reproducing the manuscript's published numbers" del README, e la
 didascalia del dashboard sulla stessa divergenza). Chi cita un risultato numerico specifico
 deve citare il tag/DOI, non "il repository" genericamente.
+
+## Aggiornamento (29/9/2026)
+
+La decisione resta valida per il congelamento dei **numeri**. L'alternativa scartata «un branch
+permanentemente congelato» è stata poi adottata per uno scopo diverso, il **codice** del
+dashboard citato con i dati che continuano ad arrivare: vedi ADR-0009, che ne accetta i costi.

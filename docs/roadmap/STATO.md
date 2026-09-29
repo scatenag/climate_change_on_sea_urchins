@@ -219,8 +219,8 @@ fixture (con l'1) e sul dato corretto, da confrontare con il manoscritto finale:
 correzioni di errori visibili, `renv.lock` per R), dati aggiornati ogni giorno da
 `update_paper_branch.yml` con il codice del branch. L'app attuale segue `main` e diventa quella di
 sviluppo; lo scambio dei sottodomini su Streamlit lo fa l'utente. Branch protetto; né il branch né
-quel workflow si toccano senza richiesta esplicita (`CLAUDE.md`). Le figure PNG del branch sono
-statiche (vedi PR del job).
+quel workflow si toccano senza richiesta esplicita (`CLAUDE.md`, ADR-0009). Le figure PNG del
+branch sono rigenerate dal job, con titoli descrittivi.
 
 **Issue aperte:**
 - [#3](https://github.com/scatenag/climate_change_on_sea_urchins/issues/3) — dashboard

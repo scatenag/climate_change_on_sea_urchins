@@ -1,3 +1,10 @@
+# ============================================================================
+# DO NOT MODIFY WITHOUT AN EXPLICIT REQUEST FROM THE REPOSITORY OWNER.
+# See docs/adr/0009-paper-branch-frozen-dashboard-code.md: this workflow and
+# the branch it updates, paper/mpb-2026, serve the dashboard cited in the
+# manuscript; neither is touched without an explicit request.
+# ============================================================================
+#
 # Keeps the data of paper/mpb-2026 -- the branch the manuscript's dashboard is
 # published from -- up to date, recomputing with THAT branch's code (v1.5.0
 # plus visible-error fixes), never with main's. The branch's code is frozen;
@@ -21,6 +28,10 @@ on:
         description: "Also run the monthly Copernicus + SST update (normally only on the 5th)"
         type: boolean
         default: false
+      simulate_failure:
+        description: "Fail the update job on purpose, to check that the failure issue is opened and the mention arrives"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +49,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Simulated failure (workflow_dispatch input)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_failure }}
+        run: |
+          echo "::error::simulate_failure=true -- failing on purpose to exercise the alarm path"
+          exit 1
+
       - name: Checkout the paper branch
         uses: actions/checkout@v4
         with:
@@ -146,6 +163,17 @@ jobs:
         if: steps.rebuild.outputs.needed == 'true'
         run: Rscript scripts/mhw_lag_analysis.R
 
+      # The dashboard's figures are PNGs made by the branch's scripts from
+      # results/; regenerated at every rebuild so they never stay behind the
+      # data. Their titles describe, never conclude (ADR-0009).
+      - name: Regenerate the dashboard figures
+        if: steps.rebuild.outputs.needed == 'true'
+        run: |
+          python scripts/make_speciation_figure.py
+          python scripts/make_thermal_legacy_figure.py
+          python scripts/make_regime_shift_figure.py
+          python scripts/make_mhw_lag_annual_figure.py
+
       # Data plausibility checks of the branch itself, BEFORE committing: a
       # failure publishes nothing and raises the alarm below.
       - name: Check data quality
@@ -159,8 +187,8 @@ jobs:
           git add data/ec50_sheets.csv data/ec50_raw.csv data/data_extended.csv data/data_ec50_ci.csv \
                   data/env_copernicus.csv data/sst_daily.csv \
                   data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
-                  results/
-          git diff --cached --quiet || git commit -m "Auto-update (paper/mpb-2026): data and results, frozen code [skip ci]"
+                  results/ figures/
+          git diff --cached --quiet || git commit -m "Auto-update (paper/mpb-2026): data, results and figures, frozen code [skip ci]"
           git push origin "HEAD:${PAPER_BRANCH}"
 
   # Same alarm as the tests after main's update: the day a Copernicus product
@@ -178,9 +206,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TITLE: "Paper branch (paper/mpb-2026) data update failing"
+          TITLE: ${{ inputs.simulate_failure && '[simulated] Paper branch (paper/mpb-2026) data update failing' || 'Paper branch (paper/mpb-2026) data update failing' }}
           BODY: |
-            @${{ github.repository_owner }} the data update of `paper/mpb-2026` failed (event: `${{ github.event_name }}`): the manuscript's dashboard is not receiving new data.
+            @${{ github.repository_owner }} the data update of `paper/mpb-2026` failed (event: `${{ github.event_name }}`${{ inputs.simulate_failure && ', simulate_failure=true: this is a drill' || '' }}): the manuscript's dashboard is not receiving new data.
 
             - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
