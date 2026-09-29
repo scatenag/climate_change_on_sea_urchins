@@ -23,9 +23,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
 
+from climate_change_on_sea_urchins.common import results_dir
+from climate_change_on_sea_urchins.study_spec import load_selected_study
+
 ROOT = Path(__file__).resolve().parent.parent
-d = pd.read_csv(ROOT / "results" / "thermal_legacy.csv", parse_dates=["Datetime"])
-summary = json.loads((ROOT / "results" / "thermal_legacy_summary.json").read_text())
+RES = results_dir(load_selected_study().id)
+d = pd.read_csv(RES / "thermal_legacy.csv", parse_dates=["Datetime"])
+summary = json.loads((RES / "thermal_legacy_summary.json").read_text())
 thr = int(summary["threshold_C"])
 per_window = pd.DataFrame(summary["per_window"]).sort_values("window_months")
 robust = set(summary["windows_robust"])

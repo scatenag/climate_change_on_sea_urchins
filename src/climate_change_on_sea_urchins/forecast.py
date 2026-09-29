@@ -49,8 +49,8 @@ from .common import load_data, load_mhw_annual, default_results_dir, TAU_MAX, RE
 # and it is excluded from the V2.2 comparison table.
 SUPPORTS_WINDOW = False
 WINDOW_UNSUPPORTED_REASON = (
-    "forecast: training period fixed in code from 2016-01-01 and projection beyond the "
-    "record by design; excluded from the V2.2 comparison table"
+    "forecast: training period fixed in code (from 2016-01-01) and projection beyond the "
+    "record by design"
 )
 
 

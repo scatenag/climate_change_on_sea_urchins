@@ -1,5 +1,6 @@
 {
-  "ec50_regime_shift": {
+  "response_label": "EC50",
+  "response_regime_shift": {
     "break": "2016-05-01",
     "p": 1.6176494741534486e-22,
     "pre_mean": 46.67564157706093,
@@ -16,7 +17,7 @@
       "O2": 0.41108408889149717,
       "pH": 0.5174112998347107
     },
-    "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated climate-change axis. Correlation with EC50 is co-trended, not causal."
+    "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies. Its correlation with EC50 is co-trended, not causal."
   },
   "early_warning_signals": {
     "variance_kendall_tau": -0.5244080350129053,
@@ -25,5 +26,5 @@
     "ar1_p": 0.01681055096560299
   },
   "critical_slowing_down_detected": false,
-  "verdict": "Regime shift in EC50 confirmed ~2016 (Pettitt p=1.6e-22). MHW exposure shifts ~2013, ~3 yr BEFORE the biological collapse \u2014 consistent with multi-year population-scale accumulation, not an acute lag. Environmental stress is multifactorial (PC1 = 71% of T/S/CO2/O2/pH variance). Canonical critical-slowing-down early-warning signals are NOT present (absolute variance falls, AR(1) not rising) \u2014 this is a documented regime shift, not a demonstrated dynamical tipping point."
+  "verdict": "Pettitt break in EC50: last month before the change 2016-05, first month after 2016-06 (p=1.6e-22, significant at 0.05). MHW exposure (total MHW days): last year before the change 2013, first year after 2014 (p=0.0055, significant at 0.05). Comparing the last period before each break, the MHW-exposure break is 3 yr earlier than the EC50 break. PC1 explains 71% of the variance of the deseasonalised T/S/CO2/O2/pH anomalies. Critical-slowing-down early-warning signals (rolling variance AND lag-1 autocorrelation both rising, Kendall p<0.05): not detected (variance tau=-0.52, p=2.5e-19; AR(1) tau=+0.14, p=0.017)."
 }

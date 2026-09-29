@@ -124,3 +124,32 @@ serve ai prerequisiti di V2.2.
 
 (`YEAR_MIN`/`YEAR_MAX` di `mhw_lag_annual.py` non è qui: si risolve in V2.2 5b-4 con la regola
 degli anni completi.)
+
+---
+
+## 9. Convenzione della data di una rottura
+
+**Domanda:** una data di rottura indica l'ultimo periodo prima del cambiamento o il primo
+dopo? Oggi i moduli non la usano in modo uniforme, e allinearli cambierebbe valori salvati.
+
+**Contesto:**
+- `regime_shift.py`: `pettitt()` restituisce l'indice dell'**ultima** osservazione prima del
+  cambiamento, e quella data viene salvata (`break`, `break_date`, `break_year`). Per la
+  risposta di Livorno risulta 2016-05. `split_date` e il manoscritto indicano invece il
+  **primo** mese dopo, 2016-06, con lo stesso p del Pettitt mensile. Dal 29/9 il testo del
+  verdict dichiara entrambe le date, ma i campi salvati restano sulla convenzione
+  «ultimo prima».
+- Nello stesso modulo le medie `pre_mean`/`post_mean` tagliano un elemento prima della
+  statistica di Pettitt: `x[:k]` e `x[k:]` mettono l'ultimo mese prima del cambiamento (2016-05)
+  nel periodo dopo, mentre il segmento della statistica è `x[:k+1]`. Vale anche per le rotture
+  annuali MHW e ambientali in `regime_shift_changepoints.csv`.
+- La distanza fra due rotture dipende dalla convenzione quando una è mensile e l'altra
+  annuale. Confrontando gli ultimi periodi prima, MHW 2013 contro risposta 2016-05, sono 3 anni
+  (`exposure_precedes_response_years`). Confrontando i primi periodi dopo, MHW 2014 contro
+  risposta 2016-06, sono 2 anni.
+- `changepoint.py` (QLR/AR(1)) riporta la propria `break_date` dall'indice di rottura
+  dell'algoritmo; quale delle due convenzioni segua non è stato verificato.
+
+Allineare significa scegliere una convenzione per tutti i moduli, correggere le medie di
+`regime_shift` e aggiornare i valori salvati e il riferimento del golden master: una modifica
+di risultati, da decidere esplicitamente.

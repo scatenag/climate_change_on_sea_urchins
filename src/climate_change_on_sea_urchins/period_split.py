@@ -54,7 +54,7 @@ def _raw_trial_contrast(window=None):
             "descriptive, not inferential. The monthly-series contrast in "
             "period_means.csv/kruskal_stats.json is this module's primary "
             "pre/post test; this is a secondary, trial-level view of the "
-            "same contrast, reported in the manuscript alongside it."
+            "same contrast."
         ),
     }
 

@@ -83,9 +83,9 @@ PUBLISHED_SPLIT_DATE = pd.Timestamp("2016-01-01")
 
 LEVENE_CENTERS = ("mean", "median", "trimmed")  # scipy default is 'median'
 
-# Quality check added 2026-09 after trial ID 224 (2020-01-01, replicates
-# [14, 1, 14]) turned out to be an uncorrected source-data outlier that
-# shifted the Spearman trend result (see module docstring). Flags any
+# Quality check added 2026-09 after a source-data typo in one replicate
+# (trial ID 224, since corrected at the source) shifted the Spearman trend
+# result -- see examples/livorno_paracentrotus/NOTES.md. Flags any
 # single replicate that deviates from the mean of the OTHER TWO replicates
 # of its own trial by more than OUTLIER_SD_THRESHOLD standard deviations of
 # the pooled replicate distribution (all 3*n readings across every trial
@@ -93,8 +93,7 @@ LEVENE_CENTERS = ("mean", "median", "trimmed")  # scipy default is 'median'
 # one: with only two "other" values, a per-trial standard deviation is
 # degenerate (zero whenever the other two happen to tie, which is common at
 # this measurement's resolution) and would falsely flag any disagreement at
-# all. Verified against trial 224: flags exactly that one record and no
-# other, on the current data.
+# all.
 OUTLIER_SD_THRESHOLD = 3.0
 
 
@@ -191,30 +190,8 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
             f"data: {n_with} of {n_total} trials."
         ),
         "trend": {
-            "status": "open",
             "spearman_rho": float(rho),
             "spearman_p": float(p_trend),
-            "manuscript_spearman_rho": 0.07,
-            "manuscript_spearman_p": 0.30,
-            "note": (
-                "OPEN, not an accepted rounding difference: trial ID 224 "
-                "(2020-01-01, replicates [14, 1, 14]) is a source-data "
-                "outlier (see replicate_outlier_flags), still uncorrected "
-                "in the sheet as of this run. spearman_rho/spearman_p above "
-                "are this module's own computation on data/ec50_raw.csv "
-                "exactly as fetched -- outlier included, unmodified. "
-                "Independently, G. Scatena/Davide (2026-09-11) report that "
-                "computing 'with the outlier still present' gives "
-                "rho=+0.0666/p=0.3124 (matching the manuscript's 0.07/0.30) "
-                "and 'without it' gives rho=+0.0706/p=0.2843 (matching this "
-                "module's own value above) -- i.e. they attribute this "
-                "module's as-fetched output to the CORRECTED scenario, not "
-                "the as-fetched one this module actually ran. That "
-                "attribution is not reconciled here (several ways of "
-                "excluding/correcting trial 224 were tried and none "
-                "reproduced 0.0666/0.3124); recorded as reported, pending "
-                "Davide's decision on the source row."
-            ),
         },
         "pre_post_current_split": current_split,
         "pre_post_published_split": {
@@ -231,14 +208,10 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
             "trim_0.10_primary": cp_010,
             "trim_0.15_module_default": cp_015,
             "note": (
-                "trim=0.10 locates the manuscript's reported break (Oct "
-                "2022, n=203/29); trim=0.15 (changepoint.py's module "
-                "default, used for the EC50 series) excludes that index "
-                "from its search window (it sits at ~88% of the series) "
-                "and finds a different, also non-significant break instead. "
-                "Both trims are within the 10-15% range the manuscript's "
-                "methods declare; both agree on the conclusion: no "
-                "significant changepoint in the negative-control series."
+                "QLR/AR(1) changepoint search on the per-trial negative-control mean, "
+                "at two trims (the fraction of the series excluded at each end from "
+                "the break search): 0.10, and 0.15 (changepoint.py's module default). "
+                "Both are reported."
             ),
         },
         "replicate_outlier_flags": {
@@ -251,9 +224,7 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
                 "OTHER TWO replicates of its own trial by more than "
                 f"{OUTLIER_SD_THRESHOLD:g} standard deviations of the "
                 "pooled replicate distribution (all readings across every "
-                "trial with a control). Added after trial 224 (2020-01-01) "
-                "turned out to be an uncorrected source-data outlier (see "
-                "the 'trend' section above) -- to catch the next one."
+                "trial with a control)."
             ),
         },
     }
@@ -263,7 +234,7 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None):
 
     print(
         f"✓ negative control: n={n_with}/{n_total} with control | "
-        f"trend rho={rho:+.3f} p={p_trend:.3f} [OPEN, see JSON] | "
+        f"trend rho={rho:+.3f} p={p_trend:.3f} | "
         f"pre/post(SPLIT_DATE) {current_split['mean_pre']:.1f}%/"
         f"{current_split['mean_post']:.1f}% MWU p={current_split['mannwhitney_p']:.3f} | "
         f"QLR(trim=0.10) break={cp_010['break_date']} p={cp_010['p_value']:.3f} | "

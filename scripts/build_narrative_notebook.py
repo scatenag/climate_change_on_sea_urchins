@@ -45,7 +45,9 @@ from IPython.display import Image, display
 from climate_change_on_sea_urchins import load_data
 from climate_change_on_sea_urchins import cu_speciation, thermal_legacy, regime_shift, mhw_lag_annual
 
-RESULTS, FIGS = Path("results"), Path("figures")
+from climate_change_on_sea_urchins.common import results_dir
+from climate_change_on_sea_urchins.study_spec import load_selected_study
+RESULTS, FIGS = results_dir(load_selected_study().id), Path("figures")
 def run_fig(script):  # regenerate a figure reproducibly
     subprocess.run([sys.executable, f"scripts/{script}"], check=True)
 
@@ -83,9 +85,9 @@ cells.append(code(
 """cu_speciation.run(); run_fig("make_speciation_figure.py")
 s = json.load(open(RESULTS/"cu_speciation_summary.json"))
 print(f"Realized pH change pre→post: {s['delta_pH']:+.3f} units")
-print(f"Nominal EC50 decline:            {s['ec50_decline_nominal_pct']:.1f}%")
+print(f"Nominal EC50 decline:            {s['response_decline_nominal_pct']:.1f}%")
 print(f"Explained by OA chemistry:       ~{s['geochemical_share_literature_pct']:.0f}%")
-print(f"Residual (biological) decline:   {s['ec50_decline_corrected_literature_pct']:.1f}%  "
+print(f"Residual (biological) decline:   {s['response_decline_corrected_literature_pct']:.1f}%  "
       f"(Mann-Whitney p={s['biological_residual_mannwhitney_p']:.0e})")
 display(Image(str(FIGS/"fig_cu_speciation_decomposition.png")))"""))
 
@@ -129,7 +131,7 @@ early-warning-signal diagnostics — reported honestly.
 cells.append(code(
 """regime_shift.run(); run_fig("make_regime_shift_figure.py")
 r = json.load(open(RESULTS/"regime_shift_summary.json"))
-print(f"EC50 regime shift:        {r['ec50_regime_shift']['break']} (p={r['ec50_regime_shift']['p']:.0e})")
+print(f"EC50 regime shift:        {r['response_regime_shift']['break']} (p={r['response_regime_shift']['p']:.0e})")
 print(f"Environment shifts:       ~{r['mhw_exposure_break_year']} (MHW days, T, CO2, pH together)")
 print(f"Accumulation lag:         ~{r['exposure_precedes_response_years']} years (exposure → response)")
 print(f"Stress axis PC1 variance: {r['multifactorial_stress_index']['pc1_variance_explained']*100:.0f}%")

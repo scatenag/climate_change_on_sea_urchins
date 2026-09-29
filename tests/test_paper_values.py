@@ -34,23 +34,15 @@ def test_negative_control_trial_counts(paper_results):
     assert r["n_without_negative_control"] == 63
 
 
-def test_negative_control_trend_is_open_not_accepted(paper_results):
-    # NOT a rounding difference: trial ID 224 (2020-01-01, replicates
-    # [14, 1, 14]) is an uncorrected source-data outlier -- see
-    # negative_control.py's module docstring and this result's own "note"
-    # field. This module computes on the data exactly as fetched (outlier
-    # included, unmodified); the manuscript's own p=0.30 is recorded
-    # alongside it for comparison, not asserted as reproduced. Both values
-    # are well above any conventional significance threshold, so the
-    # qualitative conclusion (no trend) is unaffected either way -- but the
-    # numeric mismatch stays open pending Davide's decision on the source
-    # row, not silently accepted here.
+def test_negative_control_trend_on_the_frozen_fixture(paper_results):
+    # The frozen fixture still carries a source-data typo in trial 224's
+    # replicates (since corrected at the source), so these are the fixture's
+    # values, not the manuscript's -- the comparison with the manuscript is
+    # in examples/livorno_paracentrotus/NOTES.md.
     r = _results(paper_results, "negative_control.json")["trend"]
-    assert r["status"] == "open"
+    assert set(r) == {"spearman_rho", "spearman_p"}, "the output holds computed values only"
     assert r["spearman_rho"] == pytest.approx(0.0706, abs=0.001)
     assert r["spearman_p"] == pytest.approx(0.2844, abs=0.001)
-    assert r["manuscript_spearman_rho"] == pytest.approx(0.07, abs=0.001)
-    assert r["manuscript_spearman_p"] == pytest.approx(0.30, abs=0.001)
 
 
 def test_negative_control_replicate_outlier_flag_catches_trial_224(paper_results):
@@ -162,15 +154,15 @@ def test_thermal_threshold_sensitivity_24C_is_primary_and_matches_main_analysis(
 # ---------------------------------------------------------------------------
 # Section 3.5, 2nd paragraph -- annual MHW-metric changepoint (Compito D)
 #
-# CLOSED 2026-09-14: D. Sartori removed the paragraph this was written to
-# reproduce from the manuscript (this module's own investigation is what
-# surfaced the discrepancy that led to the removal). There is no longer a
-# manuscript number to reproduce, so this only checks the module still
-# records that plainly and keeps its variant table intact -- not a
+# CLOSED 2026-09-14: the paragraph this was written to reproduce was removed
+# from the manuscript (this module's own investigation is what surfaced the
+# discrepancy that led to the removal). There is no longer a manuscript
+# number to reproduce, so this only checks the module keeps its variant
+# table intact -- not a
 # reproduction test any more.
 # ---------------------------------------------------------------------------
 
-def test_mhw_annual_changepoint_no_longer_cited(paper_results):
+def test_mhw_annual_changepoint_records_every_variant(paper_results):
     r = _results(paper_results, "mhw_annual_changepoint.json")
-    assert r["cited_in_manuscript"] is False
-    assert len(r["variants"]) == 8, "expected 2 metrics x 4 year ranges, kept as a record"
+    assert set(r) == {"variants", "note"}, "the output holds computed values and a method note only"
+    assert len(r["variants"]) == 8, "expected 2 metrics x 4 year ranges"

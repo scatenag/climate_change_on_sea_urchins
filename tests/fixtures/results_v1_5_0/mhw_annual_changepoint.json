@@ -1,14 +1,4 @@
 {
-  "status": "unresolved",
-  "cited_in_manuscript": false,
-  "manuscript_citation_note": "The section 3.5 2nd-paragraph this module was written to reproduce was removed from the manuscript (D. Sartori, 2026-09-14) -- this module's own investigation is what surfaced the discrepancy that led to the removal. Left in place, unresolved, as a record of what was tried; nothing below is reproducing a manuscript number any more.",
-  "manuscript_reference": {
-    "phi": 0.19,
-    "break_year": 2014,
-    "bootstrap_p": 0.076,
-    "ci90_lo_year": 2010,
-    "ci90_hi_year": 2020
-  },
   "variants": [
     {
       "metric": "composite_zscore_4_descriptors",
@@ -123,6 +113,5 @@
       "trim": 0.15
     }
   ],
-  "structural_cause": "2023 and 2025 have composite z-scores of +1.82 and +1.94 against +0.64 for 2014 -- whenever both are included in the series, they dominate qlr_ar1_changepoint's Quandt-F search over any two-mean split, so the reported break lands at 2022 (splitting the extreme 2022-2025 tail from the rest) regardless of the metric definition. The manuscript's 2014 break and phi only co-occur with year ranges/metrics that exclude or dilute that tail, and none of those also reproduce the marginal bootstrap p (0.076) or the wide CI90 ([2010,2020]) the manuscript reports alongside it.",
-  "note": "No (metric, year_range) variant above reproduces all four manuscript_reference values simultaneously. This is recorded as an open, unresolved discrepancy, not corrected or resolved here -- see module docstring. The composite_zscore_4_descriptors / 2004-2025 variant reproduces phi (+0.184 vs +0.19) most closely, but its break_year/bootstrap_p/CI90 do not match; no variant is otherwise closer on balance, and none is marked as primary or preferred."
+  "note": "Every (metric, year range) variant is reported side by side, in a fixed alphabetical order; none is marked as primary or preferred."
 }

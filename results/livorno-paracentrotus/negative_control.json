@@ -4,12 +4,8 @@
   "n_without_negative_control": 63,
   "note_validity_criterion": "The negative control is a per-trial validity field, present only when the trial's validity criterion was supported by data: 233 of 296 trials.",
   "trend": {
-    "status": "open",
     "spearman_rho": 0.083400968362811,
-    "spearman_p": 0.20464626476692077,
-    "manuscript_spearman_rho": 0.07,
-    "manuscript_spearman_p": 0.3,
-    "note": "OPEN, not an accepted rounding difference: trial ID 224 (2020-01-01, replicates [14, 1, 14]) is a source-data outlier (see replicate_outlier_flags), still uncorrected in the sheet as of this run. spearman_rho/spearman_p above are this module's own computation on data/ec50_raw.csv exactly as fetched -- outlier included, unmodified. Independently, G. Scatena/Davide (2026-09-11) report that computing 'with the outlier still present' gives rho=+0.0666/p=0.3124 (matching the manuscript's 0.07/0.30) and 'without it' gives rho=+0.0706/p=0.2843 (matching this module's own value above) -- i.e. they attribute this module's as-fetched output to the CORRECTED scenario, not the as-fetched one this module actually ran. That attribution is not reconciled here (several ways of excluding/correcting trial 224 were tried and none reproduced 0.0666/0.3124); recorded as reported, pending Davide's decision on the source row."
+    "spearman_p": 0.20464626476692077
   },
   "pre_post_current_split": {
     "split_date": "2016-06-01",
@@ -41,8 +37,8 @@
   "changepoint_qlr_ar1": {
     "trim_0.10_primary": {
       "n": 233,
-      "phi": 0.1574684813671244,
-      "F_max": 7.8808730341994755,
+      "phi": 0.15746848136712446,
+      "F_max": 7.88087303419944,
       "break_index": 203,
       "p_value": 0.08597134288570477,
       "ci90_lo_index": 68,
@@ -58,8 +54,8 @@
     },
     "trim_0.15_module_default": {
       "n": 233,
-      "phi": 0.1574684813671244,
-      "F_max": 5.657986364778872,
+      "phi": 0.15746848136712446,
+      "F_max": 5.657986364778909,
       "break_index": 198,
       "p_value": 0.1716094635121626,
       "ci90_lo_index": 52,
@@ -73,13 +69,13 @@
       "mean_pre": 13.792929292929292,
       "mean_post": 14.742857142857142
     },
-    "note": "trim=0.10 locates the manuscript's reported break (Oct 2022, n=203/29); trim=0.15 (changepoint.py's module default, used for the EC50 series) excludes that index from its search window (it sits at ~88% of the series) and finds a different, also non-significant break instead. Both trims are within the 10-15% range the manuscript's methods declare; both agree on the conclusion: no significant changepoint in the negative-control series."
+    "note": "QLR/AR(1) changepoint search on the per-trial negative-control mean, at two trims (the fraction of the series excluded at each end from the break search): 0.10, and 0.15 (changepoint.py's module default). Both are reported."
   },
   "replicate_outlier_flags": {
     "threshold_sd": 3.0,
     "pooled_replicate_sd": 2.352253995642684,
     "n_flagged": 0,
     "flags": [],
-    "note": "Flags any single replicate deviating from the mean of the OTHER TWO replicates of its own trial by more than 3 standard deviations of the pooled replicate distribution (all readings across every trial with a control). Added after trial 224 (2020-01-01) turned out to be an uncorrected source-data outlier (see the 'trend' section above) -- to catch the next one."
+    "note": "Flags any single replicate deviating from the mean of the OTHER TWO replicates of its own trial by more than 3 standard deviations of the pooled replicate distribution (all readings across every trial with a control)."
   }
 }

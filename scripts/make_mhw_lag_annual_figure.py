@@ -19,9 +19,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
 
+from climate_change_on_sea_urchins.common import results_dir
+from climate_change_on_sea_urchins.study_spec import load_selected_study
+
 ROOT = Path(__file__).resolve().parent.parent
-grid = pd.read_csv(ROOT / "results" / "mhw_lag_annual.csv")
-summ = json.load((ROOT / "results" / "mhw_lag_annual_summary.json").open())
+RES = results_dir(load_selected_study().id)
+grid = pd.read_csv(RES / "mhw_lag_annual.csv")
+summ = json.load((RES / "mhw_lag_annual_summary.json").open())
 
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.3), gridspec_kw={"width_ratios": [1.25, 1]})
 

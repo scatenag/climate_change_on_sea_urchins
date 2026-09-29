@@ -2094,11 +2094,11 @@ def _tab_mhw_gametes():
                             line=dict(width=0), name="Bootstrap CI 95%",
                         ))
                     fig_sea.add_trace(go.Scatter(
-                        x=sea_df["lag"], y=sea_df["mean_ec50"],
+                        x=sea_df["lag"], y=sea_df["mean_response"],
                         mode="lines+markers", name="Composite EC50",
                         line=dict(color=WARM, width=2),
                     ))
-                    fig_sea.add_hline(y=float(sea_df["mean_ec50"].mean()), line_dash="dash",
+                    fig_sea.add_hline(y=float(sea_df["mean_response"].mean()), line_dash="dash",
                                       line_color="grey", annotation_text="overall mean")
                     fig_sea.add_vline(x=0, line_dash="dash", line_color="black")
                     fig_sea.update_layout(
@@ -2243,9 +2243,9 @@ def _tab_mhw_gametes():
                         "clearly above the reverse direction (blue)."
                     )
                     fig = go.Figure()
-                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_ec50_to_mhw"],
+                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_response_to_mhw"],
                                               name="EC50 → MHW (reverse)", line=dict(color=OCEAN)))
-                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_mhw_to_ec50"],
+                    fig.add_trace(go.Scatter(x=ccm["lib_length"], y=ccm["skill_mhw_to_response"],
                                               name="MHW → EC50 (hypothesized)", line=dict(color=WARM)))
                     fig.update_layout(title="CCM cross-mapping skill vs. library length",
                                        xaxis_title="Library length", yaxis_title="Cross-map skill (ρ)",
@@ -2697,12 +2697,12 @@ def _tab_regime_shift():
         cu = _json("cu_speciation_summary.json")
         if cu:
             a, b, c, d = st.columns(4)
-            a.metric("Nominal EC50 decline", f"{cu['ec50_decline_nominal_pct']:.0f}%")
+            a.metric("Nominal EC50 decline", f"{cu['response_decline_nominal_pct']:.0f}%")
             b.metric("Explained by OA chemistry", f"~{cu['geochemical_share_literature_pct']:.0f}%",
                      help="Free-Cu²⁺ speciation shift from the measured pH change (Cu is the "
                           "ADDED positive control; ambient pH sets its speciation in the natural "
                           "test seawater).")
-            c.metric("Residual = biology", f"{cu['ec50_decline_corrected_literature_pct']:.0f}%")
+            c.metric("Residual = biology", f"{cu['response_decline_corrected_literature_pct']:.0f}%")
             d.metric("Residual significance", f"p={cu['biological_residual_mannwhitney_p']:.0e}")
             st.markdown(
                 "The realized site pH change is only ~0.01 units, so copper "
@@ -2807,29 +2807,24 @@ def _tab_regime_shift():
         rs = _json("regime_shift_summary.json")
         if rs:
             a, b, c, d = st.columns(4)
-            a.metric("EC50 regime shift", rs["ec50_regime_shift"]["break"][:7],
-                     help=f"Pettitt changepoint, p={rs['ec50_regime_shift']['p']:.0e}")
+            a.metric("EC50 regime shift", rs["response_regime_shift"]["break"][:7],
+                     help=f"Pettitt changepoint, last month before the change "
+                          f"(p={rs['response_regime_shift']['p']:.0e})")
             b.metric("Environment shifts", str(rs["mhw_exposure_break_year"]),
-                     help="MHW days / cumulative intensity, Temperature, CO₂, pH all break ~here")
-            c.metric("Accumulation lag", f"~{rs['exposure_precedes_response_years']} yr",
-                     help="exposure precedes the biological collapse")
+                     help="Pettitt changepoint of annual total MHW days, last year before the "
+                          "change; its p is in the verdict below")
+            c.metric("Years between breaks", f"{rs['exposure_precedes_response_years']} yr",
+                     help="last period before each Pettitt break (MHW exposure vs response); "
+                          "whether both breaks are significant is stated in the verdict below")
             d.metric("Stress axis (PC1)",
                      f"{rs['multifactorial_stress_index']['pc1_variance_explained']*100:.0f}%",
-                     help="one coordinated warming+acidification+deoxygenation axis")
-            st.markdown(
-                "The environment (marine-heatwave exposure, temperature, CO₂, pH) changes "
-                f"state ~{rs['mhw_exposure_break_year']}; the population's copper tolerance "
-                f"collapses ~{rs['ec50_regime_shift']['break'][:4]} — a "
-                f"~{rs['exposure_precedes_response_years']}-year accumulation lag on the "
-                "long-lived wild adults."
-            )
-            if not rs["critical_slowing_down_detected"]:
-                st.info(
-                    "**Honest caveat:** this is a documented *regime shift*, not a "
-                    "demonstrated *tipping point*. The canonical critical-slowing-down "
-                    "early-warning signals (rising variance and autocorrelation) are **not** "
-                    "present, so we do not claim a dynamical critical transition."
-                )
+                     help="PC1 of the deseasonalised T/S/CO2/O2/pH anomalies")
+            # The verdict is generated by regime_shift.py from the values it
+            # computes (break p-values, date convention, early-warning trends):
+            # shown as is, instead of hand-written conclusions that could
+            # contradict those values -- as the previous text here did, saying
+            # autocorrelation was not rising while AR(1) tau was +0.14, p=0.017.
+            st.markdown(rs["verdict"])
         _img = FIGS / "fig_regime_shift.png"
         if _img.exists():
             st.image(str(_img), use_container_width=True)

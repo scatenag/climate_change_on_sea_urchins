@@ -250,12 +250,11 @@ def _assert_declared_counts_match_the_window(out: Path, w: WindowSpec, data_dir:
     n_tied = int(raw["Datetime"].duplicated(keep=False).sum())
     assert n_months < 163 and n_trials < 295, "the check is only meaningful on a window shorter than the record"
 
-    cp = json.loads((out / "changepoint_ec50.json").read_text())
+    cp = json.loads((out / "changepoint_response.json").read_text())
     assert cp["monthly_series"]["n"] == n_months
     assert cp["ordinal_sequence"]["n"] == n_trials
     assert f"its {n_months} dates" in cp["note"]
     assert f"~{n_tied} of its {n_trials} rows" in cp["note"]
-    assert f"YEAR ({cp['monthly_series']['break_date'][:4]})" in cp["note"]
 
     st = {r["variable"]: r for r in json.loads((out / "stationarity_results.json").read_text())}
     assert st["EC50"]["n"] == n_months

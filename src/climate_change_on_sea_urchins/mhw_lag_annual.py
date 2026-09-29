@@ -33,7 +33,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from .common import load_data, default_results_dir, RESPONSE_COL, load_mhw_annual
+from .common import load_data, default_results_dir, RESPONSE_COL, load_mhw_annual, default_response_spec
 
 PREDICTORS = ["event_count", "total_mhw_days", "cum_intensity_sum", "max_intensity"]
 LAGS = [0, 1, 2, 3]
@@ -45,8 +45,11 @@ def _detrend(s: pd.Series) -> pd.Series:
                      index=s.index)
 
 
-def run(results=None):
+def run(response=None, results=None):
     results = results if results is not None else default_results_dir()
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for output text below
     _, df_real, _, _ = load_data()
     real = df_real.dropna(subset=[RESPONSE_COL])
     ec = real.assign(y=real["Datetime"].dt.year).groupby("y")[RESPONSE_COL].mean()
@@ -99,6 +102,8 @@ def run(results=None):
                else "exploratory_suggestive" if best["p_detrended"] < 0.05
                else "no_signal_beyond_trend")
 
+    count_lag1_p = float(
+        grid[(grid.predictor == "event_count") & (grid.lag_years == 1)]["p_detrended"].iloc[0])
     summary = {
         "best_signal": {
             "predictor": best["predictor"], "lag_years": int(best["lag_years"]), "n": int(best["n"]),
@@ -112,16 +117,21 @@ def run(results=None):
             "jackknife_frac_below_0p05": float((jack_ps < 0.05).mean()),
             "reverse_direction_rho": float(rev_r), "reverse_direction_p": float(rev_p),
         },
-        "event_count_lag1_detrended_p": float(
-            grid[(grid.predictor == "event_count") & (grid.lag_years == 1)]["p_detrended"].iloc[0]),
+        "event_count_lag1_detrended_p": count_lag1_p,
         "verdict": verdict,
+        # Generated from the values computed above: a fixed conclusion could
+        # contradict them on other data.
         "interpretation": (
-            "Exposure DURATION (MHW days) in the previous year predicts EC50 after detrending "
-            "(Spearman rho={:.2f}, p={:.3f}); event COUNT does not. Robust to jackknife and "
-            "direction-asymmetric, but Pearson-weak and does not survive FDR — a suggestive, "
-            "pre-registration-worthy carry-over hypothesis, not a demonstrated effect. Consistent "
-            "with a delayed (not acute) mechanism, unlike the 2025 acute-exposure experiment."
-        ).format(best["rho_detrended"], best["p_detrended"]),
+            f"Strongest detrended association: {best['predictor']} lagged "
+            f"{int(best['lag_years'])} yr with annual {label} (Spearman "
+            f"rho={best['rho_detrended']:.2f}, p={best['p_detrended']:.3f}; BH-FDR-adjusted "
+            f"p={best_fdr:.3f} across the {len(grid)}-test grid, "
+            f"{'survives' if survives_fdr else 'does not survive'} FDR). event_count at lag 1: "
+            f"detrended p={count_lag1_p:.3f}. Leave-one-year-out jackknife: "
+            f"{(jack_ps < 0.05).mean() * 100:.0f}% of p-values below 0.05. Pearson on the "
+            f"detrended series: r={pear_r:.2f}, p={pear_p:.3f}. Reverse direction ({label} "
+            f"leading MHW): rho={rev_r:.2f}, p={rev_p:.3f}. Verdict: {verdict}."
+        ),
     }
     with (results / "mhw_lag_annual_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)

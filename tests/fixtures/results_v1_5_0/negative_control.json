@@ -4,12 +4,8 @@
   "n_without_negative_control": 63,
   "note_validity_criterion": "The negative control is a per-trial validity field, present only when the trial's validity criterion was supported by data: 232 of 295 trials.",
   "trend": {
-    "status": "open",
     "spearman_rho": 0.07057659877474538,
-    "spearman_p": 0.2843853848524096,
-    "manuscript_spearman_rho": 0.07,
-    "manuscript_spearman_p": 0.3,
-    "note": "OPEN, not an accepted rounding difference: trial ID 224 (2020-01-01, replicates [14, 1, 14]) is a source-data outlier (see replicate_outlier_flags), still uncorrected in the sheet as of this run. spearman_rho/spearman_p above are this module's own computation on data/ec50_raw.csv exactly as fetched -- outlier included, unmodified. Independently, G. Scatena/Davide (2026-09-11) report that computing 'with the outlier still present' gives rho=+0.0666/p=0.3124 (matching the manuscript's 0.07/0.30) and 'without it' gives rho=+0.0706/p=0.2843 (matching this module's own value above) -- i.e. they attribute this module's as-fetched output to the CORRECTED scenario, not the as-fetched one this module actually ran. That attribution is not reconciled here (several ways of excluding/correcting trial 224 were tried and none reproduced 0.0666/0.3124); recorded as reported, pending Davide's decision on the source row."
+    "spearman_p": 0.2843853848524096
   },
   "pre_post_current_split": {
     "split_date": "2016-06-01",
@@ -73,7 +69,7 @@
       "mean_pre": 13.212765957446805,
       "mean_post": 14.090090090090092
     },
-    "note": "trim=0.10 locates the manuscript's reported break (Oct 2022, n=203/29); trim=0.15 (changepoint.py's module default, used for the EC50 series) excludes that index from its search window (it sits at ~88% of the series) and finds a different, also non-significant break instead. Both trims are within the 10-15% range the manuscript's methods declare; both agree on the conclusion: no significant changepoint in the negative-control series."
+    "note": "QLR/AR(1) changepoint search on the per-trial negative-control mean, at two trims (the fraction of the series excluded at each end from the break search): 0.10, and 0.15 (changepoint.py's module default). Both are reported."
   },
   "replicate_outlier_flags": {
     "threshold_sd": 3.0,
@@ -93,6 +89,6 @@
         "threshold": 7.196810206756286
       }
     ],
-    "note": "Flags any single replicate deviating from the mean of the OTHER TWO replicates of its own trial by more than 3 standard deviations of the pooled replicate distribution (all readings across every trial with a control). Added after trial 224 (2020-01-01) turned out to be an uncorrected source-data outlier (see the 'trend' section above) -- to catch the next one."
+    "note": "Flags any single replicate deviating from the mean of the OTHER TWO replicates of its own trial by more than 3 standard deviations of the pooled replicate distribution (all readings across every trial with a control)."
   }
 }

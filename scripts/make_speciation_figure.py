@@ -23,10 +23,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-from climate_change_on_sea_urchins.common import SPLIT_DATE
+from climate_change_on_sea_urchins.common import SPLIT_DATE, results_dir
+from climate_change_on_sea_urchins.study_spec import load_selected_study
 
 ROOT = Path(__file__).resolve().parent.parent
-RESULTS = ROOT / "results"
+RESULTS = results_dir(load_selected_study().id)
 
 d = pd.read_csv(RESULTS / "cu_speciation_decomposition.csv", parse_dates=["Datetime"])
 s = json.load((RESULTS / "cu_speciation_summary.json").open())
@@ -62,7 +63,7 @@ ax1.legend(frameon=False, fontsize=8, loc="upper right")
 ax1.spines[["top", "right"]].set_visible(False)
 
 # ---- (b) attribution ----
-nominal = s["ec50_decline_nominal_pct"]
+nominal = s["response_decline_nominal_pct"]
 geo = s["geochemical_share_literature_pct"]          # % of the decline
 geo_pts = nominal * geo / 100.0                       # in EC50-decline percentage points
 bio_pts = nominal - geo_pts

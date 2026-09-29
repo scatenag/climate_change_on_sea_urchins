@@ -20,8 +20,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from climate_change_on_sea_urchins.common import results_dir
+from climate_change_on_sea_urchins.study_spec import load_selected_study
+
 ROOT = Path(__file__).resolve().parent.parent
-RES = ROOT / "results"
+RES = results_dir(load_selected_study().id)
 
 cp = pd.read_csv(RES / "regime_shift_changepoints.csv")
 summ = json.load((RES / "regime_shift_summary.json").open())
@@ -35,7 +38,7 @@ ec50 = ec50[ec50.EC50_imputed == False].dropna(subset=["EC50"])
 ec50_year = ec50.assign(y=ec50.Datetime.dt.year).groupby("y")["EC50"].mean()
 
 mhw_break = summ["mhw_exposure_break_year"]
-ec50_break = int(summ["ec50_regime_shift"]["break"][:4])
+ec50_break = int(summ["response_regime_shift"]["break"][:4])
 lag = summ["exposure_precedes_response_years"]
 
 C_MHW, C_EC, C_STR = "#c0392b", "#1f3b73", "#6b4c9a"

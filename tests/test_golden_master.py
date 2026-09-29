@@ -137,7 +137,7 @@ TOLERANCE_BY_FILE = {
     "trends_all.csv": TIGHT, "trends_post.csv": TIGHT, "trends_pre.csv": TIGHT,
 
     # -- seeded bootstrap / RNG (all seeds fixed and exposed, per CLAUDE.md) --
-    "changepoint_ec50.json": MODERATE,
+    "changepoint_response.json": MODERATE,
     "negative_control.json": MODERATE,
     "mhw_annual_changepoint.json": MODERATE,
     "robustness_ml_importance.csv": MODERATE, "robustness_ml_cv_r2.json": MODERATE,

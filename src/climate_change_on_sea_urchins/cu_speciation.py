@@ -167,7 +167,10 @@ def run(response=None, results=None):
     u_lit, p_bio_lit = stats.mannwhitneyu(d.loc[pre_mask, bio_lit_col],
                                           d.loc[post_mask, bio_lit_col], alternative="greater")
 
+    # Generic key names (an output key is a schema the dashboard reads); the
+    # response's identity is recorded as a value, never in a key.
     summary = {
+        "response_label": label,
         "n_pre": int(pre_mask.sum()),
         "n_post": int(post_mask.sum()),
         "pH_pre_mean": float(d.loc[pre_mask, "pH"].mean()),
@@ -177,9 +180,9 @@ def run(response=None, results=None):
         "CO3_post_umol_kg": float(d.loc[post_mask, "CO3"].mean() * 1e6),
         "fCu_amplification_post_carbonate": float(d.loc[post_mask, "fCu_amplification"].mean()),
         "fCu_amplification_post_literature": float(d.loc[post_mask, "fCu_amplification_lit"].mean()),
-        "ec50_decline_nominal_pct": float(dec_nom),
-        "ec50_decline_corrected_carbonate_pct": float(dec_bio_carb),
-        "ec50_decline_corrected_literature_pct": float(dec_bio_lit),
+        "response_decline_nominal_pct": float(dec_nom),
+        "response_decline_corrected_carbonate_pct": float(dec_bio_carb),
+        "response_decline_corrected_literature_pct": float(dec_bio_lit),
         "geochemical_share_carbonate_pct": float(share_carb),
         "geochemical_share_literature_pct": float(share_lit),
         "biological_residual_mannwhitney_p": float(p_bio_carb),
@@ -188,7 +191,7 @@ def run(response=None, results=None):
     with (results / "cu_speciation_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"✓ cu_speciation: nominal EC50 decline {dec_nom:.1f}% | "
+    print(f"✓ cu_speciation: nominal {label} decline {dec_nom:.1f}% | "
           f"geochemical share {share_lit:.0f}% (lit) / {share_carb:.0f}% (carbonate); "
           f"residual biological decline {dec_bio_lit:.1f}% "
           f"(p={p_bio_lit:.1e} lit, p={p_bio_carb:.1e} carbonate)")

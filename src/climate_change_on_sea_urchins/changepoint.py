@@ -62,7 +62,7 @@ regime_shift.py is untouched: its own Pettitt break stays where it is, and
 uses its own (0-indexed) convention, unrelated to the internal auxiliary
 split used here.
 
-Output: results/changepoint_ec50.json
+Output: results/<study_id>/changepoint_response.json
 """
 import json
 
@@ -265,7 +265,6 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None, window=None):
     # Counts and the break year in the note come from the data actually
     # analysed (the window's, when there is one), never from literals.
     n_tied = int(raw["Datetime"].duplicated(keep=False).sum())
-    break_year = monthly_res["break_date"][:4]
     summary = {
         "ordinal_sequence": ordinal,
         "monthly_series": monthly_res,
@@ -277,14 +276,14 @@ def run(B=DEFAULT_B, seed=DEFAULT_SEED, results=None, window=None):
             "Datetime (many determinations record only the month), so its "
             "order is not implied by the data and requires the explicit "
             "(Datetime, ID) tiebreak above to even be reproducible -- with "
-            "that fixed, it still does not resolve the break-MONTH (it is "
-            "sensitive to which of many equally-valid tie orders is chosen; "
-            f"see module docstring), only the YEAR ({break_year}) is a stable finding "
-            "across representations and orderings tested."
+            "that fixed, its break-MONTH remains sensitive to which of many "
+            "equally-valid tie orders is chosen (see module docstring)."
         ),
     }
 
-    with (results / "changepoint_ec50.json").open("w") as f:
+    # Generic file name: the response's identity never goes into an output's
+    # name (a label may hold characters unfit for one -- docs/adr/0000, item 6).
+    with (results / "changepoint_response.json").open("w") as f:
         json.dump(summary, f, indent=2)
 
     o, m = summary["ordinal_sequence"], summary["monthly_series"]
