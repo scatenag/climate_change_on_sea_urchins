@@ -1,0 +1,193 @@
+# Keeps the data of paper/mpb-2026 -- the branch the manuscript's dashboard is
+# published from -- up to date, recomputing with THAT branch's code (v1.5.0
+# plus visible-error fixes), never with main's. The branch's code is frozen;
+# only data arrive. Its environment is frozen too: Python from the branch's
+# requirements-lock.txt, R and the DLNM packages from its renv.lock, so the
+# numbers change only because new data arrive.
+#
+# Lives on main because scheduled workflows run only from the default
+# branch. Do not modify without an explicit request from the repository
+# owner (CLAUDE.md), same as the branch itself.
+name: Auto-update data (paper/mpb-2026)
+
+on:
+  schedule:
+    # Same cadence as update_ec50.yml: daily EC50, monthly Copernicus.
+    - cron: "0 6 * * *"
+    - cron: "0 7 5 * *"
+  workflow_dispatch:
+    inputs:
+      copernicus:
+        description: "Also run the monthly Copernicus + SST update (normally only on the 5th)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: paper-branch-update
+  cancel-in-progress: false
+
+env:
+  PAPER_BRANCH: paper/mpb-2026
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the paper branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PAPER_BRANCH }}
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The frozen environment the branch's code was verified in -- it also
+      # pins copernicusmarine/xarray/netCDF4, installed unpinned by the
+      # v1.5.0 workflow.
+      - name: Install the frozen Python environment
+        run: pip install -r requirements-lock.txt
+
+      # ── EC50 from Google Sheets (daily) ─────────────────────────────────────
+      - name: Fetch EC50 from Google Sheets
+        run: python scripts/fetch_ec50.py
+
+      # Both files fetch_ec50.py writes: a corrected replicate changes only
+      # the per-trial file (fix from main's f85faf1; the v1.5.0 workflow
+      # checked and committed the monthly file alone).
+      - name: Check if EC50 data changed
+        id: check_ec50
+        run: |
+          if git diff --quiet data/ec50_sheets.csv data/ec50_raw.csv; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Copernicus env data and daily SST (monthly, on the 5th) ────────────
+      - name: Check if today is the monthly Copernicus update day
+        id: check_monthly
+        run: |
+          if [ "$(date +%d)" = "05" ] || [ "${{ inputs.copernicus }}" = "true" ]; then
+            echo "run_copernicus=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_copernicus=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update Copernicus environmental data (incremental)
+        if: steps.check_monthly.outputs.run_copernicus == 'true'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/fetch_copernicus_update.py
+
+      - name: Update daily SST cache for MHW detection
+        if: steps.check_monthly.outputs.run_copernicus == 'true'
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/fetch_copernicus_daily.py
+
+      - name: Check if Copernicus data changed
+        id: check_copernicus
+        run: |
+          if git diff --quiet data/env_copernicus.csv data/sst_daily.csv; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Decide whether to rebuild
+        id: rebuild
+        run: |
+          if [ "${{ steps.check_ec50.outputs.changed }}" = "true" ] || [ "${{ steps.check_copernicus.outputs.changed }}" = "true" ]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Rebuild with the branch's own code ─────────────────────────────────
+      - name: Rebuild dataset and re-run the Python analysis
+        if: steps.rebuild.outputs.needed == 'true'
+        run: |
+          python scripts/build_dataset.py
+          python -m climate_change_on_sea_urchins.pipeline
+
+      - name: Read the frozen R version
+        if: steps.rebuild.outputs.needed == 'true'
+        id: rversion
+        run: echo "version=$(jq -r '.R.Version' renv.lock)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up the frozen R version
+        if: steps.rebuild.outputs.needed == 'true'
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ steps.rversion.outputs.version }}
+          use-public-rspm: true
+
+      # Explicit restore into the user library setup-r prepared, which
+      # Rscript reads by default: the branch has no renv activation
+      # (.Rprofile), so a project library would be invisible to the script.
+      - name: Restore the frozen DLNM packages (renv.lock)
+        if: steps.rebuild.outputs.needed == 'true'
+        run: |
+          Rscript -e 'install.packages("renv", repos = "https://cloud.r-project.org")'
+          Rscript -e 'renv::restore(lockfile = "renv.lock", library = Sys.getenv("R_LIBS_USER"), prompt = FALSE)'
+          Rscript -e 'for (p in c("dlnm", "mgcv", "dplyr", "readr")) cat(p, as.character(packageVersion(p)), "\n")'
+
+      - name: Run DLNM analysis (R)
+        if: steps.rebuild.outputs.needed == 'true'
+        run: Rscript scripts/mhw_lag_analysis.R
+
+      # Data plausibility checks of the branch itself, BEFORE committing: a
+      # failure publishes nothing and raises the alarm below.
+      - name: Check data quality
+        run: python -m pytest tests/test_data_quality.py -q
+
+      - name: Commit and push to the paper branch
+        if: steps.rebuild.outputs.needed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ec50_sheets.csv data/ec50_raw.csv data/data_extended.csv data/data_ec50_ci.csv \
+                  data/env_copernicus.csv data/sst_daily.csv \
+                  data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
+                  results/
+          git diff --cached --quiet || git commit -m "Auto-update (paper/mpb-2026): data and results, frozen code [skip ci]"
+          git push origin "HEAD:${PAPER_BRANCH}"
+
+  # Same alarm as the tests after main's update: the day a Copernicus product
+  # changes version and v1.5.0's scripts can no longer download it, the
+  # manuscript's dashboard would silently stop updating.
+  notify-failure:
+    needs: update
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open or update the failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: "Paper branch (paper/mpb-2026) data update failing"
+          BODY: |
+            @${{ github.repository_owner }} the data update of `paper/mpb-2026` failed (event: `${{ github.event_name }}`): the manuscript's dashboard is not receiving new data.
+
+            - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --state open --limit 100 --json number,title \
+                       --jq '.[] | select(.title == env.TITLE) | .number' | head -n1)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi

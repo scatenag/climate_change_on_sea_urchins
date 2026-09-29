@@ -215,6 +215,13 @@ runner. Corretto il workflow; aggiunto un controllo di coerenza mensile/per prov
 è una questione chiusa: il valore 1 era un refuso, corretto nel foglio. Valori di §3.6 sulla
 fixture (con l'1) e sul dato corretto, da confrontare con il manoscritto finale: vedi la PR.
 
+**Dashboard del lavoro (29/9):** servito dal branch `paper/mpb-2026` (codice v1.5.0 congelato più
+correzioni di errori visibili, `renv.lock` per R), dati aggiornati ogni giorno da
+`update_paper_branch.yml` con il codice del branch. L'app attuale segue `main` e diventa quella di
+sviluppo; lo scambio dei sottodomini su Streamlit lo fa l'utente. Branch protetto; né il branch né
+quel workflow si toccano senza richiesta esplicita (`CLAUDE.md`). Le figure PNG del branch sono
+statiche (vedi PR del job).
+
 **Issue aperte:**
 - [#3](https://github.com/scatenag/climate_change_on_sea_urchins/issues/3) — dashboard
   `mg/L`→`ug/L` (23 occorrenze, fattore 1000) + le due occorrenze residue dell'attribuzione
