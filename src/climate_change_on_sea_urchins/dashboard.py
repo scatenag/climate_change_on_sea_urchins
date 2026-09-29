@@ -2163,12 +2163,33 @@ def _tab_mhw_gametes():
                     "as part of the data-update pipeline — does not change with the date "
                     "filter above."
                 )
+                # Explicit criterion instead of a fixed "no robust relationship":
+                # raw p<0.05 counts per lag-based method, and whether any lag
+                # clears Bonferroni over the 13 lags tested.
+                _bonf = 0.05 / 13
+                _parts = []
+                _sev = load_csv("robustness_severe_ccf.csv")
+                if not _sev.empty:
+                    _ps = _sev["p_diff"].dropna()
+                    _parts.append(f"Severe/Extreme driver (first differences): {int((_ps < 0.05).sum())} "
+                                  f"of {len(_ps)} lags with raw p<0.05, "
+                                  f"{int((_ps < _bonf).sum())} below Bonferroni ({_bonf:.4f})")
+                _sum = load_csv("robustness_summer_temp.csv")
+                if not _sum.empty:
+                    _ps = _sum["p"].dropna()
+                    _parts.append(f"summer temperature: {int((_ps < 0.05).sum())} of {len(_ps)} lags "
+                                  f"with raw p<0.05, {int((_ps < _bonf).sum())} below Bonferroni")
+                _mls = load_json("robustness_ml_cv_r2.json")
+                if _mls:
+                    _parts.append("ML battery: adding MHW features "
+                                  f"{'improves' if _mls['mhw_helps_out_of_sample'] else 'does not improve'} "
+                                  "out-of-sample R² over trend alone")
+                _wv = load_json("robustness_wavelet.json")
+                if _wv:
+                    _parts.append(f"wavelet coherence: surrogate p={_wv['p_value']:.3f}")
                 st.caption(
-                    "None of these five methods — deliberately chosen to be as different "
-                    "from each other and from the primary CCF/Granger/SEA/DLNM suite as "
-                    "possible — finds a robust MHW → EC50 relationship. Shown here in full "
-                    "rather than only in the paper, in the spirit of not hiding a negative "
-                    "result."
+                    "Criterion, method by method (CCM has no significance test and is shown "
+                    "descriptively): " + "; ".join(_parts) + "."
                 )
 
                 severe = load_csv("robustness_severe_ccf.csv")
@@ -2593,13 +2614,19 @@ def _tab_forecast():
             )
             with st.expander("Variables and equations"):
                 lag_k = _fc_meta.get("optimal_lag", "k")
+                try:  # trend-based Spearman from the precomputed matrix, never typed by hand
+                    _cr, _ = load_corr("all")
+                    _r_ph, _r_t, _r_pc = (f"{_cr.loc['EC50', 'pH']:+.2f}", f"{_cr.loc['EC50', 'Temperature']:+.2f}",
+                                          f"{_cr.loc['pH', 'CO2']:+.2f}")
+                except Exception:
+                    _r_ph = _r_t = _r_pc = "n/a"
                 st.markdown(
                     f"**Input variables:**  \n"
                     f"- *Endogenous*: EC₅₀(t) — monthly median effective concentration  \n"
-                    f"- *Exogenous 1*: pH — most biologically direct driver; correct sign: lower pH → lower EC₅₀ (r ≈ +0.76)  \n"
-                    f"- *Exogenous 2*: Temperature (°C) — thermal stress; r = −0.68  \n"
+                    f"- *Exogenous 1*: pH — most biologically direct driver; correct sign: lower pH → lower EC₅₀ (r = {_r_ph})  \n"
+                    f"- *Exogenous 2*: Temperature (°C) — thermal stress; r = {_r_t}  \n"
                     f"- *Exogenous 3*: MHW peak intensity (t − {lag_k}) — marine heatwave intensity, lagged {lag_k} month(s)  \n"
-                    f"CO₂ excluded: r(pH, CO₂) = −0.98 (collinear with pH). "
+                    f"CO₂ excluded: r(pH, CO₂) = {_r_pc} (collinear with pH). "
                     f"O₂ and Salinity also excluded (collinear or weak signal). "
                     f"All 5 variables are used in Approach B via OLS.  \n\n"
                     f"**Training window: post-2016 only.** "
@@ -2672,9 +2699,17 @@ def _tab_forecast():
 # ═══════════════════════════════════════════════════════════════════════════════
 def _tab_regime_shift():
         st.header("Population regime shift — beyond the raw decline")
+        # Figures below are read from the precomputed results, never typed by
+        # hand: the data keep arriving, so a hand-written number goes stale.
+        try:
+            _cu0 = json.loads((RESULTS / "cu_speciation_summary.json").read_text())
+            _decline = (f"is {_cu0['ec50_decline_nominal_pct']:.0f}% lower from "
+                        f"{SPLIT_DATE:%Y-%m} on than before it (mean of the two periods)")
+        except Exception:
+            _decline = "declined over the record"
         st.markdown(
             "The reference-toxicant EC50 (a positive-control **yardstick** for the "
-            "sea-urchin embryo test) fell ~41% over 20 years. These panels ask *why*, "
+            f"sea-urchin embryo test) {_decline}. These panels ask *why*, "
             "by excluding alternatives rather than asserting a cause. The urchins are "
             "**wild-collected**, so their gametes carry the imprint of the in-situ "
             "environment the adults lived through."
@@ -2706,9 +2741,13 @@ def _tab_regime_shift():
             c.metric("Residual = biology", f"{cu['ec50_decline_corrected_literature_pct']:.0f}%")
             d.metric("Residual significance", f"p={cu['biological_residual_mannwhitney_p']:.0e}")
             st.markdown(
-                "The realized site pH change is only ~0.01 units, so copper "
-                "bioavailability (ocean acidification) accounts for at most a few percent "
-                "of the decline — **the sensitization is genuinely biological.**"
+                f"The site pH changed by {cu['delta_pH']:+.3f} units between the two periods. "
+                "By the literature-based speciation correction, ocean-acidification-driven "
+                "copper bioavailability accounts for "
+                f"{cu['geochemical_share_literature_pct']:.1f}% of the nominal decline; the "
+                f"remaining {cu['ec50_decline_corrected_literature_pct']:.0f}% decline is not "
+                f"explained by water chemistry (Mann-Whitney p="
+                f"{cu['biological_residual_mannwhitney_p']:.0e})."
             )
         _img = FIGS / "fig_cu_speciation_decomposition.png"
         if _img.exists():
@@ -2807,30 +2846,53 @@ def _tab_regime_shift():
         st.subheader("3 · A multifactorial regime shift")
         rs = _json("regime_shift_summary.json")
         if rs:
+            # Every statement here is generated from the precomputed values: a
+            # hand-written conclusion could contradict them as the data grow.
+            # Date convention: the Pettitt break date is the LAST period before
+            # the change (so 2016-05 when split_date names 2016-06, the first
+            # month after). A distance between two breaks is shown only when
+            # both are significant at ALPHA.
+            ALPHA = 0.05
+            _cps = load_csv("regime_shift_changepoints.csv")
+            _mhw = _cps[_cps["series"] == "MHW_total_mhw_days"] if not _cps.empty else _cps
+            mhw_p = float(_mhw["p_value"].iloc[0]) if len(_mhw) else float("nan")
+            ec_p = rs["ec50_regime_shift"]["p"]
+            both_sig = ec_p < ALPHA and mhw_p < ALPHA
             a, b, c, d = st.columns(4)
             a.metric("EC50 regime shift", rs["ec50_regime_shift"]["break"][:7],
-                     help=f"Pettitt changepoint, p={rs['ec50_regime_shift']['p']:.0e}")
-            b.metric("Environment shifts", str(rs["mhw_exposure_break_year"]),
-                     help="MHW days / cumulative intensity, Temperature, CO₂, pH all break ~here")
-            c.metric("Accumulation lag", f"~{rs['exposure_precedes_response_years']} yr",
-                     help="exposure precedes the biological collapse")
+                     help=f"Pettitt changepoint, last month before the change (p={ec_p:.0e})")
+            b.metric("MHW-exposure shift", str(rs["mhw_exposure_break_year"]),
+                     help=f"Pettitt changepoint of annual total MHW days, last year before the "
+                          f"change (p={mhw_p:.2g})")
+            c.metric("Years between breaks",
+                     f"{rs['exposure_precedes_response_years']} yr" if both_sig else "—",
+                     help="last period before each break; shown only when both breaks are "
+                          f"significant at {ALPHA:g}")
             d.metric("Stress axis (PC1)",
                      f"{rs['multifactorial_stress_index']['pc1_variance_explained']*100:.0f}%",
-                     help="one coordinated warming+acidification+deoxygenation axis")
-            st.markdown(
-                "The environment (marine-heatwave exposure, temperature, CO₂, pH) changes "
-                f"state ~{rs['mhw_exposure_break_year']}; the population's copper tolerance "
-                f"collapses ~{rs['ec50_regime_shift']['break'][:4]} — a "
-                f"~{rs['exposure_precedes_response_years']}-year accumulation lag on the "
-                "long-lived wild adults."
+                     help="PC1 of the deseasonalised T/S/CO2/O2/pH anomalies")
+            _sig = lambda pv: "significant" if pv < ALPHA else "not significant"
+            _txt = (f"Pettitt break in EC50: last month before the change "
+                    f"{rs['ec50_regime_shift']['break'][:7]} (p={ec_p:.1e}, {_sig(ec_p)} at "
+                    f"{ALPHA:g}). MHW exposure (annual total MHW days): last year before the "
+                    f"change {rs['mhw_exposure_break_year']} (p={mhw_p:.2g}, {_sig(mhw_p)} at "
+                    f"{ALPHA:g}). ")
+            if both_sig:
+                _lag = rs["exposure_precedes_response_years"]
+                _txt += (f"Comparing the last period before each break, the MHW-exposure break "
+                         f"is {abs(_lag)} yr {'earlier' if _lag >= 0 else 'later'} than the "
+                         "EC50 break.")
+            else:
+                _txt += "No distance between the two breaks is reported: at least one is not significant."
+            st.markdown(_txt)
+            ews = rs["early_warning_signals"]
+            st.info(
+                "**Critical-slowing-down early-warning signals** (rolling variance AND lag-1 "
+                f"autocorrelation both rising, Kendall p<{ALPHA:g}): "
+                f"**{'detected' if rs['critical_slowing_down_detected'] else 'not detected'}** — "
+                f"variance tau={ews['variance_kendall_tau']:+.2f} (p={ews['variance_p']:.2g}), "
+                f"lag-1 autocorrelation tau={ews['ar1_kendall_tau']:+.2f} (p={ews['ar1_p']:.2g})."
             )
-            if not rs["critical_slowing_down_detected"]:
-                st.info(
-                    "**Honest caveat:** this is a documented *regime shift*, not a "
-                    "demonstrated *tipping point*. The canonical critical-slowing-down "
-                    "early-warning signals (rising variance and autocorrelation) are **not** "
-                    "present, so we do not claim a dynamical critical transition."
-                )
         _img = FIGS / "fig_regime_shift.png"
         if _img.exists():
             st.image(str(_img), use_container_width=True)
@@ -2843,26 +2905,29 @@ def _tab_regime_shift():
         if ml:
             bs, rb = ml["best_signal"], ml["robustness"]
             a, b, c, d = st.columns(4)
-            a.metric("Best predictor", "MHW days (t−1)",
-                     help="exposure DURATION in the previous year; event COUNT shows nothing")
+            _grid = load_csv("mhw_lag_annual.csv")
+            _n_sig = int((_grid["p_detrended"] < 0.05).sum()) if not _grid.empty else 0
+            _fdr_ok = bs["p_detrended_fdr_bh"] < 0.05
+            a.metric("Best predictor", f"{bs['predictor']} (t−{bs['lag_years']} yr)",
+                     help="smallest detrended p among the negative associations of the "
+                          "predictor × lag grid")
             b.metric("Detrended ρ", f"{bs['rho_detrended_spearman']:+.2f}",
                      help=f"Spearman, p={bs['p_detrended_spearman']:.3f}")
             c.metric("Jackknife robust", f"{rb['jackknife_frac_below_0p05']*100:.0f}%",
                      help="fraction of leave-one-year-out refits still p<0.05")
-            d.metric("Survives FDR?", "no" if bs["p_detrended_fdr_bh"] >= 0.05 else "yes",
-                     help=f"Benjamini-Hochberg across the 4×4 grid: p_FDR={bs['p_detrended_fdr_bh']:.2f}")
+            d.metric("Survives FDR?", "yes" if _fdr_ok else "no",
+                     help=f"Benjamini-Hochberg across the grid: p_FDR={bs['p_detrended_fdr_bh']:.2f}")
             st.markdown(
-                "The **duration** of heatwave exposure in the *previous* year predicts EC50 "
-                "even after removing the trend — the only MHW signal that survives detrending. "
-                "The **number** of events does not. Consistent with a ~1-year carry-over onto the "
-                "gametes of the next season (a *delayed* effect — not the acute one an independent "
-                "2025 experiment correctly found absent)."
+                f"**{bs['predictor']}** lagged {bs['lag_years']} yr has the strongest detrended "
+                f"association with annual EC50 (ρ={bs['rho_detrended_spearman']:+.2f}, "
+                f"p={bs['p_detrended_spearman']:.3f}). {_n_sig} of {len(_grid)} predictor × lag "
+                "combinations have a detrended p below 0.05. event_count lagged 1 yr: detrended "
+                f"p={ml['event_count_lag1_detrended_p']:.3f}."
             )
-            st.warning(
-                "**Exploratory / hypothesis-generating.** Rank-based only (Pearson "
-                f"p={rb['pearson_p']:.2f}), does **not** survive multiple-testing correction "
-                "(FDR), n≈22. A pre-registration-worthy carry-over hypothesis, not a demonstrated "
-                "effect."
+            (st.success if _fdr_ok else st.warning)(
+                f"**{'Survives' if _fdr_ok else 'Does not survive'} multiple-testing correction** "
+                f"(BH-FDR p={bs['p_detrended_fdr_bh']:.2f}), n={bs['n']} years. Pearson on the "
+                f"detrended series: p={rb['pearson_p']:.2f}."
             )
         _img = FIGS / "fig_mhw_lag_annual.png"
         if _img.exists():
