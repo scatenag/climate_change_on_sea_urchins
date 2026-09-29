@@ -40,6 +40,10 @@ from scipy import stats
 from .common import load_data, default_results_dir, SPLIT_YEAR, RESPONSE_COL, default_response_spec, load_mhw_annual
 
 ENV = ["Temperature", "Salinity", "CO2", "O2", "pH"]
+
+# Significance threshold of this module: for the early-warning trends and
+# for calling a Pettitt break significant in the verdict text.
+ALPHA = 0.05
 # Sign of each variable along the climate-change stress axis (stress increases
 # with warming, salinification, rising CO2; falling O2, falling pH).
 STRESS_SIGN = {"Temperature": 1, "Salinity": 1, "CO2": 1, "O2": -1, "pH": -1}
@@ -122,13 +126,14 @@ def run(response=None, results=None):
 
     # --- MHW exposure changepoints (annual) ---
     ann = load_mhw_annual()
-    mhw_break_year = None
+    mhw_break_year = mhw_break_p = mhw_first_after = None
     for c in ["total_mhw_days", "cum_intensity_sum", "max_intensity"]:
         s = ann[c].dropna()
         kk, pp = pettitt(s.values)
         by = int(ann["year"].iloc[kk])
         if c == "total_mhw_days":
-            mhw_break_year = by
+            mhw_break_year, mhw_break_p = by, pp
+            mhw_first_after = int(ann["year"].iloc[kk + 1]) if kk + 1 < len(ann) else None
         rows.append({"series": f"MHW_{c}", "break_date": f"{by}", "break_year": by,
                      "p_value": pp, "pre_mean": float(s.iloc[:kk].mean()),
                      "post_mean": float(s.iloc[kk:].mean())})
@@ -150,31 +155,65 @@ def run(response=None, results=None):
 
     # --- early-warning signals ---
     ews = _ews(r.set_index("Datetime")[RESPONSE_COL])
-    csd = (ews["variance_kendall_tau"] > 0 and ews["variance_p"] < 0.05
-           and ews["ar1_kendall_tau"] > 0 and ews["ar1_p"] < 0.05)
+    csd = (ews["variance_kendall_tau"] > 0 and ews["variance_p"] < ALPHA
+           and ews["ar1_kendall_tau"] > 0 and ews["ar1_p"] < ALPHA)
 
     exposure_lag = (int(ec50_break.year) - mhw_break_year) if mhw_break_year else None
 
     # Every sentence of the verdict is generated from values computed in this
     # run: a fixed conclusion ("NOT present", "BEFORE the collapse") could
-    # contradict the flag written right next to it on other data.
-    if exposure_lag is None:
-        timing = f"no MHW-exposure break was found to compare with the {label} break"
-    elif exposure_lag > 0:
-        timing = f"the MHW-exposure break ({mhw_break_year}) precedes the {label} break by {exposure_lag} yr"
-    elif exposure_lag < 0:
-        timing = f"the MHW-exposure break ({mhw_break_year}) follows the {label} break by {-exposure_lag} yr"
+    # contradict the values written right next to it on other data. Each
+    # break's p is always reported; a distance in years between two breaks
+    # is written only when BOTH are significant at ALPHA -- otherwise a
+    # non-significant break would read as an established event and the
+    # distance as a lag.
+    #
+    # Date convention: pettitt() returns the index of the LAST observation
+    # before the change, and that is the date saved in break/break_date/
+    # break_year; the text also gives the first observation after it (e.g.
+    # the response's last month before 2016-05, first month after 2016-06 --
+    # the one split_date names). The distance in years compares the last
+    # period before each break, like exposure_precedes_response_years.
+    # Whether to align every module on one convention is deferred:
+    # docs/adr/0000, item 9.
+    resp_sig = p < ALPHA
+    first_after = r["Datetime"].iloc[k + 1] if k + 1 < len(r) else None
+    parts = [
+        f"Pettitt break in {label}: last month before the change "
+        f"{ec50_break:%Y-%m}, first month after "
+        f"{first_after:%Y-%m}" if first_after is not None else
+        f"Pettitt break in {label}: last month before the change {ec50_break:%Y-%m}",
+    ]
+    parts[0] += f" (p={p:.1e}, {'significant' if resp_sig else 'not significant'} at {ALPHA:g})."
+    if mhw_break_year is None:
+        parts.append("No MHW-exposure break was computed.")
     else:
-        timing = f"the MHW-exposure break ({mhw_break_year}) falls in the same year as the {label} break"
-    verdict = (
-        f"Pettitt break in {label} at {ec50_break.date().isoformat()} (p={p:.1e}); {timing}. "
+        mhw_sig = mhw_break_p < ALPHA
+        after = f", first year after {mhw_first_after}" if mhw_first_after is not None else ""
+        parts.append(
+            f"MHW exposure (total MHW days): last year before the change {mhw_break_year}{after} "
+            f"(p={mhw_break_p:.2g}, {'significant' if mhw_sig else 'not significant'} at {ALPHA:g})."
+        )
+        if resp_sig and mhw_sig:
+            if exposure_lag > 0:
+                parts.append(f"Comparing the last period before each break, the MHW-exposure break "
+                             f"is {exposure_lag} yr earlier than the {label} break.")
+            elif exposure_lag < 0:
+                parts.append(f"Comparing the last period before each break, the MHW-exposure break "
+                             f"is {-exposure_lag} yr later than the {label} break.")
+            else:
+                parts.append(f"Comparing the last period before each break, both fall in the same year.")
+        else:
+            parts.append("No distance between the two breaks is reported: at least one is not significant.")
+    parts.append(
         f"PC1 explains {var_expl * 100:.0f}% of the variance of the deseasonalised "
         "T/S/CO2/O2/pH anomalies. Critical-slowing-down early-warning signals (rolling "
-        "variance AND lag-1 autocorrelation both rising, Kendall p<0.05): "
+        f"variance AND lag-1 autocorrelation both rising, Kendall p<{ALPHA:g}): "
         f"{'detected' if csd else 'not detected'} "
         f"(variance tau={ews['variance_kendall_tau']:+.2f}, p={ews['variance_p']:.2g}; "
         f"AR(1) tau={ews['ar1_kendall_tau']:+.2f}, p={ews['ar1_p']:.2g})."
     )
+    verdict = " ".join(parts)
     # Generic key names (an output key is a schema the dashboard reads); the
     # response's identity is recorded as a value, never in a key.
     summary = {

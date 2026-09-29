@@ -287,13 +287,15 @@ l'utente decide quando fondere.
   perché fuori dal pacchetto installabile (CLAUDE.md) e nessun fixture li monkeypatcha, quindi
   non a rischio nello stesso modo. Se `scripts/` dovesse mai entrare nel pacchetto o in un
   fixture di test, va rifatto lo stesso controllo.
-- **Lo spostamento di `results/` in `results/<study_id>/` (ADR-0008) ha reso stale
-  `scripts/make_regime_shift_figure.py`, `make_mhw_lag_annual_figure.py`,
-  `make_speciation_figure.py`, `make_thermal_legacy_figure.py`, `build_narrative_notebook.py`**:
-  costruiscono ancora `ROOT / "results"` da soli e non troveranno più i file di Livorno.
-  Lasciati intatti (fuori dal pacchetto, nessun test li esercita) — se servono di nuovo per
-  produrre figure del manoscritto, vanno aggiornati a `results/livorno-paracentrotus/` (o meglio,
-  a `common.RESULTS`) prima di rilanciarli.
+- Gli script di figure in `scripts/` leggono i risultati da `common.results_dir()` (dal 29/9);
+  leggono ancora `data/` da `ROOT / "data"` (vedi la voce sopra).
+- **Regola sugli output (29/9):** un modulo scrive solo descrizioni del metodo, valori calcolati
+  nell'esecuzione e identità dalla specifica; tutto ciò che è specifico del caso sta in
+  `examples/livorno_paracentrotus/NOTES.md` (pubblico: niente nomi, niente decisioni superate).
+  Guardia: `tests/test_response_label_leaks.py` (etichetta RSPTEST). Resta nell'output, in
+  attesa dei valori §3.6 del manoscritto finale, il confronto pre/post alla data pubblicata di
+  `negative_control`; se §3.6 è stato ricalcolato sul dato corretto della prova 224 serviranno
+  un rilascio con dati corretti e l'aggiornamento del DOI nelle bozze (lo chiede l'utente).
 
 ---
 

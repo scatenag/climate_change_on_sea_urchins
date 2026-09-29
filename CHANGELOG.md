@@ -8,6 +8,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Module outputs hold only method descriptions, values computed in the run, and identities
+  taken from the study spec.** Everything specific to the Livorno case moved out of module code
+  into `examples/livorno_paracentrotus/NOTES.md`, copied as it was but without people's names
+  or superseded decisions: manuscript references, results of past investigations, the trial-224
+  history (now recorded as a closed question, with the source sheet's corrected replicates,
+  14, 11, 14). The guard is `tests/test_response_label_leaks.py`: it runs the whole pipeline (R and
+  one temporal window included) with the response label set to RSPTEST and fails if any file or
+  file name in `results/` mentions EC50 in any form. It found 21 leaks.
+  - Output keys made generic, with the label recorded as a value (`response_label`):
+    `robustness_ccm.csv` (`skill_mhw_to_response`, `skill_response_to_mhw`), `sea_results.csv`
+    (`mean_response`, `sd_response`, `se_response`), `cu_speciation_summary.json`
+    (`response_decline_*`), `regime_shift_summary.json` (`response_regime_shift`); file
+    `changepoint_ec50.json` renamed to `changepoint_response.json`. Dashboard and tests updated.
+    The figure scripts in `scripts/` go through `common.results_dir()` (they were broken since the
+    move to `results/<study_id>/`) and read the new keys.
+  - Texts generated from computed values instead of fixed conclusions: `mhw_lag_annual`'s
+    interpretation, the ARIMA arm's reason in `robustness_severe_ccf_note.json` (counts computed;
+    the "10/13 to 1/13" reconstruction stays in issue #9), `thermal_legacy`'s hypothesis (now a
+    method description, threshold and label computed); the regime-shift verdict (see Fixed).
+  - Removed from outputs: the `manuscript_*`/`status` fields and trial-224 note of
+    `negative_control.json`, the manuscript reference, citation note and structural-cause text of
+    `mhw_annual_changepoint.json`, the manuscript mention in `period_contrast_raw.json`, the
+    ordering-stability claim in the changepoint note. The negative control's comparison at the
+    published split stays in its output until the final manuscript's section 3.6 values are
+    checked.
+  - No numeric value changes: 23107 values compared on the frozen fixture, maximum relative
+    difference 5.5e-11 (0 in the eleven changed files). **Golden-master reference updated, with
+    approval**, for those eleven files: keys and text only. The real `results/` updated for the
+    same eleven files, regenerated locally (values equal to the runner's up to 6e-9, in the ARIMA
+    diagnostics only).
+
 - **Temporal windows, infrastructure and contract** (V2.2 PR 5b-1 of 4). `StudySpec.windows` is
   now consumed: one pipeline run computes each declared window into
   `results/<study_id>/<window_id>/`, alongside the whole-record results. Livorno declares none,
@@ -276,6 +307,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     this driver.
 
 ### Fixed
+
+- **Erroneous claim in the public dashboard and results: "autocorrelation not rising".** The
+  regime-shift verdict (`regime_shift_summary.json`, public in the repository) always stated that
+  critical-slowing-down early-warning signals were absent, "absolute variance falls, AR(1) not
+  rising", and the dashboard's "Regime shift" section said the same in its own hand-written text
+  ("rising variance and autocorrelation are not present"). The value computed next to it says
+  otherwise: lag-1 autocorrelation **is** rising, Kendall tau +0.14, p=0.017; only the rolling
+  variance falls (tau −0.52). The overall conclusion, no critical slowing down, still holds,
+  because it requires both to rise, but the stated reason was false. The same text presented the
+  3-year distance between the MHW-exposure break and the response break as an "accumulation lag"
+  without reporting whether the MHW break was significant. The verdict is now generated entirely
+  from computed values: both breaks with their p, a distance in years only when both are
+  significant at the module's `ALPHA` (0.05), otherwise the MHW break is declared not
+  significant; and the date convention. `pettitt()` returns the last period before the change:
+  2016-05 for the response, while `split_date` and the manuscript name the first period after,
+  2016-06. The dashboard now shows this verdict instead of its hand-written paragraph and caveat.
+  With the first-period-after convention the distance would be 2 years instead of 3 (MHW 2014 vs
+  response 2016-06); aligning the convention across modules changes saved values and is deferred
+  (docs/adr/0000, item 9, together with an off-by-one in `regime_shift`'s pre/post means).
+  `tests/test_regime_shift_verdict.py`.
 
 - **`data/ec50_raw.csv` was never committed by the auto-update.** `fetch_ec50.py` regenerates
   it on every run, and the pipeline in the runner computed `results/` from that fresh copy, so
