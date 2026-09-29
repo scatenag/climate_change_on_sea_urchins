@@ -11,5 +11,5 @@
   "diff_abs": 20.111670454545457,
   "decline_pct": 43.21589425966013,
   "mannwhitney_p": 8.638739790624032e-44,
-  "note": "The split point (SPLIT_DATE) is estimated from this same data, and the 295 trials are serially correlated (not independent draws) -- this Mann-Whitney p-value is descriptive, not inferential. The monthly-series contrast in period_means.csv/kruskal_stats.json is this module's primary pre/post test; this is a secondary, trial-level view of the same contrast, reported in the manuscript alongside it."
+  "note": "The split point (SPLIT_DATE) is estimated from this same data, and the 296 trials are serially correlated (not independent draws) -- this Mann-Whitney p-value is descriptive, not inferential. The monthly-series contrast in period_means.csv/kruskal_stats.json is this module's primary pre/post test; this is a secondary, trial-level view of the same contrast."
 }

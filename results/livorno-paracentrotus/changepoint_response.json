@@ -1,0 +1,28 @@
+{
+  "ordinal_sequence": {
+    "n": 296,
+    "phi": 0.31065869988710737,
+    "F_max": 332.40816226674036,
+    "break_index": 177,
+    "break_date": "2016-09-01",
+    "p_value": 0.0003332222592469177,
+    "ci90_lo_date": "2016-05-01",
+    "ci90_hi_date": "2016-10-01",
+    "B": 3000,
+    "seed": 0,
+    "ordering": "Datetime, then ID"
+  },
+  "monthly_series": {
+    "n": 164,
+    "phi": 0.06290453155257185,
+    "F_max": 321.15160290090654,
+    "break_index": 95,
+    "break_date": "2016-09-01",
+    "p_value": 0.0003332222592469177,
+    "ci90_lo_date": "2016-06-01",
+    "ci90_hi_date": "2016-10-01",
+    "B": 3000,
+    "seed": 0
+  },
+  "note": "The monthly series is the primary changepoint analysis: its 164 dates are unique, so its order (and therefore phi/F/break) is unambiguous and fully reproducible. The ordinal (full-resolution) sequence is a secondary check only: ~110 of its 296 rows share a Datetime (many determinations record only the month), so its order is not implied by the data and requires the explicit (Datetime, ID) tiebreak above to even be reproducible -- with that fixed, its break-MONTH remains sensitive to which of many equally-valid tie orders is chosen (see module docstring)."
+}
