@@ -142,12 +142,16 @@ jobs:
         id: rversion
         run: echo "version=$(jq -r '.R.Version' renv.lock)" >> "$GITHUB_OUTPUT"
 
+      # No Posit Package Manager binaries (use-public-rspm: false, hence no
+      # RENV_CONFIG_REPOS_OVERRIDE): the frozen versions are built from
+      # source against this exact R, as they were locally. Binaries built
+      # elsewhere made the DLNM segfault in dplyr on the first run.
       - name: Set up the frozen R version
         if: steps.rebuild.outputs.needed == 'true'
         uses: r-lib/actions/setup-r@v2
         with:
           r-version: ${{ steps.rversion.outputs.version }}
-          use-public-rspm: true
+          use-public-rspm: false
 
       # Explicit restore into the user library setup-r prepared, which
       # Rscript reads by default: the branch has no renv activation
@@ -156,7 +160,7 @@ jobs:
         if: steps.rebuild.outputs.needed == 'true'
         run: |
           Rscript -e 'install.packages("renv", repos = "https://cloud.r-project.org")'
-          Rscript -e 'renv::restore(lockfile = "renv.lock", library = Sys.getenv("R_LIBS_USER"), prompt = FALSE)'
+          Rscript -e 'options(pkgType = "source"); renv::restore(lockfile = "renv.lock", library = Sys.getenv("R_LIBS_USER"), prompt = FALSE)'
           Rscript -e 'for (p in c("dlnm", "mgcv", "dplyr", "readr")) cat(p, as.character(packageVersion(p)), "\n")'
 
       - name: Run DLNM analysis (R)
