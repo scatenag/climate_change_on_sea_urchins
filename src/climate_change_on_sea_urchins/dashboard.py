@@ -93,7 +93,7 @@ def _dl_btn(df: pd.DataFrame, filename: str, label: str = "Download CSV") -> Non
 # physically meaningful "per year" unit rather than a bare number.
 _VAR_UNITS = {
     "Temperature": "°C", "Salinity": "PSU", "O2": "mmol/m³",
-    "pH": "", "CO2": "µatm", "EC50": "mg/L",
+    "pH": "", "CO2": "µatm", "EC50": "µg/L",
 }
 
 
@@ -1175,8 +1175,9 @@ def _tab_overview():
                 "equivalent MEDSEA_ANALYSISFORECAST near-real-time product (same variables)."
             )
             st.info(
-                "CO₂ unit note: Copernicus's `spco2` is delivered in Pascal, not the µatm its "
-                "CF metadata implies — confirmed by an automated cross-check "
+                "CO₂ unit note: Copernicus's `spco2` is delivered in Pascal, and correctly "
+                "documented as such (its CF standard_name is associated with Pascal); the error "
+                "was this pipeline's, which read it as µatm — confirmed by an automated cross-check "
                 "(`scripts/build_dataset.py::cross_check_co2`, also enforced in "
                 "`tests/test_data_quality.py`) against the original 2003–2022 series (Sartori "
                 "et al. 2023), whose CO₂ column turned out to be in the same raw unit. Both are "
@@ -1309,7 +1310,7 @@ def _tab_timeseries():
                         hovertemplate=(
                             "<b>EC50 monthly mean</b><br>"
                             "Month: %{x|%b %Y}<br>"
-                            "EC50: %{y:.2f} mg/L<br>"
+                            "EC50: %{y:.2f} µg/L<br>"
                             "Measurements: %{customdata[0]:.0f}<br>"
                             "Values: %{customdata[1]}"
                             "<extra></extra>"
@@ -1328,7 +1329,7 @@ def _tab_timeseries():
                         hovertemplate=(
                             "<b>EC50 measurement</b><br>"
                             "Date: %{x|%d %b %Y}<br>"
-                            "EC50: %{y:.2f} mg/L"
+                            "EC50: %{y:.2f} µg/L"
                             "<extra></extra>"
                         ),
                         showlegend=(i == 1),
@@ -1698,7 +1699,7 @@ def _tab_mhw_gametes():
                     fig_dr.update_layout(
                         title="Mean EC50 ± SD — MHW presence at lag=2 months<br>"
                               f"<sub>Mann-Whitney p = {dr['mw_p']:.2e}  |  n = {dr['n']}</sub>",
-                        yaxis_title="EC50 (mg/L)",
+                        yaxis_title="EC50 (µg/L)",
                         height=400, showlegend=False,
                     )
                     st.plotly_chart(fig_dr, use_container_width=True)
@@ -1707,9 +1708,9 @@ def _tab_mhw_gametes():
                     c1, c2, c3 = st.columns(3)
                     no_mhw_mean = float(grp[~grp["had_mhw"]]["mean"].values[0])
                     mhw_mean    = float(grp[grp["had_mhw"]]["mean"].values[0])
-                    c1.metric("EC50 — no MHW", f"{no_mhw_mean:.1f} mg/L")
-                    c2.metric("EC50 — MHW present", f"{mhw_mean:.1f} mg/L",
-                              delta=f"{mhw_mean - no_mhw_mean:.1f} mg/L")
+                    c1.metric("EC50 — no MHW", f"{no_mhw_mean:.1f} µg/L")
+                    c2.metric("EC50 — MHW present", f"{mhw_mean:.1f} µg/L",
+                              delta=f"{mhw_mean - no_mhw_mean:.1f} µg/L")
                     c3.metric("Mann-Whitney p (two-sided)", f"{dr['mw_p']:.2e}")
                     st.caption(
                         "Raw levels, uncorrected — EC50 trends downward over the whole record, so "
@@ -1725,15 +1726,15 @@ def _tab_mhw_gametes():
                             st.success(
                                 f"Detrended (first-differenced EC50) check: still significant "
                                 f"(Mann-Whitney two-sided p = {dr['mw_p_diff']:.2e}, n = {dr['n_diff']}) — "
-                                f"mean month-over-month EC50 change is {mhw_d:+.1f} mg/L in MHW months "
-                                f"vs {no_mhw_d:+.1f} mg/L otherwise."
+                                f"mean month-over-month EC50 change is {mhw_d:+.1f} µg/L in MHW months "
+                                f"vs {no_mhw_d:+.1f} µg/L otherwise."
                             )
                         else:
                             st.warning(
                                 f"Does **not** survive detrending: on first-differenced EC50, the same "
                                 f"comparison gives Mann-Whitney two-sided p = {dr['mw_p_diff']:.2e} "
                                 f"(n = {dr['n_diff']}, ≥0.05). The raw gap above ({no_mhw_mean:.1f} → "
-                                f"{mhw_mean:.1f} mg/L) is consistent with a shared trend, not a MHW effect — "
+                                f"{mhw_mean:.1f} µg/L) is consistent with a shared trend, not a MHW effect — "
                                 f"treat it as exploratory, not a finding."
                             )
                     else:
@@ -1759,7 +1760,7 @@ def _tab_mhw_gametes():
                         title="EC50 by MHW intensity tertile (lag=2)<br>"
                               f"<sub>Continuous dose-response (raw): Spearman r = {_tert_r:+.3f}, "
                               f"p = {_tert_p:.2e}, n = {dr.get('tertile_n')}</sub>",
-                        yaxis_title="EC50 (mg/L)", height=380, showlegend=False,
+                        yaxis_title="EC50 (µg/L)", height=380, showlegend=False,
                     )
                     st.plotly_chart(fig_tert, use_container_width=True)
                     _dl_btn(tert, f"dose_response_tertile_{_yr_start}_{_yr_end}.csv", "⬇ Tertile data (CSV)")
@@ -1855,7 +1856,7 @@ def _tab_mhw_gametes():
                         trendline="ols",
                         color_discrete_sequence=[WARM],
                         labels={"Summer_peak": "Max MHW peak intensity Jun–Aug (°C·days)",
-                                "EC50_autumn": "Mean EC50 Sep–Dec (mg/L)"},
+                                "EC50_autumn": "Mean EC50 Sep–Dec (µg/L)"},
                         title=f"Summer MHW → Autumn EC50  |  r = {sa['r']:+.3f}, p = {sa['p']:.3f}",
                     )
                     fig_sa.update_traces(textposition="top center", selector=dict(mode="markers+text"))
@@ -1864,7 +1865,7 @@ def _tab_mhw_gametes():
                     _sa_fit = px.get_trendline_results(fig_sa).iloc[0]["px_fit_results"]
                     st.caption(_regression_caption(
                         _sa_fit.params[1], _sa_fit.params[0], np.sqrt(_sa_fit.rsquared), _sa_fit.pvalues[1],
-                        unit="mg/L autumn EC50", n=len(sa_df), per="°C·day of summer MHW peak intensity",
+                        unit="µg/L autumn EC50", n=len(sa_df), per="°C·day of summer MHW peak intensity",
                     ))
                     _dl_btn(sa_df, f"summer_autumn_{_yr_start}_{_yr_end}.csv", "⬇ Summer→Autumn data (CSV)")
                     st.caption(
@@ -1900,7 +1901,7 @@ def _tab_mhw_gametes():
                     fig_ann = make_subplots(
                         rows=2, cols=1, shared_xaxes=True,
                         subplot_titles=["Annual cumulative MHW exposure (°C·days)",
-                                        "Mean annual EC50 (mg/L)"],
+                                        "Mean annual EC50 (µg/L)"],
                         vertical_spacing=0.08,
                     )
                     fig_ann.add_trace(go.Bar(
@@ -1979,13 +1980,13 @@ def _tab_mhw_gametes():
                         fig_trend.add_trace(go.Scatter(
                             x=[x0, x1], y=[y0, y1],
                             mode="lines",
-                            name=f"{label}: {slope_sign}{td['slope_yr']:.2f} mg/L/yr (p={td['p']:.4f})",
+                            name=f"{label}: {slope_sign}{td['slope_yr']:.2f} µg/L/yr (p={td['p']:.4f})",
                             line=dict(color=color, width=3),
                         ))
                     fig_trend.add_vline(x=f"{SPLIT_DATE:%Y-%m-%d}", line_dash="dash", line_color="grey")
                     fig_trend.update_layout(
                         title=f"EC50 trend: stable pre-{_split_lbl} → rapid decline post-{_split_lbl}",
-                        xaxis_title="Year", yaxis_title="EC50 (mg/L)",
+                        xaxis_title="Year", yaxis_title="EC50 (µg/L)",
                         height=420,
                         legend=dict(orientation="h", yanchor="bottom", y=1.01),
                     )
@@ -1993,9 +1994,9 @@ def _tab_mhw_gametes():
                     _dl_btn(real_ec50[["Datetime", "EC50"]], f"ec50_trend_{_yr_start}_{_yr_end}.csv", "⬇ EC50 trend data (CSV)")
 
                     col1, col2, col3 = st.columns(3)
-                    col1.metric(f"Pre-{_split_lbl} rate", f"{t_pre['slope_yr']:+.2f} mg/L/yr",
+                    col1.metric(f"Pre-{_split_lbl} rate", f"{t_pre['slope_yr']:+.2f} µg/L/yr",
                                 delta="p = {:.4f}".format(t_pre["p"]))
-                    col2.metric(f"Post-{_split_lbl} rate", f"{t_post['slope_yr']:+.2f} mg/L/yr",
+                    col2.metric(f"Post-{_split_lbl} rate", f"{t_post['slope_yr']:+.2f} µg/L/yr",
                                 delta="p = {:.4f}".format(t_post["p"]))
                     accel = abs(t_post["slope_yr"]) / max(abs(t_pre["slope_yr"]), 0.01)
                     col3.metric("Acceleration factor", f"{accel:.1f}×")
@@ -2103,7 +2104,7 @@ def _tab_mhw_gametes():
                     fig_sea.add_vline(x=0, line_dash="dash", line_color="black")
                     fig_sea.update_layout(
                         title="SEA: composite EC50 around MHW peaks (lag 0 = event peak)",
-                        xaxis_title="Lag (months)", yaxis_title="Mean EC50 (mg/L)", height=400,
+                        xaxis_title="Lag (months)", yaxis_title="Mean EC50 (µg/L)", height=400,
                     )
                     st.plotly_chart(fig_sea, use_container_width=True)
                     _dl_btn(sea_df, "sea_results.csv", "⬇ SEA data (CSV)")
@@ -2126,7 +2127,7 @@ def _tab_mhw_gametes():
                     fig_dlnm.add_hline(y=0, line_dash="dash", line_color="grey")
                     fig_dlnm.update_layout(
                         title="DLNM: cumulative EC50 change by lag (at mean MHW intensity)",
-                        xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (mg/L)", height=400,
+                        xaxis_title="Lag (months)", yaxis_title="Cumulative ΔEC50 (µg/L)", height=400,
                     )
                     st.plotly_chart(fig_dlnm, use_container_width=True)
                     _dl_btn(dlnm_lag, "dlnm_lag_profile.csv", "⬇ DLNM lag profile (CSV)")
@@ -2141,7 +2142,7 @@ def _tab_mhw_gametes():
                         color="Intensity (°C)",
                         color_discrete_sequence=px.colors.sequential.Reds[2:],
                         labels={"lag_post_end": "Months after event end",
-                                "EC50_pred": "Predicted EC50 (mg/L)"},
+                                "EC50_pred": "Predicted EC50 (µg/L)"},
                         title="Predicted EC50 in the 12 months post-MHW by intensity",
                     )
                     fig_me.update_layout(height=400)
@@ -2479,7 +2480,7 @@ def _tab_forecast():
                     line=dict(color=color, width=2),
                 ))
             fig_fc.add_vline(x=str(last_obs_date)[:10], line_dash="dash", line_color="grey")
-            fig_fc.update_layout(title=title, xaxis_title="Year", yaxis_title="EC50 (mg/L)", height=500)
+            fig_fc.update_layout(title=title, xaxis_title="Year", yaxis_title="EC50 (µg/L)", height=500)
             st.plotly_chart(fig_fc, use_container_width=True)
 
         _fc_results = compute_forecast(df, df_real, mhw_annual)
@@ -2602,7 +2603,7 @@ def _tab_forecast():
                     f"O₂ and Salinity also excluded (collinear or weak signal). "
                     f"All 5 variables are used in Approach B via OLS.  \n\n"
                     f"**Training window: post-2016 only.** "
-                    f"Full-period training causes SARIMAX to mean-revert toward the pre-2016 mean (~40–55 mg/L), "
+                    f"Full-period training causes SARIMAX to mean-revert toward the pre-2016 mean (~40–55 µg/L), "
                     f"which is no longer the relevant climate regime.  \n\n"
                     f"**Scenario projections:** each variable extrapolated along its historical linear trend; "
                     f"drift scaled by ×1.5 / ×1.0 / ×0.5 for worst / mean / best."
