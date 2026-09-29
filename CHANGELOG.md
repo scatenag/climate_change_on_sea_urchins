@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Branch `paper/mpb-2026` and its data update** (`.github/workflows/update_paper_branch.yml`).
+  The dashboard cited in the manuscript is served from `paper/mpb-2026`: the v1.5.0 code plus
+  fixes of errors visible in the dashboard (mg/L labels and the CO2 unit note from `44f37df`;
+  the "autocorrelation not rising" and "accumulation lag" claims; hand-written numbers and
+  conclusions replaced by text generated from the precomputed values), and `renv.lock` freezing
+  R 4.6.1 and the DLNM packages. Its code is frozen, its data keep arriving: the new workflow,
+  on main because scheduled runs start only from the default branch, checks out the paper
+  branch, installs its `requirements-lock.txt`, fetches EC50 daily and Copernicus/SST on the 5th
+  (same cron as `update_ec50.yml`), rebuilds with the branch's own code, restores R from
+  `renv.lock`, regenerates the dashboard figures with the branch's scripts (their titles now
+  describe what is plotted, never a conclusion; one used to state the thesis the manuscript
+  refutes, "Environmental exposure shifts ~3 years before the biological collapse"), runs the
+  branch's `tests/test_data_quality.py` before committing, and commits to the branch. It also
+  commits `data/ec50_raw.csv` (fix from `f85faf1`). On failure it opens (or comments on) an issue
+  mentioning the repository owner; a `simulate_failure` input exercises that path by hand. The
+  branch is protected against deletion and force pushes; neither the branch nor this workflow is
+  modified without an explicit request: ADR-0009, which also records how this relates to
+  ADR-0006 (numbers are still frozen by tag; the branch freezes the dashboard's code).
+
 - **Module outputs hold only method descriptions, values computed in the run, and identities
   taken from the study spec.** Everything specific to the Livorno case moved out of module code
   into `examples/livorno_paracentrotus/NOTES.md`, copied as it was but without people's names
