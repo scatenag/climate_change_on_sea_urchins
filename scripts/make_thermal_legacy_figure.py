@@ -1,16 +1,13 @@
 """
-Figure: does chronic heat dose above 24 C predict EC50 beyond the shared trend?
-Reads results/thermal_legacy.csv and results/thermal_legacy_summary.json (from
-climate_change_on_sea_urchins.thermal_legacy) and renders two panels:
-
-  (a) detrended Spearman rho for each of the 5 windows (12/24/36/48/60 months),
-      colored by cross-validation status: green = robust (survives Bonferroni
-      on BOTH the rank-based and the parametric OLS partial test), amber =
-      suggestive (rank test only, not corroborated), grey = neither.
-  (b) EC50 vs cumulative thermal dose for the strongest robust window (falling
-      back to the best suggestive, then the best raw, window if none is
-      robust), after removing each series' own linear time trend.
-
+Figure of the thermal-legacy results (results/thermal_legacy.csv and
+thermal_legacy_summary.json, from climate_change_on_sea_urchins.thermal_legacy):
+  (a) detrended Spearman rho of EC50 on the cumulative thermal dose for each
+      dose window, colored by which Bonferroni-corrected tests fall below 0.05
+      (both / rank only / neither), with both p-values on each bar;
+  (b) detrended dose vs detrended EC50 for one window, chosen by a stated
+      rule (smallest detrended p among the windows passing both tests, else
+      the rank test only, else all), with rho and p in the subtitle.
+Titles describe what is plotted; no conclusion is written into the figure.
 Run:  .venv/bin/python3 scripts/make_thermal_legacy_figure.py
 """
 import json
@@ -62,20 +59,20 @@ ax1.set_ylim(top=max(0.02, per_window["detrended_spearman_r"].max() + 0.05),
              bottom=ymin - 0.09)
 ax1.set_xlabel("Cumulative window (months)")
 ax1.set_ylabel("Detrended Spearman ρ (dose vs EC50)")
-ax1.set_title("(a) Green = robust (rank + OLS)  ·  Amber = rank-only  ·  Grey = neither",
-              fontsize=9.5, loc="left")
+ax1.set_title("(a) Detrended Spearman ρ by dose window, Bonferroni-corrected p on each bar\n"
+              "green = both tests < 0.05 · amber = rank test only · grey = neither",
+              fontsize=9, loc="left")
 ax1.spines[["top", "right"]].set_visible(False)
 
 # (b) scatter for the strongest robust window (fall back to suggestive, then
 # overall best detrended p, if nothing is robust)
 if robust:
-    pool = per_window[per_window["window_months"].isin(robust)]
+    pool, rule = per_window[per_window["window_months"].isin(robust)], "both tests < 0.05"
 elif suggestive:
-    pool = per_window[per_window["window_months"].isin(suggestive)]
+    pool, rule = per_window[per_window["window_months"].isin(suggestive)], "rank test only < 0.05"
 else:
-    pool = per_window
+    pool, rule = per_window, "all windows"
 best_win = int(pool.loc[pool["detrended_p"].idxmin(), "window_months"])
-best_status = "robust" if best_win in robust else ("rank-only, not cross-validated" if best_win in suggestive else "not surviving")
 
 dose_col = f"dose_{thr}C_{best_win}m"
 x, y = d[dose_col].values, d["EC50"].values
@@ -90,19 +87,12 @@ xs = np.array([rx.min(), rx.max()])
 ax2.plot(xs, m * xs + b, color=C_DET, lw=2)
 ax2.set_xlabel(f"Thermal dose ({thr}°C, {best_win}m) — residual\n(linear time trend removed)")
 ax2.set_ylabel("EC50 — residual")
-ax2.set_title(f"(b) {best_win}-month window, detrended (ρ = {r_det:.2f}, p = {p_det:.4f}) — {best_status}",
-              fontsize=9.5, loc="left")
+ax2.set_title(f"(b) {best_win}-month dose vs EC50, both detrended\n"
+              f"ρ = {r_det:.2f}, p = {p_det:.4f} · window: smallest detrended p among {rule}",
+              fontsize=9, loc="left")
 ax2.spines[["top", "right"]].set_visible(False)
 
-not_surviving = summary["windows_not_surviving"]
-if robust:
-    suptitle = (f"Chronic thermal dose above {thr}°C robustly predicts EC50 only at "
-                f"{'/'.join(str(w) for w in sorted(robust))}-month timescale(s)")
-elif suggestive:
-    suptitle = (f"Chronic thermal dose above {thr}°C shows a rank-only, not "
-                f"cross-validated signal at {'/'.join(str(w) for w in sorted(suggestive))} months")
-else:
-    suptitle = f"Chronic thermal dose above {thr}°C is not separable from the shared trend"
+suptitle = f"Cumulative thermal dose above {thr}°C vs EC50, by dose window (detrended)"
 fig.suptitle(suptitle, fontsize=11, y=1.02)
 fig.tight_layout()
 for out in [ROOT / "figures" / "fig_thermal_legacy.png",

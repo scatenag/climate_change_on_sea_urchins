@@ -1,14 +1,10 @@
 """
-Figure: the wild population changed state ~3 years after its environment did.
-
-Reads results produced by climate_change_on_sea_urchins.regime_shift and renders:
-
-  (a) MHW exposure (annual MHW days) with its ~2013 regime shift, overlaid on
-      EC50 with its ~2016 regime shift — visualising the multi-year accumulation
-      lag between environmental forcing and biological collapse.
-  (b) the multifactorial environmental stress index (PC1 of deseasonalised
-      T/S/CO2/O2/pH anomalies) rising through the same window.
-
+Figure of the regime-shift results (climate_change_on_sea_urchins.regime_shift):
+  (a) annual MHW days and the annual mean of the real EC50 measurements, each
+      with its Pettitt break (the last period before the change), with the
+      breaks' p-values in the subtitle;
+  (b) PC1 of the deseasonalised T/S/CO2/O2/pH anomalies, annual mean.
+Titles describe what is plotted; no conclusion is written into the figure.
 Run:  .venv/bin/python3 scripts/make_regime_shift_figure.py
 """
 import json
@@ -35,8 +31,10 @@ ec50 = ec50[ec50.EC50_imputed == False].dropna(subset=["EC50"])
 ec50_year = ec50.assign(y=ec50.Datetime.dt.year).groupby("y")["EC50"].mean()
 
 mhw_break = summ["mhw_exposure_break_year"]
-ec50_break = int(summ["ec50_regime_shift"]["break"][:4])
-lag = summ["exposure_precedes_response_years"]
+ec50_break_month = summ["ec50_regime_shift"]["break"][:7]
+ec50_break = int(ec50_break_month[:4])
+ec50_p = summ["ec50_regime_shift"]["p"]
+mhw_p = float(cp.loc[cp["series"] == "MHW_total_mhw_days", "p_value"].iloc[0])
 
 C_MHW, C_EC, C_STR = "#c0392b", "#1f3b73", "#6b4c9a"
 
@@ -52,22 +50,21 @@ ax1.tick_params(axis="y", labelcolor=C_MHW)
 
 axb = ax1.twinx()
 axb.plot(ec50_year.index, ec50_year.values, "-o", color=C_EC, ms=4, lw=1.8,
-         label="EC50 (copper tolerance)")
+         label="EC50, annual mean of real measurements")
 axb.axvline(ec50_break, color=C_EC, ls="--", lw=1.5)
 axb.set_ylabel("Copper EC50 (µg L⁻¹)", color=C_EC)
 axb.tick_params(axis="y", labelcolor=C_EC)
 
-ymid = ec50_year.max() * 0.9
-axb.annotate("", xy=(ec50_break, ymid), xytext=(mhw_break, ymid),
-             arrowprops=dict(arrowstyle="->", color="black", lw=1.3))
-axb.text((mhw_break + ec50_break) / 2, ymid * 1.02,
-         f"~{lag}-yr accumulation", ha="center", va="bottom", fontsize=8.5)
-ax1.text(mhw_break, 0.97, f" exposure shift {mhw_break}", transform=ax1.get_xaxis_transform(),
+# Titles describe what is plotted, never a conclusion; break dates and p go
+# in a subtitle computed from the precomputed results.
+ax1.text(mhw_break, 0.97, f" Pettitt break {mhw_break}", transform=ax1.get_xaxis_transform(),
          color=C_MHW, fontsize=8, va="top", ha="right")
-axb.text(ec50_break, 0.05, f" response shift {ec50_break}", transform=axb.get_xaxis_transform(),
+axb.text(ec50_break, 0.05, f" Pettitt break {ec50_break_month}", transform=axb.get_xaxis_transform(),
          color=C_EC, fontsize=8, va="bottom", ha="left")
-ax1.set_title("(a) Environmental exposure shifts ~3 years before the biological collapse",
-              fontsize=10, loc="left")
+ax1.set_title("(a) Annual MHW days and annual mean EC50, with their Pettitt breaks\n"
+              f"break = last period before the change · MHW days {mhw_break} (p={mhw_p:.2g}) · "
+              f"EC50 {ec50_break_month} (p={ec50_p:.1e})",
+              fontsize=9, loc="left")
 
 # --- (b) multifactorial stress index ---
 s = stress.dropna().sort_values("Datetime")
@@ -79,11 +76,11 @@ ax2.fill_between(ann_stress.index, ann_stress.values, 0,
                  where=(ann_stress.values < 0), color=C_STR, alpha=0.2)
 ax2.plot(ann_stress.index, ann_stress.values, color=C_STR, lw=1.8)
 ve = summ["multifactorial_stress_index"]["pc1_variance_explained"] * 100
-ax2.set_ylabel("Stress index\n(PC1, a.u.)")
+ax2.set_ylabel("PC1 (a.u.)")
 ax2.set_xlabel("Year")
-ax2.set_title(f"(b) Multifactorial climate-change stress index "
-              f"(PC1 of T/S/CO₂/O₂/pH anomalies, {ve:.0f}% variance)",
-              fontsize=10, loc="left")
+ax2.set_title(f"(b) PC1 of the deseasonalised T/S/CO₂/O₂/pH anomalies, annual mean "
+              f"({ve:.0f}% of their variance)",
+              fontsize=9, loc="left")
 
 fig.tight_layout()
 for out in [ROOT / "figures" / "fig_regime_shift.png",

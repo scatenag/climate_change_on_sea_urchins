@@ -1,12 +1,12 @@
 """
-Figure: the one MHW→EC50 signal that survives detrending — exposure DURATION,
-lagged one year. Reads results/mhw_lag_annual.csv + mhw_lag_annual_summary.json
-(from climate_change_on_sea_urchins.mhw_lag_annual).
-
-  (a) detrended-correlation grid (predictor × lag): only total MHW days at lag 1 yr
-      stands out; event count shows nothing → it's duration, not number.
-  (b) the surviving signal: detrended previous-year MHW days vs detrended EC50.
-
+Figure of the annual lagged MHW -> EC50 results (results/mhw_lag_annual.csv and
+mhw_lag_annual_summary.json, from climate_change_on_sea_urchins.mhw_lag_annual):
+  (a) detrended Spearman rho of annual mean EC50 on each annual MHW descriptor,
+      lagged 0-3 years (* = detrended p < 0.05);
+  (b) scatter of the detrended pair with the smallest detrended p among the
+      negative associations (the module's best_signal), with rho, p and the
+      BH-FDR-adjusted p in the subtitle.
+Titles describe what is plotted; no conclusion is written into the figure.
 Run:  .venv/bin/python3 scripts/make_mhw_lag_annual_figure.py
 """
 import json
@@ -18,6 +18,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
+
+from climate_change_on_sea_urchins.mhw_lag_annual import YEAR_MIN, YEAR_MAX
 
 ROOT = Path(__file__).resolve().parent.parent
 grid = pd.read_csv(ROOT / "results" / "mhw_lag_annual.csv")
@@ -40,35 +42,37 @@ for i in range(len(preds)):
         star = " *" if P.values[i, j] < 0.05 else ""
         ax1.text(j, i, f"{M.values[i,j]:+.2f}{star}", ha="center", va="center",
                  fontsize=8, color="black")
-ax1.set_title("(a) Detrended correlation — only duration, lag 1 yr, survives",
-              fontsize=9.5, loc="left")
+ax1.set_title("(a) Detrended Spearman ρ, annual EC50 vs MHW descriptor at each lag\n"
+              "* = detrended p < 0.05 (uncorrected)", fontsize=9, loc="left")
 fig.colorbar(im, ax=ax1, fraction=0.046, pad=0.04, label="Spearman ρ (detrended)")
 
-# --- (b) the surviving signal scatter ---
+# --- (b) scatter of the best_signal pair ---
 df = pd.read_csv(ROOT / "data" / "data_extended.csv", parse_dates=["Datetime"])
 ci = pd.read_csv(ROOT / "data" / "data_ec50_ci.csv", parse_dates=["Datetime"])
 df = df.merge(ci[["Datetime", "EC50_imputed"]], on="Datetime")
 real = df[df.EC50_imputed == False].dropna(subset=["EC50"])
 ec = real.assign(y=real.Datetime.dt.year).groupby("y")["EC50"].mean()
 ann = pd.read_csv(ROOT / "data" / "mhw_annual.csv").set_index("year")
-j = pd.concat([ec.rename("ec"), ann["total_mhw_days"].shift(1).rename("m")], axis=1).dropna()
-j = j[(j.index >= 2004) & (j.index <= 2025)]
+b = summ["best_signal"]
+pred, lag = b["predictor"], int(b["lag_years"])
+j = pd.concat([ec.rename("ec"), ann[pred].shift(lag).rename("m")], axis=1).dropna()
+j = j[(j.index >= YEAR_MIN) & (j.index <= YEAR_MAX)]
 det = lambda s: s - np.polyval(np.polyfit(s.index.values, s.values, 1), s.index.values)
 xr, yr = det(j["m"]), det(j["ec"])
-b = summ["best_signal"]
 ax2.scatter(xr, yr, s=32, color="#b8500f", alpha=0.75, edgecolor="none")
 m, q = np.polyfit(xr, yr, 1)
 xs = np.array([xr.min(), xr.max()])
 ax2.plot(xs, m * xs + q, color="#b8500f", lw=1.8)
 ax2.axhline(0, color="grey", lw=0.5); ax2.axvline(0, color="grey", lw=0.5)
-ax2.set_xlabel("Previous-year MHW days — residual")
+ax2.set_xlabel(f"{pred}, lagged {lag} yr — residual")
 ax2.set_ylabel("EC50 — residual")
-ax2.set_title(f"(b) The surviving signal (ρ={b['rho_detrended_spearman']:.2f}, "
-              f"p={b['p_detrended_spearman']:.3f})", fontsize=9.5, loc="left")
+ax2.set_title(f"(b) {pred} lagged {lag} yr vs annual EC50, both detrended\n"
+              f"ρ={b['rho_detrended_spearman']:.2f}, p={b['p_detrended_spearman']:.3f}, "
+              f"BH-FDR p={b['p_detrended_fdr_bh']:.2f}, n={b['n']}", fontsize=9, loc="left")
 ax2.spines[["top", "right"]].set_visible(False)
 
-fig.suptitle("Exposure duration (not event count) lagged one year — exploratory, "
-             "does not survive multiple-testing correction", fontsize=10.5, y=1.02)
+fig.suptitle("Annual MHW descriptors vs annual mean EC50, lagged 0–3 years (detrended)",
+             fontsize=10.5, y=1.02)
 fig.tight_layout()
 for out in [ROOT / "figures" / "fig_mhw_lag_annual.png",
             ROOT / "drafts" / "nuova pubblicazione" / "fig_mhw_lag_annual.png"]:

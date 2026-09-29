@@ -1,16 +1,11 @@
 """
-Figure: is the 20-year decline in copper EC50 geochemistry or biology?
-
-Reads results/cu_speciation_decomposition.csv + cu_speciation_summary.json
-(produced by climate_change_on_sea_urchins.cu_speciation) and renders a
-two-panel publication figure:
-
-  (a) nominal EC50 vs speciation-corrected ("free-Cu2+-equivalent") EC50 over
-      time — the two series are nearly indistinguishable, i.e. removing the
-      ocean-acidification bioavailability effect barely changes the trend.
-  (b) attribution of the pre/post-2016 decline into a small geochemical
-      component and a large residual biological component.
-
+Figure of the copper-speciation decomposition (results/cu_speciation_decomposition.csv
+and cu_speciation_summary.json, from climate_change_on_sea_urchins.cu_speciation):
+  (a) nominal EC50 and speciation-corrected ("free-Cu2+-equivalent", literature
+      correction) EC50 of the real measurements over time, with linear fits;
+  (b) the nominal pre/post decline split into the share accounted for by the
+      speciation correction and the remainder, with the values in the labels.
+Titles describe what is plotted; no conclusion is written into the figure.
 Run:  .venv/bin/python3 scripts/make_speciation_figure.py
 """
 import json
@@ -56,8 +51,8 @@ ax1.text(SPLIT_DATE + pd.DateOffset(months=1), ax1.get_ylim()[1] * 0.96,
          f"{SPLIT_DATE:%Y}", color="grey", fontsize=8, va="top")
 ax1.set_ylabel("Copper EC50 (µg L⁻¹)")
 ax1.set_xlabel("Year")
-ax1.set_title("(a) Correcting for Cu speciation barely shifts the decline",
-              fontsize=10, loc="left")
+ax1.set_title("(a) Nominal and speciation-corrected EC50 of the real measurements,\n"
+              "with linear fits", fontsize=10, loc="left")
 ax1.legend(frameon=False, fontsize=8, loc="upper right")
 ax1.spines[["top", "right"]].set_visible(False)
 
@@ -67,13 +62,13 @@ geo = s["geochemical_share_literature_pct"]          # % of the decline
 geo_pts = nominal * geo / 100.0                       # in EC50-decline percentage points
 bio_pts = nominal - geo_pts
 
-ax2.bar(0, geo_pts, width=0.6, color=C_GEO, label="Geochemical (OA bioavailability)")
+ax2.bar(0, geo_pts, width=0.6, color=C_GEO, label="Accounted for by Cu speciation (pH)")
 ax2.bar(0, bio_pts, bottom=geo_pts, width=0.6, color=C_BIO,
-        label="Residual biological")
+        label="Not accounted for by speciation")
 ax2.set_xlim(-0.8, 0.8)
 ax2.set_xticks([])
 ax2.set_ylabel("Decline in nominal EC50 (%)")
-ax2.set_title("(b) Attribution of the\npre→post-2016 decline", fontsize=10, loc="left")
+ax2.set_title(f"(b) Nominal decline, before vs\nfrom {SPLIT_DATE:%Y-%m} on", fontsize=10, loc="left")
 ax2.annotate(f"{geo_pts:.1f} pp\n(≈{geo:.0f}%)", (0, geo_pts / 2),
              ha="center", va="center", fontsize=8, color="#0b3d66")
 ax2.annotate(f"{bio_pts:.1f} pp\n(≈{100 - geo:.0f}%)", (0, geo_pts + bio_pts / 2),
