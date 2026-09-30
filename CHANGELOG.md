@@ -40,7 +40,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Two dashboards.** The one cited in the manuscript, from `paper/mpb-2026`, keeps
   https://climate-change-on-sea-urchins.streamlit.app; the one from `main`, whose code changes
   as the tool is generalised, moved to https://climate-response-explorer.streamlit.app. Its
-  header no longer says it corresponds to v1.5.0 and points to the cited one instead.
+  header no longer says it corresponds to v1.5.0 and points to the cited one instead. It is
+  titled "Climate Response Explorer", with a new SVG logo (`assets/climate_response_logo.svg`)
+  in place of the sea-urchin image; the README's Streamlit badge points to it, with a second
+  badge for the dashboard cited in the manuscript.
 
 - **Module outputs hold only method descriptions, values computed in the run, and identities
   taken from the study spec.** Everything specific to the Livorno case moved out of module code

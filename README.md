@@ -3,7 +3,8 @@
 [![Tests](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/tests.yml)
 [![Data validated](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml/badge.svg?branch=main)](https://github.com/scatenag/climate_change_on_sea_urchins/actions/workflows/validate_data.yml)
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/scatenag/climate_change_on_sea_urchins/main?labpath=notebooks/analysis.ipynb)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-change-on-sea-urchins.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://climate-response-explorer.streamlit.app)
+[![Dashboard cited in the manuscript](https://img.shields.io/badge/dashboard-cited%20in%20the%20manuscript-2f8fd0)](https://climate-change-on-sea-urchins.streamlit.app)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19352308.svg)](https://doi.org/10.5281/zenodo.19352308)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 

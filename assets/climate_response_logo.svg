@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Climate Response Explorer">
+  <title>Climate Response Explorer</title>
+  <defs>
+    <radialGradient id="ocean" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#7fd3f0"/>
+      <stop offset="0.55" stop-color="#2f8fd0"/>
+      <stop offset="1" stop-color="#1d5f9e"/>
+    </radialGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8cc63f"/>
+      <stop offset="1" stop-color="#3a9d5d"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1d5f9e"/>
+      <stop offset="1" stop-color="#4cc3e0"/>
+    </linearGradient>
+    <linearGradient id="arrow" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#3fb8c9"/>
+      <stop offset="1" stop-color="#7ee0c8"/>
+    </linearGradient>
+    <clipPath id="globe"><circle cx="100" cy="102" r="46"/></clipPath>
+  </defs>
+
+  <!-- orange arc behind, upper right -->
+  <path d="M112 34 A68 68 0 0 1 166 118" fill="none" stroke="#f5a23a" stroke-width="10" stroke-linecap="round"/>
+  <!-- outer blue ribbon, bottom and right -->
+  <path d="M38 118 A66 66 0 0 0 166 124" fill="none" stroke="url(#blue)" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- globe -->
+  <circle cx="100" cy="102" r="48" fill="#ffffff"/>
+  <circle cx="100" cy="102" r="46" fill="url(#ocean)"/>
+  <g clip-path="url(#globe)" fill="#8cc63f">
+    <!-- the Americas -->
+    <path d="M62 70 C72 62 86 64 88 74 C90 82 82 86 80 94 C78 102 86 108 84 118 C82 128 76 138 70 140 C68 128 72 120 66 110 C60 100 56 84 62 70 Z"/>
+    <!-- Europe and Africa -->
+    <path d="M110 66 C120 60 134 64 138 72 C132 76 128 80 132 86 C140 92 142 104 136 114 C130 124 124 134 118 136 C116 124 118 114 112 106 C106 98 104 88 110 82 C106 76 106 70 110 66 Z"/>
+  </g>
+  <ellipse cx="86" cy="80" rx="16" ry="9" fill="#ffffff" opacity="0.25"/>
+
+  <!-- green ribbon wrapping from the left, in front of the globe -->
+  <path d="M60 46 C34 64 28 104 44 130 C62 158 108 162 136 140" fill="none" stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+  <path d="M60 46 C34 64 28 104 44 130 C62 158 108 162 136 140" fill="none" stroke="url(#green)" stroke-width="12" stroke-linecap="round"/>
+
+  <!-- rising arrow crossing the globe -->
+  <path d="M70 146 C104 138 132 108 150 64" fill="none" stroke="#ffffff" stroke-width="15" stroke-linecap="round"/>
+  <path d="M70 146 C104 138 132 108 150 64" fill="none" stroke="url(#arrow)" stroke-width="9" stroke-linecap="round"/>
+  <path d="M136 62 L162 40 L162 74 Z" fill="#7ee0c8" stroke="#ffffff" stroke-width="3" stroke-linejoin="round"/>
+
+  <!-- data nodes -->
+  <circle cx="44" cy="84" r="4" fill="none" stroke="#1d5f9e" stroke-width="2"/>
+  <circle cx="152" cy="54" r="3" fill="#ffffff"/>
+  <rect x="150" y="136" width="6" height="6" rx="1" fill="none" stroke="#3fb8c9" stroke-width="2"/>
+</svg>
