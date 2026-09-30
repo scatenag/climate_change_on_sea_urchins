@@ -1007,11 +1007,10 @@ with _ico_col:
     )
 
 st.caption(
-    "The analysis published in Sartori, Scatena, Gaion et al. (*Marine Pollution "
-    "Bulletin*, submitted) corresponds to package release **v1.5.0** (see the DOI "
-    "badge in the repository README). This dashboard reflects the most recent data "
-    "available and will diverge from that release as the underlying series keeps "
-    "growing via the automated monthly update."
+    "This is the development version of the dashboard: its code changes as the "
+    "tool is generalised. The dashboard cited in Sartori, Scatena, Gaion et al. "
+    "(*Marine Pollution Bulletin*, submitted) is at "
+    "[climate-change-on-sea-urchins.streamlit.app](https://climate-change-on-sea-urchins.streamlit.app)."
 )
 
 st.markdown("#### Date range")

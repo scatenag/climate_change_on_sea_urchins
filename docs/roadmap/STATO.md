@@ -3,7 +3,7 @@
 > Si aggiorna alla fine di **ogni** sessione di lavoro, prima del merge.
 > Tenerlo corto: se supera una pagina, sposta il dettaglio in un ADR o in una issue.
 
-**Ultimo aggiornamento:** 28 settembre 2026
+**Ultimo aggiornamento:** 30 settembre 2026
 
 ---
 
@@ -221,6 +221,16 @@ correzioni di errori visibili, `renv.lock` per R), dati aggiornati ogni giorno d
 sviluppo; lo scambio dei sottodomini su Streamlit lo fa l'utente. Branch protetto; né il branch né
 quel workflow si toccano senza richiesta esplicita (`CLAUDE.md`, ADR-0009). Le figure PNG del
 branch sono rigenerate dal job, con titoli descrittivi.
+**30/9:** app pubblicate — lavoro `climate-change-on-sea-urchins.streamlit.app` (branch), sviluppo
+`climate-response-explorer.streamlit.app` (`main`, in testa rimanda a quella del lavoro). Job verde
+con Copernicus dopo aver fissato magrittr 2.0.5 in `renv.lock` (2.0.4 compilato con R 4.6.1 va in
+segfault; issue #29 chiusa), esercitazione dell'allarme riuscita (#31 chiusa). Sul branch:
+`requirements.txt` con le dipendenze dirette alle versioni esatte del lock; lettura della tabella
+della dose termica e ritardo MHW del forecast generati dai valori. **Le parti ricalcolate dal vivo
+non coincidono con il job, e non per l'ambiente** (lock vs limiti larghi: correlazioni e CCF
+identiche, forecast entro 2e-7): il dashboard prepara i dati per conto suo (EC50 dal vivo dal
+foglio, imputazione propria, metriche MHW NaN oltre la copertura SST dove la pipeline mette 0) —
+scarti fino a 0.03 nelle correlazioni, 1.1 µg/L nel forecast. Codice di v1.5.0, non toccato.
 
 **Issue aperte:**
 - [#3](https://github.com/scatenag/climate_change_on_sea_urchins/issues/3) — dashboard
@@ -253,6 +263,10 @@ l'utente decide quando fondere.
 
 ## Da non dimenticare
 
+- **`common.load_data()` mette a 0 le metriche MHW nei mesi senza SST** (`fillna(0)`, su `main` e
+  sul branch): oggi luglio–settembre 2026, in piena estate, entrano nelle analisi come "nessuna
+  ondata di calore" perché la SST giornaliera finisce a giugno. Assenza di dato trattata come
+  assenza di evento, e scelta non leggibile nella specifica (regola 6). Da decidere, non toccato.
 - **L'auto-update non si tocca.** È una funzionalità voluta ed è ciò che il lavoro rivendica
   nelle conclusioni. I trigger a schedule girano solo sul branch di default: per congelare
   basta un tag, non serve fermare né isolare niente.
