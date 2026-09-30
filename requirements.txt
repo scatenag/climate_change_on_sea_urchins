@@ -1,3 +1,8 @@
+# paper/mpb-2026: code and environment are frozen (ADR-0009). Every direct
+# dependency is pinned to its exact version in requirements-lock.txt, the
+# environment the update job runs in, so the live-recomputed parts of the
+# app give the job's values. The comments below explain the historical
+# bounds these pins replace.
 # This project's own package (src/climate_change_on_sea_urchins/), which
 # provides both the analysis pipeline and the dashboard (app.py imports it).
 # Editable install: pip/Streamlit Cloud build this from pyproject.toml.
@@ -11,7 +16,7 @@
 # reproducing reliably locally. statsmodels has also had documented pandas
 # 3.0 compatibility bugs. Revisit the pin once pandas 3.x has been
 # deliberately tested against the ARIMA/SARIMAX code paths.
-pandas>=2.0,<3.0
+pandas==2.3.3
 # numpy/scipy upper-bounded for the same reason as pandas above: unpinned,
 # Streamlit Cloud resolved numpy 2.5.1 / scipy 1.18.0 (barely-released at
 # the time) while local dev/testing used numpy 1.26.4 / scipy 1.15.3
@@ -23,8 +28,8 @@ pandas>=2.0,<3.0
 # the exact range already proven stable through this whole project's local
 # testing. Revisit once numpy 2.5.x/scipy 1.18.x have more production
 # mileage elsewhere.
-numpy>=1.24,<2.0
-scipy>=1.11,<1.16
+numpy==1.26.4
+scipy==1.15.3
 # statsmodels/scikit-learn were the only two entries in this file with no
 # upper bound at all. Confirmed as the source of real (not floating-point)
 # drift in results/ across auto-update runs: an unpinned statsmodels install
@@ -33,8 +38,8 @@ scipy>=1.11,<1.16
 # mhw_robustness.py's tree-ensemble outputs (CV R^2, permutation importance)
 # by several percent between runs with identical seeds and identical data.
 # Bounded to the next minor version after what's proven stable here.
-statsmodels>=0.14,<0.15
-scikit-learn>=1.3,<1.9
+statsmodels==0.14.6
+scikit-learn==1.8.0
 
 # MHW->EC50 robustness battery (mhw_robustness.py): Convergent Cross Mapping
 # and wavelet coherence, two of five independent checks run alongside the
@@ -43,7 +48,7 @@ skccm==0.2.dev0
 pycwt==0.4.0b0
 
 # Visualization & dashboard
-plotly>=5.18
+plotly==6.6.0
 # Upper-bounded below the Tornado->Uvicorn internal server migration
 # (happened between 1.56 and 1.57): unpinned, Streamlit Cloud silently
 # picks up whatever is newest on every redeploy, and production started
@@ -51,15 +56,15 @@ plotly>=5.18
 # very first interaction after load produces a blank page with zero
 # server-side trace) right around when it drifted onto a 1.57+ build.
 # Revisit once that migration has had time to mature upstream.
-streamlit>=1.35,<1.57
-Pillow>=10.0
+streamlit==1.56.0
+Pillow==10.4.0
 
 # Marine Heatwave detection: own implementation in mhw_detection.py, no
 # install needed. marineHeatWaves.py is vendored at the repo root for
 # reference but not imported by any current code path.
 
 # Testing
-pytest>=7.0
+pytest==9.0.2
 
 # NOTE: copernicusmarine, xarray, netcdf4 are NOT listed here.
 # They are only needed locally to run the data download scripts.
