@@ -2509,8 +2509,14 @@ def _tab_forecast():
         st.info(
             f"Trained on **{_fc_meta['train_start']} – {_fc_meta['train_end']}** "
             f"({_fc_meta['n_train']} months) · "
-            f"Optimal MHW→EC50 lag: **{_fc_meta['optimal_lag']} months** · "
+            f"MHW lag used as regressor: **{_fc_meta['optimal_lag']} months** · "
             f"Forecast: **{_fc_meta['last_date']} → {_fc_meta['forecast_end']}**"
+        )
+        st.caption(
+            f"The lag is the one, between 0 and {_TAU_MAX} months, with the largest |Spearman r| "
+            "between MHW peak intensity and real EC50 on raw levels. It is chosen only to build "
+            "the lagged MHW regressor of the SARIMAX and is not a result: raw levels share a "
+            "trend. The detrended lag analysis is in the MHW → Gametes (lag) tab."
         )
 
         fc_tab_sarimax, fc_tab_bio = st.tabs([
@@ -2770,7 +2776,7 @@ def _tab_regime_shift():
                 "corroborated — at a different temperature/duration — by acute heat-stress "
                 "biomarker and egg-viability effects from 23°C in Gallo et al. 2023) is "
                 "tested against EC50 with **two different tests**, both corrected for the "
-                "5 windows tested:"
+                f"{len(df_tl)} windows tested:"
             )
             st.markdown(
                 "- **Rank test**: Spearman correlation between dose and EC50 after each is "
@@ -2817,26 +2823,52 @@ def _tab_regime_shift():
             )
             _dl_btn(disp, "thermal_legacy_windows.csv", "⬇ Full per-window table (CSV)")
 
-            def _span(ws):
-                return ", ".join(f"{w}-month" for w in sorted(ws)) if ws else "none"
+            # Every statement here is generated from the precomputed values,
+            # including the case with no window surviving both tests.
+            n_w = len(df_tl)
+            thr = f"{tl['threshold_C']:.0f}°C"
+            by_w = df_tl.set_index("window_months")
 
-            st.markdown(
-                f"**Reading the table**: only the **{_span(robust)}** window clears "
-                "Bonferroni on *both* tests — the one place this dashboard calls it a "
-                f"cross-validated signal. The **{_span(suggestive)}** window(s) clear the "
-                "rank test but not the parametric one: a real correlation in the data, but "
-                "fragile and method-dependent — report as suggestive, not established, if "
-                f"at all. The **{_span(not_surviving)}** window(s) clear neither test; "
-                "dose-time collinearity there is high enough that the detrended residuals "
-                "are mostly noise. **Temperature is at most a short-window contributor, "
-                "not a sole or unlimited-lag explanation.**"
-            )
+            def _span(ws):
+                ws = sorted(ws)
+                if len(ws) == 1:
+                    return f"the {ws[0]}-month window"
+                head = ", ".join(f"{w}-" for w in ws[:-1])
+                return f"the {head} and {ws[-1]}-month windows"
+
+            def _vals(w):
+                r = by_w.loc[w]
+                return (f"rank ρ={r['detrended_spearman_r']:+.2f}, Bonferroni "
+                        f"p={r['p_bonferroni']:.3f}; OLS partial Bonferroni "
+                        f"p={r['partial_p_bonferroni']:.3f}; VIF={r['vif']:.2f}")
+
+            if robust:
+                headline = (f"**Heat dose above {thr} and EC50: the association survives "
+                            f"Bonferroni on both tests for {_span(robust)}, out of {n_w} "
+                            "tested.**")
+            else:
+                headline = (f"**Heat dose above {thr} and EC50: no window, out of {n_w} "
+                            "tested, survives Bonferroni on both tests.**")
+            lines = [f"**Reading the table.** {headline}", ""]
+            for w in by_w.index:
+                if w in robust:
+                    what = "both tests"
+                elif w in suggestive:
+                    what = "rank test only: the result depends on the test chosen"
+                else:
+                    what = "neither test"
+                lines.append(f"- {w} months: {what} ({_vals(w)}).")
+            lo, hi = by_w["vif"].idxmin(), by_w["vif"].idxmax()
+            lines += ["", "Variance inflation of dose given time (VIF) ranges from "
+                      f"{by_w.loc[lo, 'vif']:.2f} ({lo} months) to "
+                      f"{by_w.loc[hi, 'vif']:.2f} ({hi} months)."]
+            st.markdown("\n".join(lines))
         _img = FIGS / "fig_thermal_legacy.png"
         if _img.exists():
             st.image(str(_img), use_container_width=True)
             st.caption(
                 "Bar color: green = robust (both tests survive Bonferroni), amber = "
-                "rank-only (not cross-validated), grey = neither. Each bar is annotated "
+                "rank-only (not confirmed by the parametric test), grey = neither. Each bar is annotated "
                 "with both tests' Bonferroni-corrected p-values."
             )
 
