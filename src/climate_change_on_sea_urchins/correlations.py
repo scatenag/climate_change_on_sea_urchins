@@ -73,14 +73,12 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
     return r_df, p_df
 
 
-def run(response=None, results=None):
-    results = results if results is not None else default_results_dir()
-    if response is None:
-        response = default_response_spec()
-    label = response.label  # display identity for the response row/column below
-
-    df, _, _, _ = load_data()
-
+def compute_matrices(df: pd.DataFrame) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
+    """Trend-based Spearman matrices (r, p) of `df` (load_data's df_full, or
+    a date-filtered part of it) for the whole record and before/after
+    SPLIT_DATE, keyed "all"/"pre"/"post". Rows and columns carry the
+    internal names (RESPONSE_COL). The one implementation: run() writes
+    these, the dashboard shows them."""
     df_work = df.set_index("Datetime")
 
     # Mirror notebook cell 7: apply rolling mean to ALL response values (not
@@ -98,6 +96,7 @@ def run(response=None, results=None):
     mhw_cols = MHW_COLS   # mhw_peak_intensity, mhw_days
     all_cols  = env_cols + mhw_cols
 
+    matrices = {}
     for period, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
         subset = df_work[mask]
 
@@ -109,7 +108,20 @@ def run(response=None, results=None):
 
         combined = pd.concat([trend_env, trend_mhw], axis=1)
 
-        r_df, p_df = spearman_matrix(combined, all_cols)
+        matrices[period] = spearman_matrix(combined, all_cols)
+    return matrices
+
+
+def run(response=None, results=None):
+    results = results if results is not None else default_results_dir()
+    if response is None:
+        response = default_response_spec()
+    label = response.label  # display identity for the response row/column below
+
+    df, _, _, _ = load_data()
+
+    matrices = compute_matrices(df)
+    for period, (r_df, p_df) in matrices.items():
         # Output identity: the response's row/column name is its display
         # label, never the internal RESPONSE_COL (see common.py).
         r_df = r_df.rename(index={RESPONSE_COL: label}, columns={RESPONSE_COL: label})
@@ -117,7 +129,8 @@ def run(response=None, results=None):
         r_df.to_csv(results / f"corr_{period}.csv")
         p_df.to_csv(results / f"corr_pval_{period}.csv")
 
-    print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {len(all_cols)} vars)")
+    n_vars = len(next(iter(matrices.values()))[0])
+    print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {n_vars} vars)")
 
 
 if __name__ == "__main__":

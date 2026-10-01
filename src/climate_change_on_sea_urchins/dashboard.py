@@ -36,6 +36,7 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
+from .correlations import compute_matrices
 from .common import (SPLIT_DATE, RESULTS, RESPONSE_COL, IMPUTED_COL, aggregate_monthly,
                      load_data, load_ec50_monthly, load_ec50_raw, load_mhw_annual)
 from .mhw_analysis import (
@@ -521,80 +522,17 @@ def compute_forecast(df: pd.DataFrame, df_real: pd.DataFrame,
 @st.cache_data(show_spinner=False, ttl=900, max_entries=3)
 def compute_correlations(df: pd.DataFrame) -> dict:
     """
-    Compute Spearman correlation matrices (all/pre/post) directly from the
-    loaded DataFrame — avoids relying on pre-computed CSVs that may be stale.
-    Mirrors the logic of analysis/03_correlations.py.
+    Spearman correlation matrices (all/pre/post) on the loaded, possibly
+    date-filtered DataFrame, with the update job's own function
+    (correlations.compute_matrices): the same values as the job's on the
+    same data (tests/test_live_response.py).
     """
-    env_cols = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]
-    mhw_cols = ["mhw_peak_intensity", "mhw_days"]
-
-    env_cols = [c for c in env_cols if c in df.columns]
-    mhw_cols = [c for c in mhw_cols if c in df.columns]
-    all_cols  = env_cols + mhw_cols
-
-    df_work = df.set_index("Datetime").copy()
-    # Use only real EC50 measurements (set imputed to NaN) then apply rolling mean
-    # to smooth measurement noise — mirrors notebook cell 7 / analysis script
-    df_work.loc[df_work["EC50_imputed"] == True, "EC50"] = np.nan
-    df_work["EC50"] = df_work["EC50"].rolling(window=12, min_periods=1, center=True).mean()
-
-    pre_mask  = df_work.index < SPLIT_DATE
-    post_mask = df_work.index >= SPLIT_DATE
-
-    def _extract_trends(subset):
-        trend = pd.DataFrame(index=subset.index)
-        for col in env_cols:
-            series = subset[col].copy() if col in subset.columns else pd.Series(dtype=float)
-            valid  = series.dropna()
-            if len(valid) < 24:
-                trend[col] = series
-                continue
-            # Observed span only, as in correlations.extract_trends.
-            span = series.loc[valid.index[0]:valid.index[-1]]
-            try:
-                dec = seasonal_decompose(
-                    span.interpolate("linear"),
-                    model="multiplicative",
-                    period=12,
-                    extrapolate_trend="freq",
-                    two_sided=False,
-                )
-                trend[col] = dec.trend.reindex(series.index)
-            except Exception:
-                trend[col] = series
-        for col in mhw_cols:
-            if col in subset.columns:
-                trend[col] = subset[col].values
-        return trend
-
-    def _spearman_matrix(tdf):
-        n = len(all_cols)
-        r_mat = np.eye(n)
-        p_mat = np.zeros((n, n))
-        for i in range(n):
-            for j in range(i + 1, n):
-                if all_cols[i] not in tdf.columns or all_cols[j] not in tdf.columns:
-                    r_mat[i, j] = r_mat[j, i] = np.nan
-                    p_mat[i, j] = p_mat[j, i] = np.nan
-                    continue
-                a = tdf[all_cols[i]].dropna()
-                b = tdf[all_cols[j]].dropna()
-                common = a.index.intersection(b.index)
-                if len(common) >= 5:
-                    r, p = stats.spearmanr(a[common], b[common])
-                else:
-                    r, p = np.nan, np.nan
-                r_mat[i, j] = r_mat[j, i] = r
-                p_mat[i, j] = p_mat[j, i] = p
-        return (pd.DataFrame(r_mat, index=all_cols, columns=all_cols),
-                pd.DataFrame(p_mat, index=all_cols, columns=all_cols))
-
-    results = {}
-    for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
-        subset = df_work[mask]
-        r_df, p_df = _spearman_matrix(_extract_trends(subset))
-        results[label] = (r_df, p_df)
-    return results
+    work = df.rename(columns={"EC50": RESPONSE_COL, "EC50_imputed": IMPUTED_COL})
+    shown = {RESPONSE_COL: "EC50"}
+    return {
+        period: (r.rename(index=shown, columns=shown), p.rename(index=shown, columns=shown))
+        for period, (r, p) in compute_matrices(work).items()
+    }
 
 
 ENV_CCF_COLS = ["O2", "CO2", "Temperature", "Salinity", "pH", "EC50"]

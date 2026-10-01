@@ -67,3 +67,12 @@ def test_dashboard_prepares_data_with_load_data():
     assert "load_data" in calls
     src = DASHBOARD.read_text()
     assert ".rolling(window=12, min_periods=3" not in src, "the dashboard imputes the response itself"
+
+
+def test_dashboard_correlations_are_the_jobs():
+    # one implementation of the trend correlations: correlations.compute_matrices
+    tree = ast.parse(DASHBOARD.read_text())
+    defined = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    assert not defined & {"_extract_trends", "_spearman_matrix"}
+    calls = {getattr(n.func, "id", None) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+    assert "compute_matrices" in calls
