@@ -345,6 +345,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Series extended beyond their last observed month.** Environmental variables and the
+  response end at different months, and several fills repeated the last observed value into the
+  missing edge (pandas' linear `interpolate` does that at the end of a series, `bfill`/`ffill`
+  at both). Now no fill extends a series beyond its first or last observed month: the seasonal
+  decomposition of the correlations runs on each series' observed span (in `correlations.py`
+  and in the development dashboard), the forecast's response and covariates are filled only
+  inside their gaps (`forecast.py` and the dashboard's live forecast), the prewhitening target
+  is filtered on its observed span and the Granger target ends where it ends. Tests with three
+  missing months at the end (`tests/test_missing_edges.py`). On the frozen fixture the
+  environmental variables are complete to the last month, so only the forecast moves (7
+  golden-master files updated with approval): its training used to include June and July 2026
+  with May's response value repeated, as if measured; forecast EC50 changes by at most 1.25
+  ug/L, the scenarios' final values by 0.1 to 0.3. Centered rolling means with a low
+  `min_periods` behave similarly at the edges and are recorded as an open method choice in
+  `docs/adr/0000`.
+
 - **Months without SST entered the analyses as months without heatwaves.** The daily SST
   arrives months after the response series, so at every update the last months of the record
   have no MHW catalogue (three on 2026-09-30: July to September 2026, in full summer).
