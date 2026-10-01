@@ -41,20 +41,28 @@ LOOSE = (1e-3, 1e-12)
 # main-grid driver, not one of the near-degenerate event drivers (41% zeros,
 # vs. mhw_severe_intensity's 94%) -- a fixed low order on it is expected to
 # be well-conditioned.
+#
+# Recomputed 2026-09-30 (fix/mhw-nan-without-sst). The fixture's July 2026 is
+# beyond its SST coverage: load_data() used to set its MHW metrics to 0 ("no
+# heatwave"), and the ARIMA filter was estimated on that invented 0. Now the
+# month is missing and the filter is estimated on the driver's observed span
+# only (tests/test_mhw_missing_sst.py). n is unchanged at every lag (July
+# 2026's response is imputed, so that month never entered a pair); r and p
+# move in the third or fourth decimal, no lag crosses 0.05.
 EXPECTED = [
-    {"lag": 0, "spearman_r": -0.06420658276112413, "p_value": 0.4154921276091714, "n": 163},
-    {"lag": 1, "spearman_r": -0.18608575656308712, "p_value": 0.017392118051698494, "n": 163},
-    {"lag": 2, "spearman_r": -0.2758562777234423, "p_value": 0.00038074299075663634, "n": 162},
-    {"lag": 3, "spearman_r": -0.174358753163101, "p_value": 0.02695982341335332, "n": 161},
-    {"lag": 4, "spearman_r": -0.0925934606820579, "p_value": 0.24420309552113717, "n": 160},
-    {"lag": 5, "spearman_r": -0.0344190351086697, "p_value": 0.6666786904682067, "n": 159},
-    {"lag": 6, "spearman_r": -0.0943605206591832, "p_value": 0.23677167071489152, "n": 159},
-    {"lag": 7, "spearman_r": -0.07531347026510628, "p_value": 0.3454178116906895, "n": 159},
-    {"lag": 8, "spearman_r": -0.1911720802483879, "p_value": 0.015783895778498865, "n": 159},
-    {"lag": 9, "spearman_r": -0.16574516360162408, "p_value": 0.03680319082903203, "n": 159},
-    {"lag": 10, "spearman_r": -0.117222951994268, "p_value": 0.14114494740072972, "n": 159},
-    {"lag": 11, "spearman_r": -0.06683783138285168, "p_value": 0.4025477549269739, "n": 159},
-    {"lag": 12, "spearman_r": -0.09717279675185098, "p_value": 0.22302628331201932, "n": 159},
+    {"lag": 0, "spearman_r": -0.062172676941493345, "p_value": 0.43044992179568453, "n": 163},
+    {"lag": 1, "spearman_r": -0.1805411329334765, "p_value": 0.02109719694777279, "n": 163},
+    {"lag": 2, "spearman_r": -0.27447037022923926, "p_value": 0.00040852717061259594, "n": 162},
+    {"lag": 3, "spearman_r": -0.17375213779057413, "p_value": 0.027504419092156496, "n": 161},
+    {"lag": 4, "spearman_r": -0.09044298605414273, "p_value": 0.2553769284644249, "n": 160},
+    {"lag": 5, "spearman_r": -0.0319381418676857, "p_value": 0.6894150264747044, "n": 159},
+    {"lag": 6, "spearman_r": -0.09510993485040777, "p_value": 0.23305215667903603, "n": 159},
+    {"lag": 7, "spearman_r": -0.07220569038520819, "p_value": 0.3657427696486154, "n": 159},
+    {"lag": 8, "spearman_r": -0.1858311440171961, "p_value": 0.019015934476946925, "n": 159},
+    {"lag": 9, "spearman_r": -0.1626164318127538, "p_value": 0.0405611165547235, "n": 159},
+    {"lag": 10, "spearman_r": -0.11448531167900645, "p_value": 0.15073403330250243, "n": 159},
+    {"lag": 11, "spearman_r": -0.06268211129687128, "p_value": 0.4324962162642009, "n": 159},
+    {"lag": 12, "spearman_r": -0.09417840936231192, "p_value": 0.23768177307653457, "n": 159},
 ]
 
 

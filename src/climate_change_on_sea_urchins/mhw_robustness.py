@@ -70,6 +70,9 @@ def run_severe_ccf(df_full: pd.DataFrame, events: pd.DataFrame, label: str) -> t
 
     df2 = df_full.merge(sev_monthly, left_on="Datetime", right_index=True, how="left")
     df2["mhw_severe_intensity"] = df2["mhw_severe_intensity"].fillna(0.0)
+    # 0 means "no severe event" only where the MHW catalogue exists: months
+    # beyond the SST coverage stay missing (tests/test_mhw_missing_sst.py).
+    df2.loc[df2["mhw_days"].isna(), "mhw_severe_intensity"] = np.nan
 
     driver, targets = "mhw_severe_intensity", [RESPONSE_COL]
     df_ccf = df2.copy()
@@ -191,7 +194,10 @@ def run_ccm(df_full: pd.DataFrame, label: str) -> pd.DataFrame:
     import skccm as ccm
     from skccm.utilities import train_test_split
 
-    d = df_full.sort_values("Datetime").reset_index(drop=True)
+    # Months beyond the SST coverage have no MHW metrics; they are the last
+    # months of the record, so dropping them keeps the series contiguous.
+    d = df_full[df_full["mhw_peak_intensity"].notna()]
+    d = d.sort_values("Datetime").reset_index(drop=True)
     x = d["mhw_peak_intensity"].values.astype(float)
     y = d[RESPONSE_COL].values.astype(float)
     x = (x - x.mean()) / x.std()
@@ -223,7 +229,10 @@ def run_ccm(df_full: pd.DataFrame, label: str) -> pd.DataFrame:
 def run_wavelet_coherence(df_full: pd.DataFrame, n_surrogates: int = 100) -> dict:
     import pycwt as wavelet
 
-    d = df_full.sort_values("Datetime").reset_index(drop=True)
+    # Months beyond the SST coverage have no MHW metrics; they are the last
+    # months of the record, so dropping them keeps the series contiguous.
+    d = df_full[df_full["mhw_peak_intensity"].notna()]
+    d = d.sort_values("Datetime").reset_index(drop=True)
     x = d["mhw_peak_intensity"].values.astype(float)
     y = d[RESPONSE_COL].values.astype(float)
     x = (x - x.mean()) / x.std()

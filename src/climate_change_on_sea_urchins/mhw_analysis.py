@@ -136,6 +136,19 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
     return best_order, best_fit
 
 
+def _driver_observed_span(df: pd.DataFrame, driver: str) -> tuple[int, int]:
+    """Positions of the driver's first and last observed month (end
+    exclusive). Months at either edge without a driver value (for MHW
+    metrics: beyond the SST coverage, which arrives months after the
+    response) have no driver value, and are never filled
+    (tests/test_mhw_missing_sst.py); gaps inside the span are left to the
+    caller."""
+    observed = np.flatnonzero(df[driver].notna().to_numpy())
+    if len(observed) == 0:
+        return 0, 0
+    return int(observed[0]), int(observed[-1]) + 1
+
+
 def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
                              tau_max: int = TAU_MAX,
                              order: tuple[int, int, int] | None = None) -> tuple[pd.DataFrame, dict]:
@@ -158,7 +171,11 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
     exercise this function's fit-apply-correlate computation deterministically,
     independent of order selection.
     """
-    driver_full = df[driver].ffill().bfill().values
+    # The filter is estimated on the driver's observed span only; outside it
+    # the driver residuals are missing, so a response month beyond the span
+    # still pairs, at lag k, with the driver month k earlier.
+    start, end = _driver_observed_span(df, driver)
+    driver_full = df[driver].iloc[start:end].ffill().values
     if order is None:
         order, driver_fit = _best_arima_order(driver_full)
     else:
@@ -166,8 +183,9 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
     if driver_fit is None:
         return pd.DataFrame(), {}
 
-    driver_resid = driver_fit.resid
-    lb = acorr_ljungbox(driver_resid, lags=[6, 12, 24], return_df=True)
+    lb = acorr_ljungbox(driver_fit.resid, lags=[6, 12, 24], return_df=True)
+    driver_resid = np.full(len(df), np.nan)
+    driver_resid[start:end] = driver_fit.resid
     diagnostics = {
         "driver": driver,
         "order": list(order),
@@ -227,6 +245,10 @@ def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
     same principle as the CCF panels' lag-family correction.
     """
     results = {}
+    # Granger needs complete, contiguous rows: the series ends where the
+    # driver does.
+    start, end = _driver_observed_span(df, driver)
+    df = df.iloc[start:end]
     x = df[driver].ffill().bfill()
 
     for target in targets:

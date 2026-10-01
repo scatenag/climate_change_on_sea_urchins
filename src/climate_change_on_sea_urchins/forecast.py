@@ -102,8 +102,11 @@ def build_monthly_series(df_real: pd.DataFrame, df_full: pd.DataFrame,
                     .reindex(monthly.set_index("Datetime").index))
     monthly = monthly.set_index("Datetime")
     monthly[RESPONSE_COL] = ec50_monthly[RESPONSE_COL].interpolate("linear")
-    for col in ["pH", "Temperature", "mhw_lagged"]:
+    for col in ["pH", "Temperature"]:
         monthly[col] = monthly[col].ffill().bfill()
+    # Not filled: months beyond the SST coverage have no MHW value, and the
+    # dropna below removes them instead (tests/test_mhw_missing_sst.py).
+    monthly["mhw_lagged"] = monthly["mhw_lagged"].ffill(limit_area="inside")
     monthly = monthly.dropna(subset=[RESPONSE_COL, "mhw_lagged", "pH", "Temperature"]).reset_index()
     return monthly
 
