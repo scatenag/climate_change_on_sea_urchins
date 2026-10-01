@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
 
 from climate_change_on_sea_urchins import common
 from climate_change_on_sea_urchins.common import RESPONSE_COL
@@ -48,21 +49,22 @@ LOOSE = (1e-3, 1e-12)
 # month is missing and the filter is estimated on the driver's observed span
 # only (tests/test_mhw_missing_sst.py). n is unchanged at every lag (July
 # 2026's response is imputed, so that month never entered a pair); r and p
-# move in the third or fourth decimal, no lag crosses 0.05.
+# move in the third or fourth decimal, no lag crosses 0.05. p is no longer
+# compared with a hand-written value (see the test).
 EXPECTED = [
-    {"lag": 0, "spearman_r": -0.062172676941493345, "p_value": 0.43044992179568453, "n": 163},
-    {"lag": 1, "spearman_r": -0.1805411329334765, "p_value": 0.02109719694777279, "n": 163},
-    {"lag": 2, "spearman_r": -0.27447037022923926, "p_value": 0.00040852717061259594, "n": 162},
-    {"lag": 3, "spearman_r": -0.17375213779057413, "p_value": 0.027504419092156496, "n": 161},
-    {"lag": 4, "spearman_r": -0.09044298605414273, "p_value": 0.2553769284644249, "n": 160},
-    {"lag": 5, "spearman_r": -0.0319381418676857, "p_value": 0.6894150264747044, "n": 159},
-    {"lag": 6, "spearman_r": -0.09510993485040777, "p_value": 0.23305215667903603, "n": 159},
-    {"lag": 7, "spearman_r": -0.07220569038520819, "p_value": 0.3657427696486154, "n": 159},
-    {"lag": 8, "spearman_r": -0.1858311440171961, "p_value": 0.019015934476946925, "n": 159},
-    {"lag": 9, "spearman_r": -0.1626164318127538, "p_value": 0.0405611165547235, "n": 159},
-    {"lag": 10, "spearman_r": -0.11448531167900645, "p_value": 0.15073403330250243, "n": 159},
-    {"lag": 11, "spearman_r": -0.06268211129687128, "p_value": 0.4324962162642009, "n": 159},
-    {"lag": 12, "spearman_r": -0.09417840936231192, "p_value": 0.23768177307653457, "n": 159},
+    {"lag": 0, "spearman_r": -0.062172676941493345, "n": 163},
+    {"lag": 1, "spearman_r": -0.1805411329334765, "n": 163},
+    {"lag": 2, "spearman_r": -0.27447037022923926, "n": 162},
+    {"lag": 3, "spearman_r": -0.17375213779057413, "n": 161},
+    {"lag": 4, "spearman_r": -0.09044298605414273, "n": 160},
+    {"lag": 5, "spearman_r": -0.0319381418676857, "n": 159},
+    {"lag": 6, "spearman_r": -0.09510993485040777, "n": 159},
+    {"lag": 7, "spearman_r": -0.07220569038520819, "n": 159},
+    {"lag": 8, "spearman_r": -0.1858311440171961, "n": 159},
+    {"lag": 9, "spearman_r": -0.1626164318127538, "n": 159},
+    {"lag": 10, "spearman_r": -0.11448531167900645, "n": 159},
+    {"lag": 11, "spearman_r": -0.06268211129687128, "n": 159},
+    {"lag": 12, "spearman_r": -0.09417840936231192, "n": 159},
 ]
 
 
@@ -89,8 +91,16 @@ def test_compute_ccf_prewhitened_forced_order_is_stable(fixture_df):
         assert row["n"] == expected["n"], f"lag {expected['lag']}: n differs"
         assert row["spearman_r"] == pytest.approx(expected["spearman_r"], rel=rtol, abs=atol), \
             f"lag {expected['lag']}: spearman_r differs beyond LOOSE tolerance"
-        assert row["p_value"] == pytest.approx(expected["p_value"], rel=rtol, abs=atol), \
-            f"lag {expected['lag']}: p_value differs beyond LOOSE tolerance"
+        # Spearman's p is a function of r and n: compared with a hand-written
+        # value it would only amplify the optimizer's cross-machine noise on r
+        # (issue #9; on the CI runner p differed by 3e-3 relative while r stayed
+        # within LOOSE). Checked instead for consistency with the r and n of
+        # this same run, with scipy's own formula -- no noise on one machine.
+        r, n = row["spearman_r"], row["n"]
+        dof = n - 2
+        t = r * np.sqrt(dof / ((r + 1.0) * (1.0 - r)))
+        assert row["p_value"] == pytest.approx(2 * stats.t.sf(abs(t), dof), rel=1e-12), \
+            f"lag {expected['lag']}: p_value inconsistent with this run's r and n"
 
 
 # ── _mask_imputed: structural masking, independent of target's literal name ──
