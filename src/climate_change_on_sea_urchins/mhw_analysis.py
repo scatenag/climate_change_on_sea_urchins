@@ -137,14 +137,17 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
 
     rows = []
     for target in targets:
-        target_full = df[target].ffill().bfill().values
+        # Same for the target: filtered on its observed span, missing outside.
+        t_start, t_end = _observed_span(df, target)
+        target_full = df[target].iloc[t_start:t_end].ffill().values
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 target_filtered = ARIMA(target_full, order=order).filter(driver_fit.params)
         except Exception:
             continue
-        target_resid = target_filtered.resid
+        target_resid = np.full(len(df), np.nan)
+        target_resid[t_start:t_end] = target_filtered.resid
 
         if target == "EC50" and "EC50_imputed" in df.columns:
             target_resid = np.where(df["EC50_imputed"].values, np.nan, target_resid)
@@ -195,7 +198,9 @@ def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
     x = df[driver].ffill().bfill()
 
     for target in targets:
-        y = df[target].ffill().bfill()
+        # Filled inside its gaps only; the dropna below ends the series
+        # where the target ends.
+        y = df[target].ffill(limit_area="inside")
         # Difference both to help stationarity
         data = pd.concat([y.diff(), x.diff()], axis=1).dropna()
         data.columns = ["y", "x"]

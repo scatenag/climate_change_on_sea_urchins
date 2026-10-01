@@ -330,12 +330,12 @@ def _fc_build_monthly(df_real: pd.DataFrame, df_full: pd.DataFrame, lag: int) ->
                              if lag > 0 else monthly["mhw_peak_intensity"])
     ec50_idx = df_real[["Datetime", "EC50"]].set_index("Datetime")
     monthly  = monthly.set_index("Datetime")
-    monthly["EC50"] = ec50_idx.reindex(monthly.index)["EC50"].interpolate("linear")
-    for col in ["pH", "Temperature"]:
-        monthly[col] = monthly[col].ffill().bfill()
-    # Not filled: months beyond the SST coverage have no MHW value, and the
-    # dropna below removes them instead (tests/test_mhw_missing_sst.py).
-    monthly["mhw_lagged"] = monthly["mhw_lagged"].ffill(limit_area="inside")
+    # Every series is filled only inside its gaps: months before its first or
+    # after its last observed value stay missing, and the dropna below removes
+    # them (tests/test_mhw_missing_sst.py, tests/test_missing_edges.py).
+    monthly["EC50"] = ec50_idx.reindex(monthly.index)["EC50"].interpolate("linear", limit_area="inside")
+    for col in ["pH", "Temperature", "mhw_lagged"]:
+        monthly[col] = monthly[col].ffill(limit_area="inside")
     return monthly.dropna(subset=["EC50", "mhw_lagged", "pH", "Temperature"]).reset_index()
 
 
@@ -609,15 +609,17 @@ def compute_correlations(df: pd.DataFrame) -> dict:
             if len(valid) < 24:
                 trend[col] = series
                 continue
+            # Observed span only, as in correlations.extract_trends.
+            span = series.loc[valid.index[0]:valid.index[-1]]
             try:
                 dec = seasonal_decompose(
-                    series.interpolate("linear"),
+                    span.interpolate("linear"),
                     model="multiplicative",
                     period=12,
                     extrapolate_trend="freq",
                     two_sided=False,
                 )
-                trend[col] = dec.trend.values
+                trend[col] = dec.trend.reindex(series.index)
             except Exception:
                 trend[col] = series
         for col in mhw_cols:
