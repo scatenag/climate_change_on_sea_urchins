@@ -3,7 +3,7 @@
 > Si aggiorna alla fine di **ogni** sessione di lavoro, prima del merge.
 > Tenerlo corto: se supera una pagina, sposta il dettaglio in un ADR o in una issue.
 
-**Ultimo aggiornamento:** 30 settembre 2026
+**Ultimo aggiornamento:** 1 ottobre 2026
 
 ---
 
@@ -179,7 +179,10 @@ finestra di dose in mesi, concetto diverso. **5b spezzata in quattro PR (28/9)**
 `thermal_legacy`/`changepoint`/`stationarity`/`period_split`) — **fatta, PR aperta**; 5b-2
 `timeseries`/`correlations`/`cu_speciation`/`negative_control`; 5b-3
 `mhw_analysis`/`mhw_robustness`/`mhw_lag_extra`; 5b-4 `mhw_lag_annual` (regola degli anni completi
-al posto di `YEAR_MIN`/`YEAR_MAX`, deve restituire 2004–2025 per Livorno) e `regime_shift`. Regola
+al posto di `YEAR_MIN`/`YEAR_MAX`, deve restituire 2004–2025 per Livorno) e `regime_shift`; la regola
+degli anni completi vale per **tutti** i lettori della serie annuale MHW, `regime_shift` compreso, anche
+senza finestre — da proporre: marcare l'anno parziale all'origine, in `mhw_detection`
+(`mhw_annual.csv` oggi conta il 2026, SST fino a giugno, come anno intero). Regola
 precisata: (a) nessun valore dopo la fine della finestra, (b) tutto ciò che si stima dai dati solo
 dentro la finestra, (c) i ritardi possono venire da prima. In ogni modulo migrato: cercare
 conteggi, anni e date scritti a mano nei testi di output e ricavarli dai dati. 6. Script di
@@ -263,10 +266,12 @@ l'utente decide quando fondere.
 
 ## Da non dimenticare
 
-- **`common.load_data()` mette a 0 le metriche MHW nei mesi senza SST** (`fillna(0)`, su `main` e
-  sul branch): oggi luglio–settembre 2026, in piena estate, entrano nelle analisi come "nessuna
-  ondata di calore" perché la SST giornaliera finisce a giugno. Assenza di dato trattata come
-  assenza di evento, e scelta non leggibile nella specifica (regola 6). Da decidere, non toccato.
+- **Un mese senza dato resta senza dato.** Su `main` (1/10): le metriche MHW oltre la copertura
+  SST restano mancanti in `load_data()`, nel prewhitening, in Granger, nel forecast (anche quello
+  dal vivo del dashboard di sviluppo) e nella batteria di robustezza; test con tre mesi mancanti
+  in coda. Restano da fare, nell'ordine: la PR d) (riempimenti che prolungano l'ultimo valore
+  delle variabili ambientali e di EC50: `correlations.py`, `forecast.py`, target di prewhitening
+  e Granger, `dashboard.py:610`); il porting di entrambe su `paper/mpb-2026`.
 - **L'auto-update non si tocca.** È una funzionalità voluta ed è ciò che il lavoro rivendica
   nelle conclusioni. I trigger a schedule girano solo sul branch di default: per congelare
   basta un tag, non serve fermare né isolare niente.

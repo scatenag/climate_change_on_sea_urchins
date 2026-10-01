@@ -345,6 +345,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Months without SST entered the analyses as months without heatwaves.** The daily SST
+  arrives months after the response series, so at every update the last months of the record
+  have no MHW catalogue (three on 2026-09-30: July to September 2026, in full summer).
+  `common.load_data()` set their MHW metrics to 0, "no heatwave"; they now stay missing. Three
+  analyses then filled them back in with June's value and no longer do: the ARIMA
+  prewhitening estimates its filter on the driver's observed span only (a response month
+  beyond it still pairs, at lag k, with the driver month k earlier), the Granger test ends
+  where the driver ends, and the forecast's lagged MHW regressor, in `forecast.py` and in the
+  development dashboard's live forecast, is filled only inside its gaps. In the robustness
+  battery the CCM and the wavelet coherence use the months with an MHW catalogue, and the
+  severe-event series is missing, not 0, beyond it. Each fix has a test with three missing
+  months at the end (`tests/test_mhw_missing_sst.py`); `test_pipeline.py`'s check that the MHW
+  columns had no missing values ("filled with 0") now checks the opposite contract.
+  On the frozen fixture (one month beyond the SST coverage) no value of the manuscript moves
+  (`test_paper_values.py`); 19 files of the golden-master reference were updated with approval.
+  The largest change: in the Granger test MHW -> O2 the raw p-values below 0.05 drop from 6 to 3
+  (lags 3, 5 and 6), because the invented 0 of July 2026, right after June's value, made an
+  artificial jump in the differenced driver; none survived the FDR correction before or after.
+  Elsewhere: CCF r within 0.012 (EC50 rows unchanged), correlations within 0.02, forecast
+  within 0.003 ug/L, wavelet coherence p 0.86 -> 0.88, no change of significance.
+  The ARIMA-prewhitening test compared r and p with hand-written values at a fixed order; on the
+  corrected series it failed on CI, and the cause turned out to be the method, not the fix: the
+  MA part of the filter turns runs of zero months into near-tied residuals (down to 1e-17 apart)
+  that Spearman ranks according to each machine's arithmetic (issue #9). `compute_ccf_prewhitened`
+  takes fixed `params` too, and the test checks the whole computation with fixed parameters on a
+  synthetic continuous driver at tight tolerances (r, n, p consistent with r and n); on the
+  fixture only the structure.
+
 - **Erroneous claim in the public dashboard and results: "autocorrelation not rising".** The
   regime-shift verdict (`regime_shift_summary.json`, public in the repository) always stated that
   critical-slowing-down early-warning signals were absent, "absolute variance falls, AR(1) not

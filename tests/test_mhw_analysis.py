@@ -11,51 +11,117 @@ Covers two independent things in mhw_analysis.py:
 Order selection (_best_arima_order) is not reproducible across machines for
 near-degenerate drivers -- confirmed by two consecutive CI runs of identical
 code and data picking different orders for mhw_days (see issue #9 and
-test_golden_master.py's STRUCTURAL_ONLY_FILES). That instability lives in
-*which* candidates converge on a given machine, not in the fit/filter/
-correlate arithmetic itself. This test isolates the latter: it forces a
-fixed, low order on a main-grid (non-degenerate) driver via
-compute_ccf_prewhitened's `order` parameter, skipping the grid search
-entirely, and checks the resulting correlations under the same LOOSE
-tolerance used elsewhere in this project for iterative-MLE-optimizer
-outputs. If this test doesn't hold up on CI, the instability is in the
-computation path itself, not just order selection -- a materially different
-(and more serious) finding.
+test_golden_master.py's STRUCTURAL_ONLY_FILES). Even a fixed order is not
+enough on the fixture's MHW driver: its runs of zeros give the MA part of
+the filter near-tied residuals that Spearman ranks according to each
+machine's arithmetic (issue #9; found when this test, then comparing r with
+hand-written values at a fixed order, failed on CI). So the computation is
+checked with fixed order AND parameters (`params`) on a synthetic continuous
+driver, without near-ties, at tight tolerances; on the fixture only the
+structure is checked.
 """
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
 
 from climate_change_on_sea_urchins import common
-from climate_change_on_sea_urchins.common import RESPONSE_COL
+from climate_change_on_sea_urchins.common import IMPUTED_COL, RESPONSE_COL
 from climate_change_on_sea_urchins.mhw_analysis import _mask_imputed, compute_ccf_prewhitened
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "paper_mpb_2026"
 
-LOOSE = (1e-3, 1e-12)
+# ── compute_ccf_prewhitened ───────────────────────────────────────────────────
+# The ARIMA residuals of a driver with long runs of zeros (mhw_peak_intensity:
+# 41% of months) contain near-ties, down to 1e-17 apart, that Spearman ranks
+# according to each machine's arithmetic: on the fixture the r values are not
+# reproducible across machines even at a fixed order (issue #9; the MA part of
+# the filter converges geometrically within a run of zeros). So the whole
+# computation is checked with FIXED parameters on a synthetic continuous
+# driver, without zeros and hence without near-ties: filters, residuals,
+# masking of imputed months, pairs per lag, r and n at tight tolerances, and
+# p consistent with r and n. On the fixture only the structure is checked.
 
-# Computed once locally: compute_ccf_prewhitened(df, "mhw_peak_intensity",
-# ["EC50"], order=(1, 0, 1)) on the frozen fixture. mhw_peak_intensity is a
-# main-grid driver, not one of the near-degenerate event drivers (41% zeros,
-# vs. mhw_severe_intensity's 94%) -- a fixed low order on it is expected to
-# be well-conditioned.
-EXPECTED = [
-    {"lag": 0, "spearman_r": -0.06420658276112413, "p_value": 0.4154921276091714, "n": 163},
-    {"lag": 1, "spearman_r": -0.18608575656308712, "p_value": 0.017392118051698494, "n": 163},
-    {"lag": 2, "spearman_r": -0.2758562777234423, "p_value": 0.00038074299075663634, "n": 162},
-    {"lag": 3, "spearman_r": -0.174358753163101, "p_value": 0.02695982341335332, "n": 161},
-    {"lag": 4, "spearman_r": -0.0925934606820579, "p_value": 0.24420309552113717, "n": 160},
-    {"lag": 5, "spearman_r": -0.0344190351086697, "p_value": 0.6666786904682067, "n": 159},
-    {"lag": 6, "spearman_r": -0.0943605206591832, "p_value": 0.23677167071489152, "n": 159},
-    {"lag": 7, "spearman_r": -0.07531347026510628, "p_value": 0.3454178116906895, "n": 159},
-    {"lag": 8, "spearman_r": -0.1911720802483879, "p_value": 0.015783895778498865, "n": 159},
-    {"lag": 9, "spearman_r": -0.16574516360162408, "p_value": 0.03680319082903203, "n": 159},
-    {"lag": 10, "spearman_r": -0.117222951994268, "p_value": 0.14114494740072972, "n": 159},
-    {"lag": 11, "spearman_r": -0.06683783138285168, "p_value": 0.4025477549269739, "n": 159},
-    {"lag": 12, "spearman_r": -0.09717279675185098, "p_value": 0.22302628331201932, "n": 159},
+TIGHT = (1e-9, 1e-12)
+SYNTHETIC_PARAMS = np.array([0.0, 0.5, 0.2, 1.0])  # const, ar.L1, ma.L1, sigma2
+# (lag, spearman_r, n), computed once locally with the parameters above; the
+# response depends on the driver two months earlier, hence lag 2.
+SYNTHETIC_EXPECTED = [
+    (0, 0.006896312243905825, 120),
+    (1, 0.02481422320994513, 120),
+    (2, -0.3707377866400798, 119),
+    (3, 0.06810703420872913, 118),
+    (4, 0.004728079245905078, 117),
+    (5, -0.007250221043324491, 116),
+    (6, 0.06390650828431937, 116),
+    (7, 0.08746153239169889, 115),
+    (8, 0.17947388671756342, 114),
+    (9, 0.1115925876638499, 113),
+    (10, 0.033604400861038025, 112),
+    (11, 0.1185721119349438, 112),
+    (12, 0.09944717444717444, 111),
 ]
+# Pairs per lag on the frozen fixture: deterministic (they depend on which
+# months are observed and real, not on the fit).
+FIXTURE_N = [163, 163, 162, 161, 160, 159, 159, 159, 159, 159, 159, 159, 159]
+
+
+def _synthetic_prewhitening_frame():
+    rng = np.random.default_rng(42)
+    n = 150
+    x = np.zeros(n)
+    for i in range(1, n):
+        x[i] = 0.6 * x[i - 1] + rng.normal()
+    df = pd.DataFrame({
+        "Datetime": pd.date_range("2010-01-01", periods=n, freq="MS"),
+        "driver": x + 3,
+        RESPONSE_COL: (40 - 0.05 * np.arange(n) - 0.8 * np.r_[np.zeros(2), x[:-2]]
+                       + rng.normal(size=n)),
+    })
+    df[IMPUTED_COL] = np.arange(n) % 5 == 0  # one month in five imputed
+    return df
+
+
+def _assert_p_consistent(row):
+    # Spearman's p is a function of r and n: checked for consistency with
+    # this run's r and n, with scipy's own formula.
+    r, n = row["spearman_r"], row["n"]
+    dof = n - 2
+    t = r * np.sqrt(dof / ((r + 1.0) * (1.0 - r)))
+    assert row["p_value"] == pytest.approx(2 * stats.t.sf(abs(t), dof), rel=1e-12), \
+        f"lag {row['lag']}: p_value inconsistent with this run's r and n"
+
+
+def test_compute_ccf_prewhitened_with_fixed_params_is_exact():
+    df = _synthetic_prewhitening_frame()
+    pw, diag = compute_ccf_prewhitened(df, "driver", [RESPONSE_COL],
+                                       order=(1, 0, 1), params=SYNTHETIC_PARAMS)
+    assert diag["order"] == [1, 0, 1]
+    assert diag["converged"] is None  # nothing was fitted
+    real = ~df[IMPUTED_COL].to_numpy()
+    rtol, atol = TIGHT
+    for lag, r_expected, n_expected in SYNTHETIC_EXPECTED:
+        row = pw[pw["lag"] == lag].iloc[0]
+        # imputed months never form a pair: n counts real response months t
+        # with a driver month t - lag
+        assert row["n"] == n_expected == real[lag:].sum(), f"lag {lag}: n differs"
+        assert row["spearman_r"] == pytest.approx(r_expected, rel=rtol, abs=atol), \
+            f"lag {lag}: spearman_r differs beyond TIGHT tolerance"
+        _assert_p_consistent(row)
+
+
+def test_compute_ccf_prewhitened_forced_order_structure(fixture_df):
+    pw, diag = compute_ccf_prewhitened(fixture_df, "mhw_peak_intensity", [RESPONSE_COL],
+                                       order=(1, 0, 1))
+    assert diag["order"] == [1, 0, 1]
+    assert diag["converged"] is True
+    assert list(pw["lag"]) == list(range(13))
+    assert list(pw["n"]) == FIXTURE_N
+    assert pw["spearman_r"].between(-1, 1).all()
+    for _, row in pw.iterrows():
+        _assert_p_consistent(row)
 
 
 @pytest.fixture(scope="module")
@@ -68,21 +134,6 @@ def fixture_df():
     finally:
         mp.undo()
     return df_full
-
-
-def test_compute_ccf_prewhitened_forced_order_is_stable(fixture_df):
-    pw, diag = compute_ccf_prewhitened(fixture_df, "mhw_peak_intensity", [RESPONSE_COL], order=(1, 0, 1))
-    assert diag["order"] == [1, 0, 1]
-    assert diag["converged"] is True
-
-    rtol, atol = LOOSE
-    for expected in EXPECTED:
-        row = pw[pw["lag"] == expected["lag"]].iloc[0]
-        assert row["n"] == expected["n"], f"lag {expected['lag']}: n differs"
-        assert row["spearman_r"] == pytest.approx(expected["spearman_r"], rel=rtol, abs=atol), \
-            f"lag {expected['lag']}: spearman_r differs beyond LOOSE tolerance"
-        assert row["p_value"] == pytest.approx(expected["p_value"], rel=rtol, abs=atol), \
-            f"lag {expected['lag']}: p_value differs beyond LOOSE tolerance"
 
 
 # ── _mask_imputed: structural masking, independent of target's literal name ──
