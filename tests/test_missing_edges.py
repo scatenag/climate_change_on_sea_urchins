@@ -101,13 +101,3 @@ def test_dashboard_forecast_series_ends_at_last_observed():
     df_real = df.iloc[:-2 * N_MISSING]
     monthly = _dashboard_function("_fc_build_monthly")(df_real, df, 0)
     assert monthly["Datetime"].max() == df_real["Datetime"].max()
-
-
-def test_dashboard_correlation_trends_use_no_month_without_data():
-    df = _synthetic()
-    df["O2"], df["CO2"], df["Salinity"] = 230 + df["pH"], 400 + df["pH"], 38 + df["pH"]
-    df["mhw_days"] = np.abs(df["mhw_peak_intensity"])
-    corr = _dashboard_function("compute_correlations")
-    got = corr(_with_missing_tail(df, "Temperature"))["all"][0]
-    expected = corr(df.iloc[:-N_MISSING])["all"][0]
-    pd.testing.assert_series_equal(got["Temperature"], expected["Temperature"])

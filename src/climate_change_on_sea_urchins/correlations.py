@@ -73,9 +73,11 @@ def spearman_matrix(df: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, pd
     return r_df, p_df
 
 
-def run():
-    df, _, _, _ = load_data()
-
+def compute_matrices(df: pd.DataFrame) -> dict[str, tuple[pd.DataFrame, pd.DataFrame]]:
+    """Trend-based Spearman matrices (r, p) of `df` (load_data's df_full, or
+    a date-filtered part of it) for the whole record and before/after
+    SPLIT_DATE, keyed "all"/"pre"/"post". The one implementation: run()
+    writes these, the dashboard shows them."""
     df_work = df.set_index("Datetime")
 
     # Mirror notebook cell 7: apply rolling mean to ALL EC50 values (not just NaN).
@@ -92,6 +94,7 @@ def run():
     mhw_cols = MHW_COLS   # mhw_peak_intensity, mhw_days
     all_cols  = env_cols + mhw_cols
 
+    matrices = {}
     for label, mask in [("all", slice(None)), ("pre", pre_mask), ("post", post_mask)]:
         subset = df_work[mask]
 
@@ -103,11 +106,20 @@ def run():
 
         combined = pd.concat([trend_env, trend_mhw], axis=1)
 
-        r_df, p_df = spearman_matrix(combined, all_cols)
+        matrices[label] = spearman_matrix(combined, all_cols)
+    return matrices
+
+
+def run():
+    df, _, _, _ = load_data()
+
+    matrices = compute_matrices(df)
+    for label, (r_df, p_df) in matrices.items():
         r_df.to_csv(RESULTS / f"corr_{label}.csv")
         p_df.to_csv(RESULTS / f"corr_pval_{label}.csv")
 
-    print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {len(all_cols)} vars)")
+    n_vars = len(next(iter(matrices.values()))[0])
+    print(f"✓ correlations: trend-based Spearman matrices saved (all/pre/post, {n_vars} vars)")
 
 
 if __name__ == "__main__":

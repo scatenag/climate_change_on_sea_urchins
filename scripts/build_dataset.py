@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import CO2_PA_TO_UATM
+from climate_change_on_sea_urchins.common import impute_ec50
 
 ROOT = Path(__file__).parent.parent
 ENV_PATH  = ROOT / "data" / "env_copernicus.csv"
@@ -79,25 +80,6 @@ def cross_check_co2(env: pd.DataFrame, orig: pd.DataFrame):
     else:
         print(f"  ⚠️  Ratio = {ratio.mean():.1f}, expected ≈ 1. Manual unit inspection required.")
     print()
-
-
-def impute_ec50(monthly_full: pd.DataFrame, ec50: pd.DataFrame) -> pd.DataFrame:
-    """
-    Merge EC50 into the full monthly grid.
-    Months without bioassay data are filled with a 12-month centered rolling mean.
-    CI bounds are NaN for imputed months (flag: EC50_imputed=True).
-    """
-    df = pd.merge(monthly_full, ec50, on="Datetime", how="left")
-
-    df["EC50_imputed"] = df["EC50"].isna()
-
-    # Fill missing EC50 with 12-month centered rolling mean (same as original notebook)
-    df["EC50"] = df["EC50"].fillna(
-        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
-    )
-
-    # CI bounds remain NaN for imputed months
-    return df
 
 
 def main():
