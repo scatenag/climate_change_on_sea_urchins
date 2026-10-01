@@ -119,6 +119,15 @@ serve ai prerequisiti di V2.2.
   conserva ora esplicitamente come `PUBLISHED_SPLIT_DATE`).
 - **`correlations.py`**: media mobile centrata a 12 mesi applicata a *tutti* i valori della
   risposta, reali compresi, prima della decomposizione.
+- **Medie mobili centrate con `min_periods` basso** (annotate il 1/10/2026, mentre si
+  correggevano i riempimenti ai bordi delle serie): vicino al primo e all'ultimo mese la
+  finestra è incompleta e il valore si calcola da un lato solo, fino a un solo mese con
+  `min_periods=1`. Sono la media a 12 mesi di `correlations.py` qui sopra (`min_periods=1`), il
+  trend a 25 mesi di `regime_shift.py` (`min_periods=8`), il trend della temperatura a 25 mesi
+  di `mhw_robustness.py` (`min_periods=12`) e l'imputazione della risposta (`min_periods=3`,
+  prima voce). Non sono riempimenti di valori mancanti ma, sugli ultimi mesi della serie, si
+  comportano in modo simile: scelte di metodo, da decidere insieme alla media di
+  `correlations.py`.
 - **`mhw_lag_extra.py`**: un'osservazione della risposta è associata a un evento se dista
   meno di 20 giorni dalla data attesa (`_nearest_ec50`).
 

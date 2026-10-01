@@ -266,12 +266,12 @@ l'utente decide quando fondere.
 
 ## Da non dimenticare
 
-- **Un mese senza dato resta senza dato.** Su `main` (1/10): le metriche MHW oltre la copertura
-  SST restano mancanti in `load_data()`, nel prewhitening, in Granger, nel forecast (anche quello
-  dal vivo del dashboard di sviluppo) e nella batteria di robustezza; test con tre mesi mancanti
-  in coda. Restano da fare, nell'ordine: la PR d) (riempimenti che prolungano l'ultimo valore
-  delle variabili ambientali e di EC50: `correlations.py`, `forecast.py`, target di prewhitening
-  e Granger, `dashboard.py:610`); il porting di entrambe su `paper/mpb-2026`.
+- **Un mese senza dato resta senza dato.** Su `main` (1/10): metriche MHW oltre la copertura SST
+  mancanti (#33) e nessun riempimento che prolunghi una serie oltre il suo primo o ultimo mese
+  osservato (d): destagionalizzazione delle correlazioni, forecast, target di prewhitening e
+  Granger, anche nel dashboard di sviluppo); test con tre mesi mancanti in coda. Da fare: il
+  porting su `paper/mpb-2026`. Le medie mobili centrate con `min_periods` basso restano una
+  scelta di metodo aperta (ADR-0000, voce 8).
 - **L'auto-update non si tocca.** È una funzionalità voluta ed è ciò che il lavoro rivendica
   nelle conclusioni. I trigger a schedule girano solo sul branch di default: per congelare
   basta un tag, non serve fermare né isolare niente.
