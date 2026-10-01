@@ -36,7 +36,8 @@ ROOT_ASSETS = ROOT / "assets"
 sys.path.insert(0, str(ROOT))  # config.py lives at repo root, not inside the package
 
 from config import SITE_LAT, SITE_LON, SITE_NAME, EC50_EXPORT_URL
-from .common import SPLIT_DATE, RESULTS, DATA
+from .common import (SPLIT_DATE, RESULTS, RESPONSE_COL, IMPUTED_COL, aggregate_monthly,
+                     load_data, load_ec50_monthly, load_ec50_raw, load_mhw_annual)
 from .mhw_analysis import (
     compute_ccf as _ccf_core,
     difference_series,
@@ -113,38 +114,8 @@ def _regression_caption(slope: float, intercept: float, r_val: float, p_val: flo
 
 # ── Cached loaders ────────────────────────────────────────────────────────────
 
-def _aggregate_ec50(raw: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate raw EC50 bioassay rows to monthly values."""
-    raw = raw.copy()
-    raw.columns = raw.columns.str.strip()
-    raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
-    raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
-    raw["hw_upper"] = raw["UL"] - raw["EC50"]
-    raw["hw_lower"] = raw["EC50"] - raw["LL"]
-
-    agg = raw.groupby("Datetime").agg(
-        EC50=("EC50", "mean"),
-        EC50_std=("EC50", "std"),
-        EC50_n=("EC50", "count"),
-        mean_hw_upper=("hw_upper", "mean"),
-        mean_hw_lower=("hw_lower", "mean"),
-    ).reset_index()
-
-    agg["se"] = agg["EC50_std"] / np.sqrt(agg["EC50_n"])
-    agg["EC50_ci_upper"] = agg["EC50"] + np.maximum(
-        agg["mean_hw_upper"], 1.96 * agg["se"].fillna(0)
-    )
-    agg["EC50_ci_lower"] = agg["EC50"] - np.maximum(
-        agg["mean_hw_lower"], 1.96 * agg["se"].fillna(0)
-    )
-    agg["EC50_imputed"] = False
-
-    cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n", "EC50_imputed"]
-    return agg[cols].sort_values("Datetime").reset_index(drop=True)
-
-
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
+def fetch_ec50_live() -> tuple[pd.DataFrame | None, pd.DataFrame | None, str]:
     """
     Fetch EC50 from Google Sheets, cached for 10 minutes (EC50 is entered
     manually at most a few times a month, so this loses no real freshness
@@ -154,9 +125,11 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
     and, under sustained use, was a plausible contributor to the app
     becoming slow/unresponsive over time). The "Refresh EC50" button clears
     this cache explicitly to force a real re-fetch on demand.
-    Returns (monthly_df, raw_df, source).
-    raw_df has one row per individual measurement with the actual measurement DATE.
-    Falls back to data_ec50_ci.csv if the network request fails.
+    Returns (monthly_df, raw_df, error): monthly_df is the sheet aggregated by
+    common.aggregate_monthly, the update job's own aggregation; raw_df has one
+    row per individual measurement with the actual measurement DATE. Both
+    are None when the read fails, and `error` says why (load_main falls back
+    to the committed data and the page says so).
     """
     try:
         # Cache-buster: prevents Google Sheets CDN from serving a stale export
@@ -167,55 +140,9 @@ def fetch_ec50_live() -> tuple[pd.DataFrame, pd.DataFrame, str]:
         raw.columns = raw.columns.str.strip()
         raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
         raw_clean = raw[["DATE", "EC50"]].dropna(subset=["EC50"]).rename(columns={"DATE": "Date"})
-        monthly = _aggregate_ec50(raw)
-        return monthly, raw_clean, "live"
-    except Exception as _exc:
-        # Log the error in the sidebar so we can diagnose live fetch failures
-        import traceback
-        with st.sidebar:
-            st.error(f"EC50 live fetch failed: {_exc}")
-        # Fallback: use the static CSV committed to the repo
-        ci_path = DATA / "data_ec50_ci.csv"
-        fallback = pd.read_csv(ci_path, parse_dates=["Datetime"])
-        fallback["EC50_imputed"] = fallback["EC50_imputed"].astype(bool)
-        real = fallback[~fallback["EC50_imputed"]].copy()
-        cols = ["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n", "EC50_imputed"]
-        real = real[[c for c in cols if c in real.columns]]
-        if "EC50_n" not in real.columns:
-            real["EC50_n"] = 1
-        # Build a synthetic raw_df from monthly data (no individual dates available)
-        raw_fallback = real[["Datetime", "EC50"]].rename(columns={"Datetime": "Date"})
-        return real.reset_index(drop=True), raw_fallback, "static"
-
-
-@st.cache_data(show_spinner=False)
-def load_env_data():
-    """Load static environmental data (Copernicus CSVs). Cached indefinitely — changes only
-    when the nightly GitHub Actions workflow pushes new data_extended.csv."""
-    df   = pd.read_csv(DATA / "data_extended.csv",  parse_dates=["Datetime"])
-    mhwm = pd.read_csv(DATA / "mhw_monthly.csv",    parse_dates=["Datetime"])
-    mhwe = pd.read_csv(DATA / "mhw_events.csv",
-                       parse_dates=["start_date","end_date","peak_date"])
-    mhwa = pd.read_csv(DATA / "mhw_annual.csv")
-    # Drop stale EC50 columns — will be replaced with live data
-    stale = [c for c in ["EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]
-             if c in df.columns]
-    df = df.drop(columns=stale)
-    # Fill Temperature gaps from daily SST
-    sst_path = DATA / "sst_daily.csv"
-    if sst_path.exists():
-        sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
-        sst["month"] = sst["Datetime"].dt.to_period("M").dt.to_timestamp()
-        sst_monthly = sst.groupby("month")["Temperature"].mean().reset_index()
-        sst_monthly.columns = ["Datetime", "Temperature_sst"]
-        df = df.merge(sst_monthly, on="Datetime", how="left")
-        mask = df["Temperature"].isna() & df["Temperature_sst"].notna()
-        df.loc[mask, "Temperature"] = df.loc[mask, "Temperature_sst"]
-        df.drop(columns=["Temperature_sst"], inplace=True)
-    # Merge MHW monthly metrics
-    df = df.merge(mhwm[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
-                  on="Datetime", how="left")
-    return df, mhwe, mhwa
+        return aggregate_monthly(raw), raw_clean, ""
+    except Exception as exc:
+        return None, None, f"{type(exc).__name__}: {exc}"
 
 
 def _current_rss_mb() -> float:
@@ -235,21 +162,35 @@ def _current_rss_mb() -> float:
     return -1.0
 
 
-def load_main():
-    """Merge static env data with live EC50 from Google Sheets (cached 10 min, see fetch_ec50_live)."""
-    print(f"DIAG-MEM: RSS={_current_rss_mb():.1f}MB at rerun start", flush=True)
-    df_env, mhwe, mhwa = load_env_data()
-    ec50_live, ec50_raw, ec50_source = fetch_ec50_live()
+@st.cache_data(show_spinner=False)
+def _prepare_data(ec50_monthly: pd.DataFrame):
+    """The update job's own data preparation (common.load_data), on the
+    monthly response aggregate passed in: no second preparation of the same
+    quantity here (tests/test_live_response.py)."""
+    df_full, _df_real, mhwe, _mhwm = load_data(ec50_monthly=ec50_monthly)
+    df = df_full.rename(columns={RESPONSE_COL: "EC50", IMPUTED_COL: "EC50_imputed"})
+    df["EC50_imputed"] = df["EC50_imputed"].astype(bool)
+    # replicate count per month, for the tooltips only
+    df = df.merge(ec50_monthly[["Datetime", "EC50_n"]], on="Datetime", how="left")
+    return df, mhwe, load_mhw_annual()
 
-    df = df_env.merge(
-        ec50_live[["Datetime","EC50","EC50_ci_upper","EC50_ci_lower","EC50_n","EC50_imputed"]],
-        on="Datetime", how="left"
-    )
-    df["EC50_imputed"] = df["EC50_imputed"].fillna(True).astype(bool)
-    df["EC50"] = df["EC50"].fillna(
-        df["EC50"].rolling(window=12, min_periods=3, center=True).mean()
-    )
-    return df, ec50_live, mhwe, mhwa, ec50_raw, ec50_source
+
+def load_main():
+    """Live EC50 from Google Sheets (cached 10 min, see fetch_ec50_live),
+    prepared exactly as the update job prepares it. If the live read fails,
+    the same preparation runs on the sheet as the job last saved it, and
+    the page says so (see the warning below the date range)."""
+    print(f"DIAG-MEM: RSS={_current_rss_mb():.1f}MB at rerun start", flush=True)
+    ec50_monthly, ec50_raw, error = fetch_ec50_live()
+    source = "live"
+    if ec50_monthly is None:
+        source = "static"
+        ec50_monthly = load_ec50_monthly().rename(columns={RESPONSE_COL: "EC50"})
+        ec50_raw = (load_ec50_raw()[["Datetime", RESPONSE_COL]]
+                    .rename(columns={"Datetime": "Date", RESPONSE_COL: "EC50"}))
+    df, mhwe, mhwa = _prepare_data(ec50_monthly)
+    ci_df = ec50_monthly.assign(EC50_imputed=False)
+    return df, ci_df, mhwe, mhwa, ec50_raw, source, error
 
 
 @st.cache_data
@@ -966,7 +907,12 @@ def add_mhw_shading(fig, events: pd.DataFrame, row=1, col=1):
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 
-df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source = load_main()
+df, ci_df, mhw_events, mhw_annual, ec50_raw, _ec50_source, _ec50_error = load_main()
+# Dates of the data shown, for the fallback warning below (before the date
+# filter narrows df).
+_ec50_through = ci_df["Datetime"].max()
+_env_through = df.loc[df[["O2", "CO2", "Temperature", "Salinity", "pH"]].notna().any(axis=1),
+                      "Datetime"].max()
 
 # ── Global date-range filter ───────────────────────────────────────────────────
 
@@ -1062,6 +1008,14 @@ st.caption(
     f"{len(mhw_events)} MHW events"
 )
 _dl_btn(df, f"data_{_yr_start}_{_yr_end}.csv", "⬇ Download filtered dataset (CSV)")
+if _ec50_source != "live":
+    # Never a silent fallback: it would hide the very failure of the live read.
+    st.warning(
+        "**The live read of the EC50 sheet failed** "
+        f"({_ec50_error}). Showing the data last saved by the update job in the "
+        f"repository: EC50 through **{_ec50_through:%b %Y}**, environmental data "
+        f"through **{_env_through:%b %Y}**."
+    )
 st.divider()
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────

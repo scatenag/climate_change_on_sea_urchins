@@ -27,11 +27,11 @@ Output: data/ec50_sheets.csv
 
 import sys
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import EC50_EXPORT_URL as EXPORT_URL
+from climate_change_on_sea_urchins.common import aggregate_monthly
 
 OUT_PATH     = Path(__file__).parent.parent / "data" / "ec50_sheets.csv"
 RAW_OUT_PATH = Path(__file__).parent.parent / "data" / "ec50_raw.csv"
@@ -43,49 +43,6 @@ def fetch_raw() -> pd.DataFrame:
     df.columns = df.columns.str.strip()
     print(f"  → {len(df)} rows, columns: {list(df.columns)}")
     return df
-
-
-def aggregate_monthly(raw: pd.DataFrame) -> pd.DataFrame:
-    """
-    Aggregate multiple within-month measurements to a single monthly value.
-
-    Strategy:
-    - EC50: arithmetic mean of all measurements in the month
-    - CI: use the mean of individual half-widths (UL-EC50, EC50-LL),
-          then compute standard error across replicates and take
-          the wider of the two as the final CI bound.
-    """
-    raw = raw.copy()
-    raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
-    # Normalize to first-of-month
-    raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
-
-    # Half-widths from individual bioassay CI
-    raw["hw_upper"] = raw["UL"] - raw["EC50"]
-    raw["hw_lower"] = raw["EC50"] - raw["LL"]
-
-    agg = raw.groupby("Datetime").agg(
-        EC50=("EC50", "mean"),
-        EC50_std=("EC50", "std"),
-        EC50_n=("EC50", "count"),
-        mean_hw_upper=("hw_upper", "mean"),
-        mean_hw_lower=("hw_lower", "mean"),
-    ).reset_index()
-
-    # Standard error across replicates
-    agg["se"] = agg["EC50_std"] / np.sqrt(agg["EC50_n"])
-
-    # Final CI: use the larger of (propagated bioassay CI) vs (replicate SE * 1.96)
-    agg["EC50_ci_upper"] = agg["EC50"] + np.maximum(
-        agg["mean_hw_upper"], 1.96 * agg["se"].fillna(0)
-    )
-    agg["EC50_ci_lower"] = agg["EC50"] - np.maximum(
-        agg["mean_hw_lower"], 1.96 * agg["se"].fillna(0)
-    )
-
-    result = agg[["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n"]].copy()
-    result = result.sort_values("Datetime").reset_index(drop=True)
-    return result
 
 
 def main():
