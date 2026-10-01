@@ -136,14 +136,13 @@ def _best_arima_order(series: np.ndarray, max_p: int = 3, max_q: int = 3):
     return best_order, best_fit
 
 
-def _driver_observed_span(df: pd.DataFrame, driver: str) -> tuple[int, int]:
-    """Positions of the driver's first and last observed month (end
-    exclusive). Months at either edge without a driver value (for MHW
-    metrics: beyond the SST coverage, which arrives months after the
-    response) have no driver value, and are never filled
-    (tests/test_mhw_missing_sst.py); gaps inside the span are left to the
-    caller."""
-    observed = np.flatnonzero(df[driver].notna().to_numpy())
+def _observed_span(df: pd.DataFrame, col: str) -> tuple[int, int]:
+    """Positions of `col`'s first and last observed month (end exclusive).
+    Months at either edge without a value (for MHW metrics: beyond the SST
+    coverage, which arrives months after the response) are never filled
+    (tests/test_mhw_missing_sst.py, tests/test_missing_edges.py); gaps
+    inside the span are left to the caller."""
+    observed = np.flatnonzero(df[col].notna().to_numpy())
     if len(observed) == 0:
         return 0, 0
     return int(observed[0]), int(observed[-1]) + 1
@@ -183,7 +182,7 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
     # The filter is estimated on the driver's observed span only; outside it
     # the driver residuals are missing, so a response month beyond the span
     # still pairs, at lag k, with the driver month k earlier.
-    start, end = _driver_observed_span(df, driver)
+    start, end = _observed_span(df, driver)
     driver_full = df[driver].iloc[start:end].ffill().values
     if params is not None:
         driver_fit = ARIMA(driver_full, order=order).filter(params)
@@ -210,14 +209,18 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
 
     rows = []
     for target in targets:
-        target_full = df[target].ffill().bfill().values
+        # Same for the target: filtered on its observed span, missing outside.
+        t_start, t_end = _observed_span(df, target)
+        target_full = df[target].iloc[t_start:t_end].ffill().values
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 target_filtered = ARIMA(target_full, order=order).filter(driver_fit.params)
         except Exception:
             continue
-        target_resid = _mask_imputed(df, target, target_filtered.resid)
+        target_resid = np.full(len(df), np.nan)
+        target_resid[t_start:t_end] = target_filtered.resid
+        target_resid = _mask_imputed(df, target, target_resid)
 
         for lag in range(0, tau_max + 1):
             if lag == 0:
@@ -260,12 +263,14 @@ def compute_granger(df: pd.DataFrame, driver: str, targets: list[str]) -> dict:
     results = {}
     # Granger needs complete, contiguous rows: the series ends where the
     # driver does.
-    start, end = _driver_observed_span(df, driver)
+    start, end = _observed_span(df, driver)
     df = df.iloc[start:end]
     x = df[driver].ffill().bfill()
 
     for target in targets:
-        y = df[target].ffill().bfill()
+        # Filled inside its gaps only; the dropna below ends the series
+        # where the target ends.
+        y = df[target].ffill(limit_area="inside")
         # Difference both to help stationarity
         data = pd.concat([y.diff(), x.diff()], axis=1).dropna()
         data.columns = ["y", "x"]

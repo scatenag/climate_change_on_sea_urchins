@@ -32,15 +32,19 @@ def extract_trends(df: pd.DataFrame, cols: list[str], period: int = 12) -> pd.Da
         if len(valid) < 2 * period:
             trend_df[col] = series
             continue
+        # Decomposed on the observed span only: interpolation fills the gaps
+        # inside it, never the months before the first or after the last
+        # observed value, which stay missing (tests/test_missing_edges.py).
+        span = series.loc[valid.index[0]:valid.index[-1]]
         try:
             dec = seasonal_decompose(
-                series.interpolate("linear"),
+                span.interpolate("linear"),
                 model="multiplicative",
                 period=period,
                 extrapolate_trend="freq",
                 two_sided=False,
             )
-            trend_df[col] = dec.trend.values
+            trend_df[col] = dec.trend.reindex(series.index)
         except Exception:
             trend_df[col] = series
     return trend_df
