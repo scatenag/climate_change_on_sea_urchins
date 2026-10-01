@@ -272,6 +272,11 @@ l'utente decide quando fondere.
   Granger, anche nel dashboard di sviluppo); test con tre mesi mancanti in coda. Da fare: il
   porting su `paper/mpb-2026`. Le medie mobili centrate con `min_periods` basso restano una
   scelta di metodo aperta (ADR-0000, voce 8).
+- **Dashboard di sviluppo e job usano la stessa preparazione dei dati** (1/10): aggregazione
+  del foglio e prima imputazione in `common.py`, `load_data(ec50_monthly=...)` per la lettura dal
+  vivo, correlazioni da `correlations.compute_matrices`; ripiego sui dati salvati visibile nella
+  pagina. Resta una seconda implementazione del forecast nel dashboard (scarto 3e-6 µg/L).
+  Da portare su `paper/mpb-2026` dopo le correzioni dei bordi.
 - **L'auto-update non si tocca.** È una funzionalità voluta ed è ciò che il lavoro rivendica
   nelle conclusioni. I trigger a schedule girano solo sul branch di default: per congelare
   basta un tag, non serve fermare né isolare niente.

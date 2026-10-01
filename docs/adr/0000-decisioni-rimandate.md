@@ -118,7 +118,10 @@ serve ai prerequisiti di V2.2.
   era successo al confronto pre/post del controllo negativo (`negative_control.py`, che lo
   conserva ora esplicitamente come `PUBLISHED_SPLIT_DATE`).
 - **`correlations.py`**: media mobile centrata a 12 mesi applicata a *tutti* i valori della
-  risposta, reali compresi, prima della decomposizione.
+  risposta, reali compresi, prima della decomposizione. Il dashboard ne aveva una seconda
+  implementazione che toglieva prima i mesi imputati: dal 1/10/2026 chiama
+  `correlations.compute_matrices`, quindi la scelta (lisciare o no i mesi imputati) riguarda
+  una sola funzione.
 - **Medie mobili centrate con `min_periods` basso** (annotate il 1/10/2026, mentre si
   correggevano i riempimenti ai bordi delle serie): vicino al primo e all'ultimo mese la
   finestra è incompleta e il valore si calcola da un lato solo, fino a un solo mese con
