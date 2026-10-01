@@ -47,14 +47,14 @@ def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]
     events  = pd.read_csv(ROOT / "data" / "mhw_events.csv",
                           parse_dates=["start_date","end_date","peak_date"])
 
-    # Merge MHW monthly metrics
+    # Merge MHW monthly metrics. Months beyond the SST coverage (the daily SST
+    # arrives months after the response) have no MHW catalogue: their metrics
+    # stay missing, never 0, which would mean "no heatwave"
+    # (tests/test_mhw_missing_sst.py).
     df = data.merge(
         monthly[["Datetime","mhw_days","mhw_peak_intensity","mhw_cum_intensity"]],
         on="Datetime", how="left"
     )
-    df["mhw_days"]            = df["mhw_days"].fillna(0)
-    df["mhw_peak_intensity"]  = df["mhw_peak_intensity"].fillna(0)
-    df["mhw_cum_intensity"]   = df["mhw_cum_intensity"].fillna(0)
 
     # Imputation flag
     df = df.merge(ci_df[["Datetime","EC50_imputed","EC50_ci_upper","EC50_ci_lower"]],

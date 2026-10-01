@@ -141,11 +141,16 @@ def test_df_real_non_empty():
     assert len(df_real) >= 100, "Expected at least 100 real EC50 measurements"
 
 
-def test_df_full_no_missing_mhw():
-    df_full, _, _, _ = load_data()
+def test_df_full_mhw_missing_only_beyond_sst():
+    # Complete within the SST coverage; missing, not 0, beyond it (the daily
+    # SST arrives months after the response -- tests/test_mhw_missing_sst.py).
+    df_full, _, _, monthly = load_data()
+    within = df_full["Datetime"] <= monthly["Datetime"].max()
     for col in MHW_COLS:
-        assert df_full[col].isna().sum() == 0, \
-            f"Column '{col}' should have no NaN values (filled with 0)"
+        assert df_full.loc[within, col].notna().all(), \
+            f"Column '{col}' has missing values within the SST coverage"
+        assert df_full.loc[~within, col].isna().all(), \
+            f"Column '{col}' has values beyond the SST coverage"
 
 
 def test_events_dataframe_not_empty():
