@@ -151,7 +151,8 @@ def _driver_observed_span(df: pd.DataFrame, driver: str) -> tuple[int, int]:
 
 def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
                              tau_max: int = TAU_MAX,
-                             order: tuple[int, int, int] | None = None) -> tuple[pd.DataFrame, dict]:
+                             order: tuple[int, int, int] | None = None,
+                             params: np.ndarray | None = None) -> tuple[pd.DataFrame, dict]:
     """
     Box-Jenkins pre-whitening CCF (Method E in the CCF robustness review):
     fit the best ARIMA(p,0,q) (by AIC) to the driver, apply that SAME fitted
@@ -170,13 +171,23 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
     skips the search entirely and is what tests/test_mhw_analysis.py uses to
     exercise this function's fit-apply-correlate computation deterministically,
     independent of order selection.
+
+    `params`: with a fixed `order`, the ARIMA parameters too. The driver is
+    then filtered with them instead of fitted: no optimizer runs, and
+    everything that follows (filters, residuals, masking of imputed months,
+    pairs per lag, r, n, p) is deterministic arithmetic. Even with a fixed
+    order the maximum likelihood is ill-conditioned on the MHW drivers (a
+    1e-10 perturbation of the driver moves r by up to 4%, issue #9), so
+    tests/test_mhw_analysis.py passes fixed parameters.
     """
     # The filter is estimated on the driver's observed span only; outside it
     # the driver residuals are missing, so a response month beyond the span
     # still pairs, at lag k, with the driver month k earlier.
     start, end = _driver_observed_span(df, driver)
     driver_full = df[driver].iloc[start:end].ffill().values
-    if order is None:
+    if params is not None:
+        driver_fit = ARIMA(driver_full, order=order).filter(params)
+    elif order is None:
         order, driver_fit = _best_arima_order(driver_full)
     else:
         driver_fit = _fit_arima_if_converged(driver_full, order)
@@ -190,7 +201,9 @@ def compute_ccf_prewhitened(df: pd.DataFrame, driver: str, targets: list[str],
         "driver": driver,
         "order": list(order),
         "aic": float(driver_fit.aic),
-        "converged": True,  # both paths above only ever return a converged fit
+        # both fitting paths above only ever return a converged fit; with
+        # fixed params nothing was fitted
+        "converged": True if params is None else None,
         "ljung_box_p": {int(lag): float(p) for lag, p in zip(lb.index, lb["lb_pvalue"])},
         "white_noise": bool((lb["lb_pvalue"] > 0.05).all()),
     }

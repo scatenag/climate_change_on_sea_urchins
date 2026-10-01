@@ -365,8 +365,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   artificial jump in the differenced driver; none survived the FDR correction before or after.
   Elsewhere: CCF r within 0.012 (EC50 rows unchanged), correlations within 0.02, forecast
   within 0.003 ug/L, wavelet coherence p 0.86 -> 0.88, no change of significance.
-  `test_compute_ccf_prewhitened_forced_order_is_stable`'s expected values were recomputed on the
-  corrected series, with the reason written in the test.
+  The ARIMA-prewhitening test compared r and p with hand-written values at a fixed order; on the
+  corrected series it failed on CI, and the cause turned out to be the method, not the fix: the
+  MA part of the filter turns runs of zero months into near-tied residuals (down to 1e-17 apart)
+  that Spearman ranks according to each machine's arithmetic (issue #9). `compute_ccf_prewhitened`
+  takes fixed `params` too, and the test checks the whole computation with fixed parameters on a
+  synthetic continuous driver at tight tolerances (r, n, p consistent with r and n); on the
+  fixture only the structure.
 
 - **Erroneous claim in the public dashboard and results: "autocorrelation not rising".** The
   regime-shift verdict (`regime_shift_summary.json`, public in the repository) always stated that
