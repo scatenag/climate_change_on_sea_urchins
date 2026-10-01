@@ -17,7 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on main because scheduled runs start only from the default branch, checks out the paper
   branch, installs its `requirements-lock.txt`, fetches EC50 daily and Copernicus/SST on the 5th
   (same cron as `update_ec50.yml`), rebuilds with the branch's own code, restores R from
-  `renv.lock` (built from source against the frozen R version: Posit's prebuilt binaries made the DLNM segfault in `dplyr` on the first run), regenerates the dashboard figures with the branch's scripts (their titles now
+  `renv.lock` (built from source against the frozen R version; the lock pins magrittr 2.0.5,
+  because 2.0.4 compiled against R 4.6.1 segfaults on the DLNM script's first `%>%`, the cause
+  of the first two failed runs, not the prebuilt binaries as first assumed), regenerates the dashboard figures with the branch's scripts (their titles now
   describe what is plotted, never a conclusion; one used to state the thesis the manuscript
   refutes, "Environmental exposure shifts ~3 years before the biological collapse"), runs the
   branch's `tests/test_data_quality.py` before committing, and commits to the branch. It also
@@ -26,6 +28,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   branch is protected against deletion and force pushes; neither the branch nor this workflow is
   modified without an explicit request: ADR-0009, which also records how this relates to
   ADR-0006 (numbers are still frozen by tag; the branch freezes the dashboard's code).
+  First run by hand with Copernicus on 30/9/2026: green, data, results and figures committed to
+  the branch; the `simulate_failure` drill opened its issue with the mention. The branch's
+  `requirements.txt` pins every direct dependency to its version in `requirements-lock.txt`, so
+  the app installs the job's environment. Two more hand-written conclusions on the branch are
+  now generated from values: the reading of the thermal-dose table (it attributed the null
+  long windows to dose-time collinearity, which the moderate VIFs do not support) and the
+  forecast's "optimal" MHW lag, now "MHW lag used as regressor", chosen on raw levels and not a
+  result.
+
+- **Two dashboards.** The one cited in the manuscript, from `paper/mpb-2026`, keeps
+  https://climate-change-on-sea-urchins.streamlit.app; the one from `main`, whose code changes
+  as the tool is generalised, moved to https://climate-response-explorer.streamlit.app. Its
+  header no longer says it corresponds to v1.5.0 and points to the cited one instead. It is
+  titled "Climate Response Explorer", with a new SVG logo (`assets/climate_response_logo.svg`)
+  in place of the sea-urchin image; the README's Streamlit badge points to it, with a second
+  badge for the dashboard cited in the manuscript.
 
 - **Module outputs hold only method descriptions, values computed in the run, and identities
   taken from the study spec.** Everything specific to the Livorno case moved out of module code

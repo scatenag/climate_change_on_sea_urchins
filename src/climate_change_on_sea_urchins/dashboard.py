@@ -52,8 +52,8 @@ from statsmodels.stats.multitest import multipletests
 # download's file is never involved. An emoji page_icon never touches
 # MediaFileManager at all, sidestepping whatever the underlying bug is.
 st.set_page_config(
-    page_title="Sea Urchins & Climate Change",
-    page_icon="🦔",
+    page_title="Climate Response Explorer",
+    page_icon="🌍",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -996,22 +996,21 @@ def _date_range_slider():
 # specifically while deleting the two real PNG files this page registers
 # (this logo + the page_icon, now also fixed) -- the CSV download's file
 # is never involved. A data: URI never touches MediaFileManager at all.
-_logo_b64 = base64.b64encode((ROOT_ASSETS / "sea_urchin_transparent.png").read_bytes()).decode()
+_logo_b64 = base64.b64encode((ROOT_ASSETS / "climate_response_logo.svg").read_bytes()).decode()
 _title_col, _ico_col = st.columns([12, 1])
 with _title_col:
-    st.title("Climate Change on Sea Urchins")
+    st.title("Climate Response Explorer")
 with _ico_col:
     st.markdown(
-        f'<img src="data:image/png;base64,{_logo_b64}" width="80">',
+        f'<img src="data:image/svg+xml;base64,{_logo_b64}" width="80">',
         unsafe_allow_html=True,
     )
 
 st.caption(
-    "The analysis published in Sartori, Scatena, Gaion et al. (*Marine Pollution "
-    "Bulletin*, submitted) corresponds to package release **v1.5.0** (see the DOI "
-    "badge in the repository README). This dashboard reflects the most recent data "
-    "available and will diverge from that release as the underlying series keeps "
-    "growing via the automated monthly update."
+    "This is the development version of the dashboard: its code changes as the "
+    "tool is generalised. The dashboard cited in Sartori, Scatena, Gaion et al. "
+    "(*Marine Pollution Bulletin*, submitted) is at "
+    "[climate-change-on-sea-urchins.streamlit.app](https://climate-change-on-sea-urchins.streamlit.app)."
 )
 
 st.markdown("#### Date range")
