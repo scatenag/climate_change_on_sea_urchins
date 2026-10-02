@@ -106,7 +106,9 @@ leggibile nel file di studio è un difetto. Emerse leggendo i moduli per le fine
 serve ai prerequisiti di V2.2.
 
 **Contesto, una voce per scelta:**
-- **Imputazione della risposta**: media mobile centrata di `IMPUTE_WINDOW_MONTHS = 12` mesi con
+- **Imputazione della risposta** (sciolta il 2/10/2026 per la milestone M1, decisione D8: si
+  dichiara nella specifica, assente per default, e lo `study.yaml` di Livorno dichiara quella
+  qui sotto; resta aperto se la doppia passata sia voluta): media mobile centrata di `IMPUTE_WINDOW_MONTHS = 12` mesi con
   `IMPUTE_MIN_PERIODS = 3` (`common.impute_response`, condivisa da `scripts/build_dataset.py`).
   È applicata **due volte**: una da `build_dataset.py` sui valori reali, una di nuovo da
   `common.load_data()` sulla serie già imputata. La seconda passata riempie 8 mesi che la
@@ -238,3 +240,18 @@ primario e il dashboard un consumatore fra tanti. **Quando:** dopo V3.3.
 
 **Domanda:** in che forma pubblicare i risultati dello strumento generico, e dove. **Quando:** dopo
 V3.2.
+
+---
+
+## 17. Analisi che esistono solo nella dashboard
+
+**Domanda:** quali delle analisi calcolate oggi solo dalla dashboard di `main` diventano analisi
+della pipeline, e con quale metodo.
+
+**Contesto:** la scheda dei ritardi della dashboard calcola dal vivo una ventina di test che la
+pipeline non ha (`compute_mhw_deep`: confronto della risposta con e senza ondata a ritardo fisso di
+2 mesi, dose-risposta per terzili di intensità, correlazioni stagionali, estate→autunno, serie
+annuali; accelerazione del declino). Il ritardo di 2 mesi è scritto nel codice ed è specifico di
+Livorno; nessuno di questi test è contato fra quelli eseguiti. Con la milestone M1 la dashboard di
+Livorno esce da `main` (M1.13) e queste analisi restano solo nell'app del lavoro. Portarne una nella
+pipeline è una scelta di metodo, da fare una per una.

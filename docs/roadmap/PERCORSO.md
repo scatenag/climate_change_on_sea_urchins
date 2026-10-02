@@ -117,8 +117,9 @@ nata.
 - **Seguito trovato il 2/10.** La copertura della SST non è ferma solo per il ritardo del
   prodotto: `scripts/fetch_copernicus_daily.py` ha la data di fine scritta a mano
   (`END = "2026-06-30"`), mentre il prodotto multiyear arriva al 31/8/2026. È la seconda volta
-  (a luglio la stessa data era indietro di due anni, `09b928a`). Issue da aprire; vale anche per
-  il branch del lavoro.
+  (a luglio la stessa data era indietro di due anni, `09b928a`). Issue #45; corretta su `main`
+  dalla #44 (fine letta dal catalogo, test che fallisce se torna un letterale); sul branch del
+  lavoro su richiesta esplicita.
 
 ### 7. Riempimenti ai bordi delle serie (corretto il 1/10, #34)
 - **Cosa.** `interpolate`, `ffill` e `bfill` prolungavano le serie oltre l'ultimo mese
@@ -147,7 +148,7 @@ nata.
 - **Perché.** Due implementazioni della stessa grandezza divergono, e le correzioni vanno
   applicate due volte a mano.
 - **Regola.** Una sola implementazione per ogni grandezza, condivisa da pipeline e dashboard.
-  Resta una copia del forecast nel dashboard (scarto 3e-6 µg/L), da togliere.
+  Resta una copia del forecast nel dashboard (scarto 3e-6 µg/L), issue #39.
 
 ### 10. L'instabilità dei ranghi nel prewhitening (#7, #33, issue #9)
 - **Cosa.** La selezione dell'ordine ARIMA del prewhitening cambia fra due run della CI sullo
