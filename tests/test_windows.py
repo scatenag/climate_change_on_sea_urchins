@@ -19,6 +19,7 @@ window with the run without a window.
 import datetime as dt
 import filecmp
 import importlib.util
+import inspect
 import json
 import shutil
 import types
@@ -60,8 +61,11 @@ def test_impute_response_fills_gaps_with_centered_rolling_mean():
 
 def test_build_dataset_uses_the_package_imputation_not_its_own():
     src = (REPO_ROOT / "scripts" / "build_dataset.py").read_text()
-    assert "impute_response" in src
+    assert "from climate_change_on_sea_urchins.common import impute_ec50" in src
     assert ".rolling(" not in src, "build_dataset.py must not carry its own copy of the imputation"
+    # common.impute_ec50 (shared with the dashboard's live read) imputes with
+    # the package's impute_response, the per-window re-imputation's function
+    assert "impute_response(" in inspect.getsource(common.impute_ec50)
 
 
 # --- explicit declaration of window support -----------------------------------

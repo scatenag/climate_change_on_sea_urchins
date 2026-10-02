@@ -345,6 +345,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The development dashboard's live values differed from the update job's.** The dashboard
+  prepared its data a second time: its own copy of the sheet's monthly aggregation, one
+  imputation pass instead of two, its own MHW merge, and its own implementation of the trend
+  correlations with a different smoothing of the response. Now there is one implementation of
+  each step: the monthly aggregation and the first imputation pass move from `scripts/` into
+  `common.py` (the scripts import them), `common.load_data(ec50_monthly=...)` rebuilds the
+  response from a monthly aggregate exactly as the job does, and the dashboard calls it on the
+  live sheet and calls `correlations.compute_matrices` for the correlations. Measured locally
+  on the current data, same code: correlations and CCF identical to the job's (they differed
+  by up to 0.03 and 0.017), live forecast within 3e-6 ug/L (it was 1.1). When the live read of
+  the sheet fails, the same preparation runs on the sheet as the job last saved it, and the
+  page now says so, with the error and the dates of the data shown, instead of a warning in
+  the collapsed sidebar only.
+
 - **Series extended beyond their last observed month.** Environmental variables and the
   response end at different months, and several fills repeated the last observed value into the
   missing edge (pandas' linear `interpolate` does that at the end of a series, `bfill`/`ffill`

@@ -2,6 +2,7 @@
 reading data/ and writing results/ (CLAUDE.md invariant #5). No other
 module in src/ should build a data/ or results/ path itself; if one needs
 data this file doesn't already expose, add a function here instead."""
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -78,7 +79,89 @@ def impute_response(values: pd.Series) -> pd.Series:
     )
 
 
-def load_data(window=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def aggregate_monthly(raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate multiple within-month measurements to a single monthly value.
+    The one implementation: scripts/fetch_ec50.py (the update job) and the
+    dashboard's live read of the sheet both call it.
+
+    Strategy:
+    - EC50: arithmetic mean of all measurements in the month
+    - CI: use the mean of individual half-widths (UL-EC50, EC50-LL),
+          then compute standard error across replicates and take
+          the wider of the two as the final CI bound.
+    """
+    raw = raw.copy()
+    raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
+    # Normalize to first-of-month
+    raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
+
+    # Half-widths from individual bioassay CI
+    raw["hw_upper"] = raw["UL"] - raw["EC50"]
+    raw["hw_lower"] = raw["EC50"] - raw["LL"]
+
+    agg = raw.groupby("Datetime").agg(
+        EC50=("EC50", "mean"),
+        EC50_std=("EC50", "std"),
+        EC50_n=("EC50", "count"),
+        mean_hw_upper=("hw_upper", "mean"),
+        mean_hw_lower=("hw_lower", "mean"),
+    ).reset_index()
+
+    # Standard error across replicates
+    agg["se"] = agg["EC50_std"] / np.sqrt(agg["EC50_n"])
+
+    # Final CI: use the larger of (propagated bioassay CI) vs (replicate SE * 1.96)
+    agg["EC50_ci_upper"] = agg["EC50"] + np.maximum(
+        agg["mean_hw_upper"], 1.96 * agg["se"].fillna(0)
+    )
+    agg["EC50_ci_lower"] = agg["EC50"] - np.maximum(
+        agg["mean_hw_lower"], 1.96 * agg["se"].fillna(0)
+    )
+
+    result = agg[["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n"]].copy()
+    result = result.sort_values("Datetime").reset_index(drop=True)
+    return result
+
+
+def impute_ec50(monthly_full: pd.DataFrame, ec50: pd.DataFrame) -> pd.DataFrame:
+    """
+    Merge EC50 into the full monthly grid.
+    Months without bioassay data are filled with a 12-month centered rolling mean.
+    CI bounds are NaN for imputed months (flag: EC50_imputed=True).
+    The one implementation: scripts/build_dataset.py (the update job) and
+    load_data(ec50_monthly=...) (the dashboard's live read) both call it.
+    """
+    df = pd.merge(monthly_full, ec50, on="Datetime", how="left")
+
+    df["EC50_imputed"] = df["EC50"].isna()
+
+    # Fill missing EC50 with the package's imputation (12-month centered
+    # rolling mean, same as the original notebook) -- one implementation,
+    # shared with the per-window re-imputation in common.load_data().
+    df["EC50"] = impute_response(df["EC50"])
+
+    # CI bounds remain NaN for imputed months
+    return df
+
+
+def _build_from_monthly(data: pd.DataFrame, ec50_monthly: pd.DataFrame
+                        ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """data_extended.csv and data_ec50_ci.csv as scripts/build_dataset.py
+    builds them, from a monthly response aggregate (aggregate_monthly) read
+    elsewhere than data/ -- the environmental columns are data_extended's."""
+    env = data.drop(columns=["EC50"])
+    start = min(env["Datetime"].min(), ec50_monthly["Datetime"].min())
+    end = max(env["Datetime"].max(), ec50_monthly["Datetime"].max())
+    grid = pd.DataFrame({"Datetime": pd.date_range(start=start, end=end, freq="MS")})
+    built = impute_ec50(pd.merge(grid, env, on="Datetime", how="left"), ec50_monthly)
+    data = built[list(env.columns) + ["EC50"]]
+    ci_df = built[["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n", "EC50_imputed"]]
+    return data, ci_df
+
+
+def load_data(window=None, ec50_monthly: pd.DataFrame | None = None
+              ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Returns:
         df_full   — all months (response includes rolling-mean imputations)
@@ -96,10 +179,18 @@ def load_data(window=None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd
     mhw_monthly are returned whole: the MHW catalogue is computed once on
     the whole record by design, and events before the window may enter a
     window statistic as lagged predictors (rule (c)).
+
+    With `ec50_monthly` (aggregate_monthly of the source sheet, read live by
+    the dashboard): the response is rebuilt from it exactly as the update
+    job builds data/ (scripts/build_dataset.py), then prepared as below --
+    the same values as the job's when the sheet has not changed
+    (tests/test_live_response.py).
     """
     data    = pd.read_csv(DATA / "data_extended.csv",  parse_dates=["Datetime"])
-    data    = data.rename(columns={"EC50": RESPONSE_COL})
     ci_df   = pd.read_csv(DATA / "data_ec50_ci.csv",   parse_dates=["Datetime"])
+    if ec50_monthly is not None:
+        data, ci_df = _build_from_monthly(data, ec50_monthly)
+    data    = data.rename(columns={"EC50": RESPONSE_COL})
     ci_df   = ci_df.rename(columns={"EC50_imputed": IMPUTED_COL})
     monthly = pd.read_csv(DATA / "mhw_monthly.csv",    parse_dates=["Datetime"])
     events  = pd.read_csv(DATA / "mhw_events.csv",
