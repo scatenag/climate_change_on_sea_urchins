@@ -10,11 +10,11 @@
   "multifactorial_stress_index": {
     "pc1_variance_explained": 0.7139931670272498,
     "pc1_loadings_stress_oriented": {
-      "Temperature": 0.4796571906307762,
+      "Temperature": 0.47965719063077616,
       "Salinity": 0.2842913338356422,
-      "CO2": 0.5025491972112097,
+      "CO2": 0.5025491972112096,
       "O2": 0.41231881989035973,
-      "pH": 0.5162798777104659
+      "pH": 0.516279877710466
     },
     "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies; one coordinated climate-change axis. Correlation with EC50 is co-trended, not causal."
   },
