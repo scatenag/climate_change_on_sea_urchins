@@ -1,8 +1,9 @@
 # Milestone M1 · Lo strumento generico da capo a fondo
 
-> **Stato (2/10/2026):** definizione fissata dal proprietario; decisioni aperte e piano dei pezzi
-> **proposti, in attesa di approvazione** (§5, §6). Nessun codice della milestone si scrive prima
-> dell'approvazione del piano. Il piano approvato sostituisce §6 in questo file.
+> **Stato (2/10/2026):** definizione fissata dal proprietario; decisioni D1–D9 approvate il
+> 2/10 con le precisazioni riportate in §5; piano riordinato il 2/10 come fetta verticale (§6), che
+> si approva con la fusione di questo documento. Nessuna scadenza: la milestone si chiude quando
+> i criteri di §4 sono soddisfatti.
 
 ---
 
@@ -36,8 +37,9 @@ V3.2.
   il proprio caso. Porta l'etichetta di caso del lavoro elaborato dallo strumento generico, con il
   rimando all'app citata nel lavoro per la versione pubblicata.
 - **I propri dati**, in tre passi:
-  1. sito, periodo e credenziali Copernicus dell'utente; download reale dei dati ambientali e
-     loro visualizzazione, compresi gli eventi di ondata di calore rilevati;
+  1. sito, periodo e credenziali Copernicus dell'utente; coordinate fuori dalla copertura del
+     catalogo rifiutate qui, con il motivo; download reale dei dati ambientali e loro
+     visualizzazione, compresi gli eventi di ondata di calore rilevati;
   2. serie di risposta guidata: un modello di CSV scaricabile e domande ricavate da quanto
      abbiamo imparato sul foglio dei ricci (`note-dati-sorgente.md`): risoluzione delle date,
      valori per singola prova o già aggregati, intervalli di confidenza come estremi, quale
@@ -94,63 +96,117 @@ V3.2.
 | 4 | Un pacchetto scaricato e ricaricato riproduce gli stessi risultati | test di andata e ritorno: stessi file di risultato, byte per byte, sulla stessa macchina |
 | 5 | Il caso dei ricci si apre senza credenziali e senza conoscere lo strumento | test dell'app (`streamlit.testing`) senza credenziali né variabili d'ambiente; prova con una persona esterna al progetto |
 
-## 5. Decisioni aperte (proposte, da approvare)
+## 5. Decisioni (approvate il 2/10/2026)
 
-| # | Domanda | Proposta | Alternativa |
-|---|---|---|---|
-| D1 | Ambito geografico del catalogo | Solo Mediterraneo (i prodotti MEDSEA di Livorno); coordinate fuori dominio rifiutate con un messaggio | Prodotti globali (risoluzione, profondità e variabili diverse: un secondo catalogo da validare) |
-| D2 | Stato globale dello studio: `common.py` carica lo studio all'import (`DATA`, `SPLIT_DATE`, `WINDOWS` costanti di modulo, scelte da `CCSU_STUDY`), incompatibile con più studi nello stesso processo | Ogni esecuzione di uno studio in un **processo separato** (comando unico); la dashboard legge per percorsi espliciti. Togliere lo stato di modulo resta per dopo (ADR) | Rifattorizzare ora `common.py` e i 16 moduli per ricevere il contesto esplicito |
-| D3 | Con quale analisi si ritrova il ritardo noto | CCF generica variabile ambientale → risposta, sulle differenze prime, ritardi 0–12, correzione BH-FDR, riusando `mhw_analysis.compute_ccf`; serie fittizia = temperatura ritardata di *k* mesi + rumore AR(1), seme fissato ed esposto | Serie fittizia generata dall'intensità MHW, ritrovata dalla CCF MHW→risposta che esiste già (nessuna analisi nuova, ma non «dalla temperatura») |
-| D4 | Cosa contiene il pacchetto | Solo input e manifest, con l'impronta dei risultati; al caricamento si ricalcola e l'app dice se i risultati coincidono | Anche i risultati, mostrati subito senza ricalcolo |
-| D5 | `split_date` per uno studio nuovo | Facoltativo: senza, le analisi pre/post sono spente con il motivo | Obbligatorio, chiesto all'utente |
-| D6 | DLNM (R) nell'app generica | Spento con il motivo «R non disponibile su questo server» (coerente con ADR-0000 voce 4) | Installare R sull'app |
-| D7 | Speciazione del rame su uno studio utente | Requisito dichiarato nella specifica (campo nuovo per il contaminante dell'endpoint); senza, spenta con il motivo | Spenta per tutti gli studi diversi da Livorno |
-| D8 | Imputazione della risposta (oggi solo nel codice, ADR-0000 voce 8) | Dichiarata nella specifica con i valori attuali (media mobile centrata 12 mesi, `min_periods` 3, doppia passata), deriva zero | Lasciata nel codice e dichiarata nell'interfaccia come scelta fissa |
-| D9 | Download nel pacchetto installabile | Un modulo del pacchetto (extra `acquisition`), perché l'app lo chiama; `scripts/` resta per il job di Livorno | — |
+| # | Domanda | Decisione |
+|---|---|---|
+| D1 | Ambito geografico del catalogo | Solo Mediterraneo (i prodotti MEDSEA di Livorno). Coordinate fuori copertura rifiutate al passo 1, con il motivo |
+| D2 | Stato globale dello studio (`common.py` lo carica all'import da `CCSU_STUDY`) | Ogni esecuzione di uno studio in un **processo separato** (comando unico). Togliere lo stato di modulo dal nucleo resta per dopo. La dashboard non lo usa: vedi §5.1 |
+| D3 | Con quale analisi si ritrova il ritardo noto | CCF generica variabile ambientale → risposta, sulle differenze prime, ritardi 0–12, correzione BH-FDR, riusando `mhw_analysis.compute_ccf`. Serie a verità nota con i caratteri della serie reale (pezzo M1.6) |
+| D4 | Cosa contiene il pacchetto | Gli input, **compresi i dati ambientali scaricati**, e il manifest con l'impronta dei risultati; al caricamento si ricalcola e l'app dice se i risultati coincidono |
+| D5 | `split_date` per uno studio nuovo | Facoltativo: senza, le analisi pre/post sono spente con il motivo |
+| D6 | DLNM (R) nell'app generica | Spento con il motivo «R non disponibile su questo server» |
+| D7 | Speciazione del rame su uno studio utente | Requisito dichiarato nella specifica (campo per il contaminante dell'endpoint); senza, spenta con il motivo |
+| D8 | Imputazione della risposta | Dichiarata nella specifica; **assente per default**. Lo `study.yaml` di Livorno dichiara la sua (media mobile centrata 12 mesi, `min_periods` 3, doppia passata), con deriva zero |
+| D9 | Dove sta il download | Un modulo del pacchetto (extra `acquisition`), perché l'app lo chiama; `scripts/` resta per il job di Livorno |
 
-## 6. Piano proposto
+### 5.1 Due utenti, due studi, un solo processo Streamlit
 
-Ogni pezzo è una PR con il proprio criterio di verifica. Prima il motore (verificabile senza
-interfaccia e senza rete), poi l'interfaccia.
+Le costanti di `common.py` (`DATA`, `RESULTS`, `SPLIT_DATE`, `WINDOWS`) sono fissate all'import, e
+in un processo Streamlit i moduli sono condivisi da tutte le sessioni: valgono per uno studio solo.
+Per questo la dashboard generica non le legge mai.
+
+- **Calcolo.** Ogni studio gira in un processo separato (`ccsu-run-study`), che carica il proprio
+  `study.yaml`: lì le costanti sono quelle dello studio, e il processo finisce con il calcolo.
+- **Visualizzazione.** Ogni sessione tiene in `st.session_state` il proprio contesto di studio:
+  la specifica letta dal suo `study.yaml`, la cartella dei dati e quella dei risultati (una
+  cartella di lavoro per sessione, mai condivisa e cancellata a fine sessione; per Livorno i
+  risultati precalcolati, in sola lettura). Il contesto si passa esplicitamente a ogni pannello, e
+  i pannelli leggono i file con funzioni che ricevono i percorsi come argomenti (parametri nuovi
+  dei lettori di `common.py`, con i valori attuali come default per la pipeline).
+- **Verifica.** Un test statico vieta al codice della dashboard generica di usare `common.DATA`,
+  `common.RESULTS`, `common.SPLIT_DATE`, `common.WINDOWS` e `config`. Un test dell'app apre nello
+  stesso processo due sessioni con studi diversi (etichette EC50 e RSPTEST) e controlla che
+  ciascuna mostri il proprio.
+
+## 6. Piano
+
+Ogni pezzo è una PR con il proprio criterio di verifica; i pezzi marcati «una PR per…» sono più
+PR. Prima una fetta verticale stretta che attraversa la catena da riga di comando; poi si allarga
+una variabile e un'analisi alla volta; solo dopo vengono la dashboard e i tre passi.
+
+### Fetta verticale (riga di comando, senza interfaccia)
+
+**Criterio di uscita:** su coordinate mai usate, con dati scaricati davvero, il comando unico
+ritrova il ritardo noto della serie a verità nota.
 
 | Pezzo | Contenuto | Criterio di verifica |
 |---|---|---|
-| **M1.1 Catalogo delle variabili** | File dichiarativo nel pacchetto: per variabile prodotto, dataset multiyear e analysis-forecast, nome, unità nativa, unità di analisi, conversione nominata (Pa→µatm), profondità, cadenza, dominio | Il catalogo riproduce esattamente dataset, variabili, profondità e conversione usati oggi per Livorno; nessun campo eseguibile |
-| **M1.2 Specifica, formato 2** | `format_version`; ambiente per id di catalogo; `split_date` facoltativo (D5); campi di D7/D8; caricamento non fidato che ignora `data_dir` e sorgenti remote | Livorno formato 1 si carica e dà deriva zero; una versione sconosciuta è rifiutata nominandola; YAML con tag Python e `data_dir` ostili rifiutati o ignorati con avviso |
-| **M1.3 Download guidato dalla specifica** | Mensili e SST giornaliera, multiyear più coda analysis-forecast, fine dalla copertura del prodotto (nessuna data scritta a mano), controllo della cella di mare, manifest di provenienza; credenziali come argomenti | In CI, con il toolbox simulato: credenziali passate solo come argomenti, `login` mai chiamato, ambiente e `$HOME` intatti, errore con la password mascherato (visto fallire su sabotaggio). A mano, con credenziali: sulle coordinate di Livorno serie uguali a `data/env_copernicus.csv` nei mesi comuni; tempi misurati |
-| **M1.4 Sorgente CSV della risposta** | Modello di CSV generato dalle risposte alle domande; lettura per prova o aggregata; errori leggibili con il numero di riga | I dati per prova di Livorno, esportati nel modello e riletti, danno la stessa serie mensile; un test per ogni classe di errore |
-| **M1.5 Costruttore del dataset generico** | Da ambiente, risposta e SST ai file che legge `load_data`, con le funzioni di `common.py` (una sola implementazione) e il rilevamento MHW | Dagli input della fixture, file identici byte per byte a quelli della fixture; golden master a deriva zero |
-| **M1.6 Requisiti dichiarati** | Ogni analisi dichiara cosa le serve (variabili, SST giornaliera, dati per prova, controlli, `split_date`, mesi minimi, R); `analyses.json` con stato ed eventuale motivo | Studio sintetico senza pH: speciazione e forecast spenti con motivo e nessun loro file scritto; Livorno: tutte eseguite, deriva zero |
-| **M1.7 Comando unico** | `ccsu-run-study <study.yaml o pacchetto>`: costruzione, analisi, rapporto; avanzamento leggibile da un altro processo; il job di Livorno lo usa | Golden master eseguito dal comando (criterio 1, parte motore); uno studio sintetico gira in CI senza rete |
-| **M1.8 Pacchetto** | Esportazione e caricamento (D4); manifest con versione del codice, prodotti, versioni dei dataset, data del download, impronte | Andata e ritorno con risultati identici (criterio 4); archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio) |
-| **M1.9 Serie a verità nota** | Generatore della serie fittizia (D3), seme esposto; CCF generica variabile → risposta | Sulla temperatura della fixture con *k* = 3 il ritardo 3 sopravvive a FDR; con una serie indipendente nessun ritardo sopravvive |
-| **M1.10 Dashboard: ingresso e contesto** | Scelta iniziale; contesto di studio passato esplicitamente alle schede; Livorno precalcolato senza credenziali, etichetta e rimando all'app del lavoro, percorso in sola lettura; il dashboard attuale resta dietro un interruttore | Test dell'app senza credenziali (criterio 5); guardia RSPTEST sulla vista generica |
-| **M1.11 Dashboard: schede generiche, parte 1** | Panoramica, serie temporali, ondate di calore, correlazioni, pre/post; schede spente con il motivo; testi dai valori | Stessi valori del job per Livorno; studio sintetico con analisi spente (criterio 3) |
-| **M1.12 Dashboard: schede generiche, parte 2** | Ritardi (CCF), stazionarietà, changepoint e regime shift, forecast (da `forecast.py`: sparisce la seconda implementazione), legacy termica, speciazione | Come M1.11; nessuna funzione di calcolo duplicata nel dashboard |
-| **M1.13 Propri dati, passo 1** | Sito su mappa, periodo, credenziali, download con avanzamento, visualizzazione con gli eventi MHW | Test dell'app con download simulato: credenziali assenti da file, messaggi, cache e pacchetto |
-| **M1.14 Propri dati, passo 2** | Domande, modello CSV, caricamento, validazione | Errori mostrati in chiaro per ogni classe; Livorno ricostruito dal CSV equivale al caso precalcolato |
-| **M1.15 Propri dati, passo 3** | Analisi applicabili, analisi lente su richiesta con avanzamento (processo separato), pacchetto a ogni passo, ricarica | Criteri 3 e 4 dall'interfaccia |
-| **M1.16 Prova generale e copione** | Percorso del video eseguito per intero con credenziali vere su coordinate mai usate; copione in `docs/`; `docs/ADAPTING.md` riscritto | I cinque criteri spuntati, con le evidenze nella PR |
+| **M1.1 Specifica formato 2 e catalogo con la sola SST** | `format_version`; ambiente per id di catalogo; sorgente `csv` della risposta; `split_date` facoltativo (D5); imputazione dichiarata, assente per default (D8); campo del contaminante (D7). Catalogo dichiarativo con la sola SST giornaliera, dominio Mediterraneo (D1) | Lo `study.yaml` di Livorno (formato 1) si carica e dà deriva zero; una versione sconosciuta è rifiutata nominandola; la voce SST riproduce dataset, variabile e profondità di `scripts/fetch_copernicus_daily.py`; nessun campo eseguibile |
+| **M1.2 Download della SST per coordinate nuove** | Dal catalogo; fine dalla copertura del prodotto; coordinate fuori dominio rifiutate con il motivo; controllo della cella di mare; manifest di provenienza; credenziali solo come argomenti (§3) | In CI, con il toolbox simulato: credenziali passate solo come argomenti, `login` mai chiamato, ambiente e `$HOME` intatti, errore con la password mascherato (visto fallire su sabotaggio). A mano, con credenziali: sulle coordinate di Livorno serie uguale a `data/sst_daily.csv` nei giorni comuni; tempo misurato |
+| **M1.3 Sorgente CSV della risposta** | Valori per prova o aggregati, risoluzione delle date dichiarata, intervalli come estremi, unità e verso; errori leggibili con il numero di riga | I dati per prova di Livorno, esportati nel formato e riletti, danno la stessa serie mensile; un test per ogni classe di errore |
+| **M1.4 Costruttore del dataset (SST e risposta)** | Aggregazione della risposta, imputazione come dichiarata, rilevamento MHW, temperatura mensile; con le funzioni di `common.py` (una sola implementazione). Per la fetta la temperatura mensile è la media mensile della SST giornaliera: scelta da confermare nella PR, sostituita dalla variabile mensile del catalogo con M1.8 | Dalla SST e dai dati per prova della fixture: catalogo MHW identico a quello della fixture; Livorno, con la sua imputazione dichiarata, identico a `data_ec50_ci.csv` della fixture |
+| **M1.5 `ccsu-run-study` con la sola CCF** | Comando unico: costruzione, CCF variabile → risposta (D3) con il numero di test dichiarato, risultati in `results/<study_id>/` con la provenienza; un processo per studio; avanzamento leggibile da un altro processo | Uno studio sintetico gira da capo a fondo in CI, senza rete |
+| **M1.6 Serie a verità nota (uscita della fetta)** | Generatore con seme esposto. Riproduce i caratteri della serie reale: risposta che scende quando la temperatura sale, ritardo *k* né 0 né multiplo di 12 (proposta: 3 mesi), da 1 a 6 prove per mese da aggregare, mesi mancanti in sequenze come nel foglio dei ricci (circa metà dei mesi), rumore autocorrelato | Automatico, sulla SST della fixture: il ritardo *k* sopravvive a FDR e ha il segno negativo; con una serie indipendente nessun ritardo sopravvive. A mano, con credenziali: il criterio di uscita su coordinate mai usate |
 
-**Stime.**
+### Allargamento (una variabile e un'analisi alla volta)
+
+| Pezzo | Contenuto | Criterio di verifica |
+|---|---|---|
+| **M1.7 Requisiti dichiarati** | Ogni analisi dichiara cosa le serve (variabili, SST giornaliera, dati per prova, controlli, `split_date`, mesi minimi, contaminante, R); `analyses.json` con stato ed eventuale motivo | Uno studio senza pH: speciazione e forecast spenti con il motivo, nessun loro file scritto (criterio 3, motore) |
+| **M1.8 Variabili mensili**, una PR per variabile | Temperatura 0–10 m, salinità, O₂, pH, CO₂ con la conversione Pa→µatm nominata nel catalogo | Voce di catalogo uguale a quella usata oggi per Livorno; a mano, sulle coordinate di Livorno, serie uguale a `data/env_copernicus.csv` nei mesi comuni |
+| **M1.9 Analisi nel comando unico**, una PR per analisi o famiglia | Le analisi della pipeline, ciascuna con i propri requisiti, fino a Livorno completo; alla fine il job di Livorno usa `ccsu-run-study` (PR su `update_ec50.yml`) | Deriva zero sul golden master a ogni PR; alla fine il golden master intero eseguito dal comando unico (criterio 1, motore) |
+| **M1.10 Pacchetto e caricamento non fidato** | Esportazione e caricamento (D4); YAML sicuro; `data_dir` e sorgenti remote ignorati con avviso | Andata e ritorno con risultati identici byte per byte (criterio 4); archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio) |
+
+### Interfaccia
+
+| Pezzo | Contenuto | Criterio di verifica |
+|---|---|---|
+| **M1.11 Dashboard generica: ingresso e contesto** | Scelta iniziale; contesto di studio per sessione (§5.1); Livorno precalcolato senza credenziali, con l'etichetta e il rimando all'app del lavoro, e il percorso in sola lettura | Test dell'app senza credenziali né variabili d'ambiente (criterio 5); due sessioni con studi diversi nello stesso processo |
+| **M1.12 Pannelli per analisi**, una PR per gruppo | Un pannello per analisi, letto da `analyses.json` e dai file dell'analisi; analisi spente con il motivo; testi dai valori | Stessi valori dei file di risultato; guardia RSPTEST sulla vista generica (criterio 1, dashboard; criterio 3) |
+| **M1.13 Via la dashboard di Livorno da `main`** | Rimozione di `dashboard.py` e, se non serve più, del meccanismo di import di `app.py`; l'app del lavoro vive sul suo branch | Nessun riferimento rimasto; l'app di sviluppo apre la vista generica |
+| **M1.14 Propri dati, passo 1** | Sito su mappa, periodo, credenziali, download con avanzamento, visualizzazione con gli eventi MHW | Test dell'app con download simulato: credenziali assenti da file, messaggi, cache e pacchetto |
+| **M1.15 Propri dati, passo 2** | Domande, modello CSV, caricamento, validazione | Errori mostrati in chiaro per ogni classe; Livorno ricostruito dal CSV uguale al caso precalcolato |
+| **M1.16 Propri dati, passo 3** | Analisi applicabili, analisi lente su richiesta con avanzamento, pacchetto a ogni passo, ricarica | Criteri 3 e 4 dall'interfaccia |
+| **M1.17 Prova generale e copione** | Percorso del video eseguito per intero con credenziali vere su coordinate mai usate; copione in `docs/`; `docs/ADAPTING.md` riscritto | I cinque criteri spuntati, con le evidenze nella PR |
+
+## 7. La dashboard: riscriverla o togliere il caso dall'attuale
+
+**A. Riscritta, guidata da risultati e specifica.** Un pannello per analisi: legge lo stato da
+`analyses.json` e i valori dai file dell'analisi, con il contesto della sessione (§5.1); i testi
+nascono dai valori. Costo stimato **6–8 sessioni** (M1.11–M1.13): ingresso e contesto 1–2,
+pannelli 4–5 a gruppi, rimozione della dashboard attuale 1; circa 1200–1600 righe nuove.
+
+**B. Togliere il caso dalle 2827 righe attuali.** Da sciogliere: 211 occorrenze del letterale
+EC50; le costanti di modulo dello studio lette all'import; la seconda implementazione del forecast;
+i testi scritti a mano; soprattutto la scheda dei ritardi (753 righe), che calcola dal vivo una
+ventina di test che la pipeline non ha (`compute_mhw_deep`: confronto a ritardo fisso di 2 mesi,
+dose-risposta per terzili, correlazioni stagionali, estate→autunno, serie annuali; accelerazione del
+declino), ciascuno da portare nella pipeline, con una scelta di metodo, o da togliere. Stima
+**8–11 sessioni**, e il risultato resterebbe organizzato attorno al racconto di Livorno, non
+all'elenco delle analisi applicabili a uno studio.
+
+**Proposta: A.** Su `main` la dashboard di Livorno non sopravvive come codice a sé: si toglie con
+M1.13, e l'app del lavoro resta sul suo branch. Le analisi che oggi esistono solo nella dashboard
+spariscono da `main`; quelle da tenere diventano analisi della pipeline, ciascuna con una decisione
+(ADR-0000, voce 17).
+
+## 8. Stime
+
 - **Download per un sito tipico.** Misurato nei job del 30/9 su GitHub Actions: circa 5–6 s per
   richiesta mensile (quasi tutto metadati e apertura del dataset), circa 4 s per l'intera SST
-  giornaliera 2003–2026 su una cella. Uno studio richiede 5 variabili mensili e la SST
+  giornaliera 2003–2026 su una cella. Uno studio completo richiede 5 variabili mensili e la SST
   giornaliera, ciascuna con il multiyear più la coda analysis-forecast: circa 12 richieste,
   **1–2 minuti** su GitHub Actions, meno di 5 MB. Su Streamlit Cloud non è misurato: si assume
-  2–5 minuti finché M1.3 non lo misura.
-- **Dashboard capace di mostrare uno studio qualunque** (M1.10–M1.12): **5–7 sessioni**. Il
-  dashboard attuale ha 2827 righe, 10 schede, 211 occorrenze del letterale EC50, legge le
-  costanti di modulo dello studio caricato all'import, e la scheda dei ritardi (circa 750 righe) è
-  quasi tutta specifica del caso; contiene ancora conclusioni scritte a mano e una seconda
-  implementazione del forecast.
-- **Milestone intera:** 20–26 sessioni, una PR ciascuna. Se il tempo non basta, si taglia M1.12
-  alla sola scheda dei ritardi e al forecast; le altre schede restano spente con il motivo «non
-  ancora disponibile nella vista generica», e il caso completo resta visibile nell'app del lavoro.
+  2–5 minuti finché M1.2 non lo misura.
+- **Fetta verticale** (M1.1–M1.6): 7–8 sessioni. **Allargamento** (M1.7–M1.10): 14–20 sessioni,
+  quasi tutte in M1.9 (16 moduli). **Dashboard** (M1.11–M1.13): 6–8. **Tre passi e prova
+  generale** (M1.14–M1.17): 5–6. In tutto **32–42 sessioni**, una PR ciascuna.
 
-## 7. Fuori dalla milestone
+## 9. Fuori dalla milestone
 
 Le finestre temporali nei moduli non migrati, il prewhitening ARIMA (issue #9), i prodotti fuori
-dal Mediterraneo (se D1 approvata), il confronto fra casi e la contabilità dei test (V3.2),
-autenticazione e più utenti (V5), la rinomina del progetto. Ogni difetto trovato lungo la strada
-che non blocca il percorso della milestone va in una issue e non si tocca.
+dal Mediterraneo, il confronto fra casi e la contabilità dei test (V3.2), autenticazione e più
+utenti (V5), la rinomina del progetto, la rimozione dello stato di modulo dal nucleo (D2). Ogni
+difetto trovato lungo la strada che non blocca il percorso della milestone va in una issue e non
+si tocca.
