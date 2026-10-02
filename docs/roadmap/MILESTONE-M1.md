@@ -13,13 +13,15 @@ registrabile in un video per i convegni. Alla presentazione si usa il video: l'a
 reggere una dimostrazione dal vivo davanti a un pubblico, ma deve funzionare davvero, su dati
 veri scaricati in quel momento.
 
-Il lavoro pubblicato afferma che la pipeline è un modello adattabile da altri programmi di
+Il manoscritto citato (in revisione) afferma che la pipeline è un modello adattabile da altri programmi di
 monitoraggio; oggi `docs/ADAPTING.md` ammette che cambiare sito è facile e cambiare indicatore
 no. M1 è ciò che rende vera quella frase: alla fine `ADAPTING.md` va riscritto.
 
-Nella strada V1–V5 (`METODO_E_FASI.md`) M1 chiude **V2** e anticipa una parte di **V3.1** (ogni
-analisi dichiara i propri requisiti) e di **V3.3** (usabile da chi non conosce il codice). Non
-contiene il confronto fra casi né la disciplina inferenziale di V3.2.
+Nella strada V1–V5 (`METODO_E_FASI.md`) M1 sta dentro **V2**, di cui porta la genericità fino a
+chi non conosce il codice, e anticipa una parte di **V3.1** (ogni analisi dichiara i propri
+requisiti) e di **V3.3** (uso senza conoscere il codice). Le celle spostate e la tabella di
+confronto delle finestre restano in V2.2; il confronto fra casi e la disciplina inferenziale in
+V3.2.
 
 ## 2. Struttura
 

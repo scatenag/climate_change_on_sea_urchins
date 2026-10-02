@@ -9,8 +9,9 @@
 
 ## Dove siamo
 
-**V2 · Il caso diventa configurazione**, che si chiude con la **milestone M1 · Lo strumento
-generico da capo a fondo**: un'app generica, un percorso per i propri dati, una demo registrata.
+**V2 · Il caso diventa configurazione**, con la **milestone M1 · Lo strumento generico da capo a
+fondo**: un'app generica, un percorso per i propri dati, una demo registrata. Il lavoro sulle
+finestre di V2.2 è parcheggiato (sotto).
 Definizione fissata dal proprietario; decisioni D1–D9 e piano dei pezzi **proposti, in attesa di
 approvazione**. Nessun codice della milestone è ancora scritto.
 
