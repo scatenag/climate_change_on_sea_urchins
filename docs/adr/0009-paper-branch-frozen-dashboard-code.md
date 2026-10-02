@@ -65,3 +65,20 @@ e sono accettati esplicitamente: una seconda storia e un secondo aggiornamento d
   perché tocca il branch.
 - Un eventuale rilascio `v1.5.1` (per esempio con la fixture corretta per la prova 224) può
   chiudere lo stato del branch con un tag, senza fermare l'aggiornamento.
+
+## Aggiornamento (2/10/2026): ricalcolo forzato
+
+Su richiesta esplicita del proprietario, il workflow ha un input manuale `force_rebuild`. Il job
+ricalcola `results/` e le figure con il codice del branch anche quando non sono arrivati dati
+nuovi, e il commit lo dichiara («Rebuild … recomputed by hand (force_rebuild)», con il commit del
+codice usato). Serve dopo ogni correzione del codice del branch. Senza questo input i risultati
+precalcolati resterebbero quelli del codice precedente fino al primo dato nuovo, mentre le parti
+ricalcolate dal vivo nell'app userebbero già il codice nuovo.
+
+Questo precisa la decisione: sul branch i numeri cambiano perché arrivano dati nuovi **oppure**
+per una correzione del codice chiesta esplicitamente. La prima occasione sono state le correzioni
+della preparazione dei dati portate da `main` il 2/10/2026 (#33, #34, #35): mesi senza SST
+trattati come mesi senza ondate di calore, serie prolungate oltre l'ultimo mese osservato, una
+seconda preparazione dei dati nel dashboard. Ogni correzione di questo tipo entra prima su
+`main`, poi sul branch in un commit a sé, con i suoi test; i valori del lavoro
+(`test_paper_values.py`) devono restare invariati.

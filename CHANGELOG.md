@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Forced rebuild of the paper branch.** `update_paper_branch.yml` has a manual
+  `force_rebuild` input: it recomputes the branch's `results/` and figures with the branch's
+  code even without new data, and the commit says so. Needed after every code fix on the
+  branch, so the precomputed results do not lag behind the code. Added on explicit request,
+  recorded in ADR-0009.
+
 - **Branch `paper/mpb-2026` and its data update** (`.github/workflows/update_paper_branch.yml`).
   The dashboard cited in the manuscript is served from `paper/mpb-2026`: the v1.5.0 code plus
   fixes of errors visible in the dashboard (mg/L labels and the CO2 unit note from `44f37df`;

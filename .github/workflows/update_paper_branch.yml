@@ -32,6 +32,10 @@ on:
         description: "Fail the update job on purpose, to check that the failure issue is opened and the mention arrives"
         type: boolean
         default: false
+      force_rebuild:
+        description: "Recompute results/ and figures even without new data (after a code fix on the branch; ADR-0009)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -124,7 +128,7 @@ jobs:
       - name: Decide whether to rebuild
         id: rebuild
         run: |
-          if [ "${{ steps.check_ec50.outputs.changed }}" = "true" ] || [ "${{ steps.check_copernicus.outputs.changed }}" = "true" ]; then
+          if [ "${{ steps.check_ec50.outputs.changed }}" = "true" ] || [ "${{ steps.check_copernicus.outputs.changed }}" = "true" ] || [ "${{ inputs.force_rebuild }}" = "true" ]; then
             echo "needed=true" >> "$GITHUB_OUTPUT"
           else
             echo "needed=false" >> "$GITHUB_OUTPUT"
@@ -192,7 +196,12 @@ jobs:
                   data/env_copernicus.csv data/sst_daily.csv \
                   data/mhw_events.csv data/mhw_monthly.csv data/mhw_annual.csv \
                   results/ figures/
-          git diff --cached --quiet || git commit -m "Auto-update (paper/mpb-2026): data, results and figures, frozen code [skip ci]"
+          if [ "${{ inputs.force_rebuild }}" = "true" ]; then
+            msg="Rebuild (paper/mpb-2026): results and figures recomputed by hand (force_rebuild), branch code at $(git rev-parse --short HEAD) [skip ci]"
+          else
+            msg="Auto-update (paper/mpb-2026): data, results and figures, frozen code [skip ci]"
+          fi
+          git diff --cached --quiet || git commit -m "$msg"
           git push origin "HEAD:${PAPER_BRANCH}"
 
   # Same alarm as the tests after main's update: the day a Copernicus product
