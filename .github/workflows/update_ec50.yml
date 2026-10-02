@@ -11,8 +11,10 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
+    # The push to main goes through the deploy key below, not GITHUB_TOKEN, so the
+    # token only needs to read.
     permissions:
-      contents: write
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -20,6 +22,10 @@ jobs:
         with:
           ref: main
           fetch-depth: 1
+          # Write deploy key, the only exception to main's ruleset (PR and green checks
+          # required for everyone else): this job's commit of new data and results is the
+          # one push to main that does not go through a pull request. Used here only.
+          ssh-key: ${{ secrets.UPDATE_EC50_DEPLOY_KEY }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
