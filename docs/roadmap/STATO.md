@@ -80,5 +80,5 @@ script · #45 data di fine della SST (corretta su `main` dalla #44, fusa il 3/10
 
 ## Prossimo passo
 
-**M1.1 Specifica formato 2 e catalogo con la sola SST**, primo pezzo della fetta verticale. Prima
-di M1.4 va approvata la regola per i mesi incompleti della SST (`MILESTONE-M1.md`, M1.4).
+**M1.1 Specifica formato 2 e catalogo con la sola SST**, primo pezzo della fetta verticale. La regola
+per i mesi incompleti della SST (M1.4) è approvata: un giorno mancante rende mancante il mese.
