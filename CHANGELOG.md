@@ -318,6 +318,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The auto-update pushes to `main` with a deploy key** (`update_ec50.yml`), not with
+  `GITHUB_TOKEN`, whose permission drops to `contents: read`. The key's secret is stored only in
+  the environment `auto-update-main`, restricted to the `main` branch and declared only by this
+  job, so a workflow running on any other branch cannot read it. Preparation for main's ruleset
+  (pull request and green `test` check required, no approvals): the write deploy key is its only
+  exception, so the job's commit of new data and results stays the one push to `main` that does
+  not go through a pull request.
+
 - `.gitignore` no longer excludes `docs/roadmap/` and `docs/adr/0000-decisioni-rimandate.md`.
   Both rules silently excluded new documents created there (it happened to `STATO.md` and to
   ADR-0000, each then force-added one at a time). Nothing under `docs/` is ignored now; the
@@ -365,6 +373,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     this driver.
 
 ### Fixed
+
+- **The daily SST stopped at a date written in the code.** `scripts/fetch_copernicus_daily.py`
+  downloaded up to `END = "2026-06-30"`, so `data/sst_daily.csv`, the MHW catalogue and every MHW
+  analysis stayed at June 2026 although the multiyear product covers up to 2026-08-31 (catalogue
+  read on 2026-10-02). Second time: in 2026-07 the same constant was two years behind (`09b928a`).
+  The end is now read at every run from the Copernicus catalogue's coverage of the multiyear
+  dataset, and the analysis-forecast fallback stops at the same day, so forecast days never enter
+  as observations. `tests/test_sst_end_from_catalog.py` fails if a date literal other than the
+  series start comes back (sabotage-verified). The months without SST attributed in #33 to the
+  product's delay were partly this. Data and results on `main` change at the next monthly update
+  (the 5th), when July and August 2026 arrive.
 
 - **The development dashboard's live values differed from the update job's.** The dashboard
   prepared its data a second time: its own copy of the sheet's monthly aggregation, one
