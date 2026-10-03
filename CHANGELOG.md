@@ -351,6 +351,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The daily SST stopped at a date written in the code.** `scripts/fetch_copernicus_daily.py`
+  downloaded up to `END = "2026-06-30"`, so `data/sst_daily.csv`, the MHW catalogue and every MHW
+  analysis stayed at June 2026 although the multiyear product covers up to 2026-08-31 (catalogue
+  read on 2026-10-02). Second time: in 2026-07 the same constant was two years behind (`09b928a`).
+  The end is now read at every run from the Copernicus catalogue's coverage of the multiyear
+  dataset, and the analysis-forecast fallback stops at the same day, so forecast days never enter
+  as observations. `tests/test_sst_end_from_catalog.py` fails if a date literal other than the
+  series start comes back (sabotage-verified). The months without SST attributed in #33 to the
+  product's delay were partly this. Data and results on `main` change at the next monthly update
+  (the 5th), when July and August 2026 arrive.
+
 - **The development dashboard's live values differed from the update job's.** The dashboard
   prepared its data a second time: its own copy of the sheet's monthly aggregation, one
   imputation pass instead of two, its own MHW merge, and its own implementation of the trend
