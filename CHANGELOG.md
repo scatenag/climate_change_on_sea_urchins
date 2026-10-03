@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Project memory for the next phase** (documentation only). `docs/roadmap/STATO.md` rewritten
+  as a one-page status (current state, parked work and how to resume it, pending decisions);
+  `docs/roadmap/PERCORSO.md`, the path from the v1.5.0 consolidation to today, with the main
+  decisions and their ADRs and sixteen silent errors, each with its cause and the working rule it
+  produced; `docs/roadmap/MILESTONE-M1.md`, the next milestone (a generic tool working end to
+  end, shown by a recorded guided demo) with its definition, constraints, acceptance criteria,
+  approved decisions, the plan as a narrow vertical slice through the command line first, and the
+  case for rewriting the dashboard from results and spec; `docs/COME_SI_LAVORA.md`, the working
+  rules, versioned (the local `CLAUDE.md` is not in git); eight new deferred decisions in
+  `docs/adr/0000-decisioni-rimandate.md`. Three roadmap documents that existed only locally are
+  now versioned after review for a public repository: `METODO_E_FASI.md` (the V1–V5 road, with
+  M1 placed in it; no personal or event references), `note-dati-sorgente.md` (the response
+  source's anatomy, cited by `study_spec.py`; without people's names, trial 224 described as
+  corrected at the source, the second sheet tab left out) and the folder's `README.md`.
+
 - **Forced rebuild of the paper branch.** `update_paper_branch.yml` has a manual
   `force_rebuild` input: it recomputes the branch's `results/` and figures with the branch's
   code even without new data, and the commit says so. Needed after every code fix on the
