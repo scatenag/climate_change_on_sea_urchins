@@ -303,6 +303,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **The auto-update pushes to `main` with a deploy key** (`update_ec50.yml`), not with
+  `GITHUB_TOKEN`, whose permission drops to `contents: read`. The key's secret is stored only in
+  the environment `auto-update-main`, restricted to the `main` branch and declared only by this
+  job, so a workflow running on any other branch cannot read it. Preparation for main's ruleset
+  (pull request and green `test` check required, no approvals): the write deploy key is its only
+  exception, so the job's commit of new data and results stays the one push to `main` that does
+  not go through a pull request.
+
 - `.gitignore` no longer excludes `docs/roadmap/` and `docs/adr/0000-decisioni-rimandate.md`.
   Both rules silently excluded new documents created there (it happened to `STATO.md` and to
   ADR-0000, each then force-added one at a time). Nothing under `docs/` is ignored now; the
