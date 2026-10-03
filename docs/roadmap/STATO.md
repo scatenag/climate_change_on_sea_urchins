@@ -31,12 +31,14 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
   gira anche dopo ogni aggiornamento e apre una issue se fallisce; `validate_data.yml` ogni giorno.
 - **Protezione.** Ruleset su `main` e `sartori-2023-supplement`: niente cancellazione né force
   push, nessuna eccezione. `paper/mpb-2026`: protezione classica, idem. **Protezione completa di
-  `main` approvata, in corso**: deploy key con scrittura e segreto `UPDATE_EC50_DEPLOY_KEY`
-  creati il 2/10; la #46 fa spingere `update_ec50.yml` con la chiave; dopo la sua fusione si
-  attiva il ruleset (PR obbligatoria senza approvazioni, controllo `test` verde, unica eccezione
-  le deploy key; quelle di Streamlit sono in sola lettura). Il primo push reale con la chiave è
-  l'aggiornamento Copernicus del 5/10: da controllare. I branch delle PR fuse si cancellano da
-  soli.
+  `main` approvata, in corso.** Fatto (#46, 3/10): `update_ec50.yml` spinge con una deploy key con
+  scrittura; il segreto `UPDATE_EC50_DEPLOY_KEY` sta solo nell'environment `auto-update-main`,
+  limitato al branch `main` e dichiarato solo da quel job; il token del job è in sola lettura.
+  Verificato il 3/10 con un'esecuzione a mano: segreto letto, checkout via SSH riuscito, nessun
+  push (nessun dato nuovo). **Il ruleset (PR obbligatoria senza approvazioni, controllo `test`
+  verde, unica eccezione le deploy key) si attiva solo dopo che il job del 5/10 avrà spinto su
+  `main` con la chiave**; poi si leggono con l'API le regole effettive di `main` e si verifica il
+  primo push successivo del job. I branch delle PR fuse si cancellano da soli.
 - **Branch**: `main`, `paper/mpb-2026`, `sartori-2023-supplement` (riferimento del lavoro del
   2023, tag `v0.1.0-sartori-2023`).
 
@@ -50,14 +52,21 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 | `paper/mpb-2026` | Riceve solo dati nuovi e correzioni di affermazioni false | Su richiesta esplicita: prima su `main`, poi sul branch in un commit a sé, `force_rebuild`, verifica dell'app (ADR-0009). La data di fine della SST (#45) verrà richiesta dopo la misura dell'effetto sull'app citata. Altri candidati: copia del forecast (#39), riempimento a 0 nel DLNM (#38), `update_ec50.yml` di v1.5.0 rimasto sul branch |
 | Logo dell'app di sviluppo (#32) | In attesa del parere del proprietario | — |
 
+## Dopo il 5/10 (aggiornamento mensile Copernicus)
+
+- Verificare che il job abbia spinto su `main` con la chiave e che `data/sst_daily.csv` arrivi al
+  31/8/2026 (#44, fusa il 3/10).
+- Attivare il ruleset di `main`, leggerne le regole effettive con l'API e riportarle; al push
+  successivo del job verificare che sia passato.
+- Misura per il branch del lavoro, senza push: in una copia locale di `paper/mpb-2026`, con la SST
+  scaricata da `main`, ricalcolare e riportare mesi di SST e di ondate in più, eventi nuovi e valori
+  cambiati nell'app citata. Le credenziali Copernicus restano fuori dalle sessioni
+  dell'assistente. Poi la correzione sul branch solo su richiesta esplicita.
+
 ## In attesa del proprietario
 
 - Rilettura e fusione della #37 (questa memoria); poi: `CLAUDE.md` locale sostituito dalla
   versione breve, `PASSAGGIO.md` cancellato, avvio della fetta verticale.
-- Fusione della #44 (data di fine della SST su `main`), prima del 5/10 perché l'aggiornamento
-  mensile porti luglio e agosto 2026.
-- Richiesta esplicita della stessa correzione su `paper/mpb-2026`, dopo la misura dell'effetto
-  sull'app citata (mesi di SST e di ondate in più, risultati mostrati che cambiano).
 - Parte sulla seconda scheda del foglio in `note-dati-sorgente.md`: fuori finché non è chiarito
   se si può descrivere.
 - Chiudere la #23 (esercitazione del 25/9).
@@ -67,8 +76,9 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 #9 prewhitening (V3.1) · #23 esercitazione, da chiudere · #38 riempimento a 0 nel DLNM · #39 copia
 del forecast nel dashboard · #40 unità del CO₂ in `fetch_copernicus.py` · #41 interpolazione dei
 buchi della SST · #42 rimandi a documenti non versionati · #43 percorsi risolti all'import negli
-script · #45 data di fine della SST (corretta su `main` dalla #44, aperta per il branch del lavoro).
+script · #45 data di fine della SST (corretta su `main` dalla #44, fusa il 3/10; aperta per il branch del lavoro).
 
 ## Prossimo passo
 
-**M1.1 Specifica formato 2 e catalogo con la sola SST**, primo pezzo della fetta verticale.
+**M1.1 Specifica formato 2 e catalogo con la sola SST**, primo pezzo della fetta verticale. Prima
+di M1.4 va approvata la regola per i mesi incompleti della SST (`MILESTONE-M1.md`, M1.4).

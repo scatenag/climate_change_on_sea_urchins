@@ -145,7 +145,7 @@ ritrova il ritardo noto della serie a verità nota.
 | **M1.1 Specifica formato 2 e catalogo con la sola SST** | `format_version`; ambiente per id di catalogo; sorgente `csv` della risposta; `split_date` facoltativo (D5); imputazione dichiarata, assente per default (D8); campo del contaminante (D7). Catalogo dichiarativo con la sola SST giornaliera, dominio Mediterraneo (D1) | Lo `study.yaml` di Livorno (formato 1) si carica e dà deriva zero; una versione sconosciuta è rifiutata nominandola; la voce SST riproduce dataset, variabile e profondità di `scripts/fetch_copernicus_daily.py`; nessun campo eseguibile |
 | **M1.2 Download della SST per coordinate nuove** | Dal catalogo; fine dalla copertura del prodotto; coordinate fuori dominio rifiutate con il motivo; controllo della cella di mare; manifest di provenienza; credenziali solo come argomenti (§3) | In CI, con il toolbox simulato: credenziali passate solo come argomenti, `login` mai chiamato, ambiente e `$HOME` intatti, errore con la password mascherato (visto fallire su sabotaggio). A mano, con credenziali: sulle coordinate di Livorno serie uguale a `data/sst_daily.csv` nei giorni comuni; tempo misurato |
 | **M1.3 Sorgente CSV della risposta** | Valori per prova o aggregati, risoluzione delle date dichiarata, intervalli come estremi, unità e verso; errori leggibili con il numero di riga | I dati per prova di Livorno, esportati nel formato e riletti, danno la stessa serie mensile; un test per ogni classe di errore |
-| **M1.4 Costruttore del dataset (SST e risposta)** | Aggregazione della risposta, imputazione come dichiarata, rilevamento MHW, temperatura mensile; con le funzioni di `common.py` (una sola implementazione). Per la fetta la temperatura mensile è la media mensile della SST giornaliera: scelta da confermare nella PR, sostituita dalla variabile mensile del catalogo con M1.8 | Dalla SST e dai dati per prova della fixture: catalogo MHW identico a quello della fixture; Livorno, con la sua imputazione dichiarata, identico a `data_ec50_ci.csv` della fixture |
+| **M1.4 Costruttore del dataset (SST e risposta)** | Aggregazione della risposta, imputazione come dichiarata, rilevamento MHW, temperatura mensile; con le funzioni di `common.py` (una sola implementazione). Per la fetta la temperatura mensile è la media mensile della SST giornaliera (confermato il 2/10), sostituita dalla variabile mensile del catalogo con M1.8. Regola per i mesi incompleti da approvare prima del codice: proposta, un mese con anche un solo giorno mancante è mancante | Dalla SST e dai dati per prova della fixture: catalogo MHW identico a quello della fixture; Livorno, con la sua imputazione dichiarata, identico a `data_ec50_ci.csv` della fixture |
 | **M1.5 `ccsu-run-study` con la sola CCF** | Comando unico: costruzione, CCF variabile → risposta (D3) con il numero di test dichiarato, risultati in `results/<study_id>/` con la provenienza; un processo per studio; avanzamento leggibile da un altro processo | Uno studio sintetico gira da capo a fondo in CI, senza rete |
 | **M1.6 Serie a verità nota (uscita della fetta)** | Generatore con seme esposto. Riproduce i caratteri della serie reale: risposta che scende quando la temperatura sale, ritardo *k* né 0 né multiplo di 12 (proposta: 3 mesi), da 1 a 6 prove per mese da aggregare, mesi mancanti in sequenze come nel foglio dei ricci (circa metà dei mesi), rumore autocorrelato | Automatico, sulla SST della fixture: il ritardo *k* sopravvive a FDR e ha il segno negativo; con una serie indipendente nessun ritardo sopravvive. A mano, con credenziali: il criterio di uscita su coordinate mai usate |
 
@@ -186,7 +186,7 @@ declino), ciascuno da portare nella pipeline, con una scelta di metodo, o da tog
 **8–11 sessioni**, e il risultato resterebbe organizzato attorno al racconto di Livorno, non
 all'elenco delle analisi applicabili a uno studio.
 
-**Proposta: A.** Su `main` la dashboard di Livorno non sopravvive come codice a sé: si toglie con
+**Decisione (2/10/2026): A.** Su `main` la dashboard di Livorno non sopravvive come codice a sé: si toglie con
 M1.13, e l'app del lavoro resta sul suo branch. Le analisi che oggi esistono solo nella dashboard
 spariscono da `main`; quelle da tenere diventano analisi della pipeline, ciascuna con una decisione
 (ADR-0000, voce 17).
@@ -201,7 +201,8 @@ spariscono da `main`; quelle da tenere diventano analisi della pipeline, ciascun
   2–5 minuti finché M1.2 non lo misura.
 - **Fetta verticale** (M1.1–M1.6): 7–8 sessioni. **Allargamento** (M1.7–M1.10): 14–20 sessioni,
   quasi tutte in M1.9 (16 moduli). **Dashboard** (M1.11–M1.13): 6–8. **Tre passi e prova
-  generale** (M1.14–M1.17): 5–6. In tutto **32–42 sessioni**, una PR ciascuna.
+  generale** (M1.14–M1.17): 5–6. In tutto **32–42 sessioni**, una PR ciascuna. La stima si
+  rivede alla chiusura di M1.6 con i tempi reali della fetta, prima di cominciare M1.7.
 
 ## 9. Fuori dalla milestone
 
