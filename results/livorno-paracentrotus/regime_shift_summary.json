@@ -9,13 +9,13 @@
   "mhw_exposure_break_year": 2013,
   "exposure_precedes_response_years": 3,
   "multifactorial_stress_index": {
-    "pc1_variance_explained": 0.7103105561791445,
+    "pc1_variance_explained": 0.7139931670272497,
     "pc1_loadings_stress_oriented": {
-      "Temperature": 0.47904863791892854,
-      "Salinity": 0.28413289337617187,
-      "CO2": 0.5030669141111426,
-      "O2": 0.41108408889149717,
-      "pH": 0.5174112998347107
+      "Temperature": 0.4796571906307762,
+      "Salinity": 0.2842913338356422,
+      "CO2": 0.5025491972112096,
+      "O2": 0.4123188198903597,
+      "pH": 0.5162798777104658
     },
     "note": "PC1 of deseasonalised T/S/CO2/O2/pH anomalies. Its correlation with EC50 is co-trended, not causal."
   },
@@ -26,5 +26,5 @@
     "ar1_p": 0.016455926372748352
   },
   "critical_slowing_down_detected": false,
-  "verdict": "Pettitt break in EC50: last month before the change 2016-05, first month after 2016-06 (p=8.6e-23, significant at 0.05). MHW exposure (total MHW days): last year before the change 2013, first year after 2014 (p=0.0055, significant at 0.05). Comparing the last period before each break, the MHW-exposure break is 3 yr earlier than the EC50 break. PC1 explains 71% of the variance of the deseasonalised T/S/CO2/O2/pH anomalies. Critical-slowing-down early-warning signals (rolling variance AND lag-1 autocorrelation both rising, Kendall p<0.05): not detected (variance tau=-0.51, p=2.7e-18; AR(1) tau=+0.14, p=0.016)."
+  "verdict": "Pettitt break in EC50: last month before the change 2016-05, first month after 2016-06 (p=8.6e-23, significant at 0.05). MHW exposure (total MHW days): last year before the change 2013, first year after 2014 (p=0.0019, significant at 0.05). Comparing the last period before each break, the MHW-exposure break is 3 yr earlier than the EC50 break. PC1 explains 71% of the variance of the deseasonalised T/S/CO2/O2/pH anomalies. Critical-slowing-down early-warning signals (rolling variance AND lag-1 autocorrelation both rising, Kendall p<0.05): not detected (variance tau=-0.51, p=2.7e-18; AR(1) tau=+0.14, p=0.016)."
 }

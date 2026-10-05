@@ -3,9 +3,9 @@
     1,
     8
   ],
-  "observed_mean_coherence": 0.21739886054800206,
-  "null_mean": 0.2396970566650075,
-  "null_sd": 0.026017488665031736,
+  "observed_mean_coherence": 0.2143578555903624,
+  "null_mean": 0.2429504507669218,
+  "null_sd": 0.02524754998964616,
   "n_surrogates": 100,
-  "p_value": 0.76
+  "p_value": 0.84
 }
