@@ -22,6 +22,7 @@
 | 28–29/9 | **Igiene degli output e dei dati** | nessuna identità, conteggio o conclusione scritti a mano negli output; il file per prova committato dall'aggiornamento | #26, #27 |
 | 29/9–2/10 | **Il branch del lavoro** | il dashboard citato gira da `paper/mpb-2026` a codice congelato, con dati aggiornati ogni giorno da un job dedicato; due app pubbliche | #28, #30, #32, #36; ADR-0009 |
 | 1–2/10 | **Bordi delle serie e preparazione unica dei dati** | mesi senza SST mancanti, nessun riempimento oltre i bordi, dashboard e job con le stesse funzioni; portate anche sul branch del lavoro e ricalcolate | #33, #34, #35; branch `3d41358`, `3f738c0` |
+| 3–8/10 | **Protezione completa di `main`** | deploy key con scrittura per il job di aggiornamento, segreto in un environment limitato a `main`, token in sola lettura; ruleset attivato dopo il primo push reale con la chiave (5/10): PR obbligatoria senza approvazioni, controllo `test`, nessuna eccezione per le persone | #46; ruleset 24719143 |
 | 2/10 | **Chiusura e cambio di direzione** | inventario, protezione parziale del repository (ruleset contro cancellazione e force push, cancellazione automatica dei branch fusi), questa memoria, definizione della milestone M1 | [`MILESTONE-M1.md`](MILESTONE-M1.md) |
 
 Prima del 22/9 i commit entravano su `main` anche senza PR. Dal 22/9 ogni modifica passa da una
@@ -148,14 +149,16 @@ nata.
 - **Perché.** Due implementazioni della stessa grandezza divergono, e le correzioni vanno
   applicate due volte a mano.
 - **Regola.** Una sola implementazione per ogni grandezza, condivisa da pipeline e dashboard.
-  Resta una copia del forecast nel dashboard (scarto 3e-6 µg/L), issue #39.
+  Resta una copia del forecast nel dashboard (scarto al più 3e-6 µg/L, misure dell'1–2/10/2026), issue #39.
 
 ### 10. L'instabilità dei ranghi nel prewhitening (#7, #33, issue #9)
 - **Cosa.** La selezione dell'ordine ARIMA del prewhitening cambia fra due run della CI sullo
   stesso codice; anche a ordine fissato la parte MA trasforma le sequenze di mesi a zero in
   residui quasi pari (fino a 1e-17), che Spearman ordina secondo l'aritmetica della macchina.
 - **Perché.** Il metodo è numericamente mal posto su un driver a eventi intermittenti.
-- **Regola.** Un numero che non è riproducibile dal codice e dai dati non si riporta. Il golden
+- **Regola.** Un numero che dipende dalla macchina non si riporta come valore esatto: si riporta
+  l'esito stabile alla perturbazione e fra le scelte equivalenti, con la misura (ADR-0000 voce 10,
+  8/10/2026: la griglia da 39 test dà 0 significativi in tutti i casi quasi equivalenti per AIC). Il golden
   master confronta quei file solo nella struttura; il calcolo si verifica con parametri fissi su
   un driver sintetico continuo.
 
@@ -175,8 +178,10 @@ nata.
 - **Cosa.** Una correzione urgente della CI è entrata su `main` con un push diretto da una
   sessione dell'assistente, senza PR. Il registro di GitHub mostra un evento `push`, non una
   fusione.
-- **Regola.** Ogni modifica a `main` passa da una PR, comprese le correzioni urgenti. Oggi è una
-  convenzione: GitHub non la impone ancora (la protezione è proposta in `STATO.md`).
+- **Regola.** Ogni modifica a `main` passa da una PR, comprese le correzioni urgenti. Dall'8/10 la
+  impone GitHub (ruleset 24719143: PR obbligatoria e controllo `test` verde, con la deploy key
+  del job di aggiornamento come unica eccezione); fino ad allora era una convenzione.
+  [Prima del 22/9 i commit entravano anche senza PR.]
 
 ### 14. Copie di lavoro sparite (fino al 2/10)
 - **Cosa.** Le copie di lavoro del branch del lavoro stavano nella cartella temporanea della
@@ -198,3 +203,5 @@ nata.
   dopo la correzione delle coordinate.
 - **Regola.** Tutto ciò che dipende dalle coordinate o dai dati passa dalla stessa pipeline, nello
   stesso ordine; il rilevamento MHW è il primo passo di `ccsu-run-pipeline`.
+- **Versioni.** La correzione (`09b928a`, 17/7) è contenuta in v1.4.0 e in v1.5.0: la versione
+  citata nel lavoro non ne è toccata.

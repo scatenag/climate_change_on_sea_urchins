@@ -46,7 +46,11 @@
 - Un test nuovo va visto fallire su un sabotaggio prima di considerarlo valido [5].
 - Un test verde solo perché i dati coincidono per caso non verifica niente: i test girano su
   fixture congelate, mai sui dati vivi [5].
-- Un numero che non è riproducibile dal codice e dai dati non si riporta [10].
+- Un numero che dipende dalla macchina non si riporta come valore esatto [10]. Si riporta l'esito che
+  resta stabile alla perturbazione del dato e fra le scelte equivalenti (per esempio gli ordini ARIMA
+  entro 2 punti di AIC dal migliore), come intervallo o come affermazione qualitativa («0 su 39»), con
+  le condizioni della verifica e la data; un conteggio che cambia fra scelte equivalenti non si
+  riporta. La misura va fatta e conservata: ADR-0000 voce 10 ne è l'esempio.
 - Si committa ciò da cui si calcola [11].
 - Tutto ciò che è specifico del caso di Livorno (rimandi al lavoro, esiti di indagini passate)
   sta in `examples/livorno_paracentrotus/NOTES.md`, non nel codice né negli output. È pubblico:
@@ -83,15 +87,20 @@
 ## 4. Branch, PR e fusioni
 
 - **Su `main` nessun push diretto**, nemmeno per correzioni piccole o urgenti della CI: ogni
-  modifica passa da una PR, anche finché GitHub non lo impone [13]. Se `main` è rotto, la
-  correzione va su un branch e una PR.
+  modifica passa da una PR, e dall'8/10 lo impone GitHub (ruleset 24719143: PR obbligatoria,
+  controllo `test` verde, nessuna approvazione richiesta, nessuna eccezione per le persone; unica
+  eccezione la deploy key del job di aggiornamento) [13]. Se `main` è rotto, la correzione va su
+  un branch e una PR.
 - **Prima di ogni push si esegue la suite completa** (`pytest tests/`), non solo i test toccati:
   un test lontano dalla modifica può fallire. Vale anche per `paper/mpb-2026` con la sua suite.
 - **Fusioni** con `gh pr merge --merge`, solo con tutti i controlli verdi, mai con `--admin`.
   Fonde il proprietario, o l'assistente quando il proprietario lo chiede per quella PR.
 - **Chiamate all'API di GitHub.** Mai con la credenziale git salvata. `gh` autenticato con il
-  device flow è autorizzato per creare e fondere PR su richiesta. Per una issue si prepara il
-  testo e la apre il proprietario.
+  device flow è autorizzato per creare e fondere PR. Le issue le apre l'assistente quando il
+  proprietario lo chiede, come è successo il 3/10/2026, con gli stessi strumenti.
+- **Operazioni meccaniche e decisioni.** Dall'8/10/2026 le operazioni meccaniche (fusioni a
+  controlli verdi, pulizie, rilettura dello stato, misure) le fa l'assistente senza attendere il
+  proprietario; le decisioni restano del proprietario.
 - Dopo una fusione: i branch delle PR fuse si cancellano da soli (`delete_branch_on_merge`).
 
 ## 5. Copie di lavoro e shell
@@ -114,7 +123,11 @@
   per data correlazioni, CCF e forecast) sono deliberate e segnalate nell'interfaccia; usano le
   stesse funzioni del job. Granger e stazionarietà restano precalcolati dopo un segfault in
   produzione: non renderli vivi senza un motivo forte.
-- Il dashboard non si rifattorizza in un colpo solo: si procede per schede, dietro interruttori.
+- Il dashboard **del lavoro** (`paper/mpb-2026`) non si tocca. Quello di `main` si riscrive,
+  guidato da risultati e specifica (`roadmap/MILESTONE-M1.md` §7), invece di togliere il caso
+  specifico dalle sue 2827 righe: la riscrittura non mette a rischio l'app citata, perché la
+  dashboard di Livorno resta sul branch del lavoro. Il rifacimento si fa comunque per gruppi di
+  pannelli, una PR ciascuno, mai mescolato ad altro lavoro.
 - `app.py` forza un import nuovo a ogni esecuzione e un lock globale serializza le sessioni:
   prima di toccarlo, verificare se la causa originale è ancora presente.
 - Dopo un push su un branch servito da Streamlit Cloud si verifica che l'app serva davvero il

@@ -178,8 +178,30 @@ calcolo dei ranghi nel prewhitening della CCF, e se tenerlo fra le analisi.
 **Contesto:** issue #9. La selezione dell'ordine cambia fra due run della CI sullo stesso codice;
 anche a ordine fissato la parte MA trasforma le sequenze di mesi a zero in residui quasi pari, che
 Spearman ordina secondo l'aritmetica della macchina. Oggi il golden master confronta quei file solo
-nella struttura e nessun numero del prewhitening è riportato. Rimandata a V3.1, quando ogni analisi
-riceverà la forma comune dei risultati.
+nella struttura. Rimandata a V3.1, quando ogni analisi riceverà la forma comune dei risultati.
+
+**Che cosa si riporta nel frattempo.** La tabella del test multiplo del manoscritto (10/9) riporta le
+griglie ARIMA-prewhitened (39 test mensili: tre driver MHW per 13 ritardi contro l'EC50; 26 test sulle
+ondate severe: 13 ritardi del braccio ARIMA e 13 delle differenze prime) con i conteggi dei test
+significativi: la frase «nessun numero del prewhitening è riportato», presente in questa voce fino
+all'8/10/2026, era falsa. Misura dell'8/10/2026 sulla fixture del manoscritto
+(`tests/fixtures/paper_mpb_2026`; script e dati in `drafts/`, non versionati):
+- *Perturbazione del driver* (rumore additivo 1e-10, 30 semi, come nella #9): i conteggi non
+  cambiano. Griglia da 39: 0 test con p<0.05, con BH e con Bonferroni in 30 casi su 30, massimo
+  \|r\| sempre su `mhw_days` al ritardo 9, segno negativo. Braccio ARIMA severo (13 test): 11 con
+  p<0.05, 9 con BH, ritardo 10 positivo in 30 su 30.
+- *Ordine ARIMA scelto altrove.* Ordini entro 2 punti di AIC dal migliore (per ogni driver quelli che
+  un'altra macchina può scegliere, 40 combinazioni per la griglia da 39, 3 ordini per l'ondata severa):
+  griglia da 39 sempre 0; braccio severo 10–11 con p<0.05, 8–9 con BH, 7 con Bonferroni, picco sempre
+  al ritardo 10, positivo. Fra tutti gli ordini che convergono (3600 combinazioni, 15 ordini severi) i
+  conteggi vanno da 0 a 39 (e da 0 a 13). Gli ordini lontani dal migliore per AIC sono tipicamente di
+  bassa dimensione; se i loro residui siano rumore bianco (Ljung-Box) non è stato verificato.
+- Il braccio ARIMA dell'ondata severa è dichiarato non applicabile nel codice attuale
+  (`robustness_severe_ccf_note.json`, #7): i suoi conteggi sono un'osservazione sulla fixture, non un
+  risultato dello strumento.
+In sintesi: l'esito (nessun test significativo sulla griglia da 39; picco al ritardo 10 e un gruppo di
+ritardi significativi sull'ondata severa) è stabile alla perturbazione e fra ordini quasi equivalenti
+per AIC; il conteggio esatto fuori da questo insieme non lo è.
 
 ---
 
@@ -215,7 +237,7 @@ fixture congelata conserva il valore 1 della prova 224, corretto in 11 nel fogli
 
 **Contesto:** per ADR-0009 il branch riceve solo dati nuovi e correzioni di affermazioni false, su
 richiesta esplicita. Candidati noti al 2/10/2026: la seconda implementazione del forecast nel
-dashboard (scarto massimo 7e-7 µg/L), il riempimento a 0 delle metriche MHW nello script R del
+dashboard (scarto al più 3e-6 µg/L, misure dell'1–2/10/2026), il riempimento a 0 delle metriche MHW nello script R del
 DLNM, la data di fine della SST giornaliera scritta a mano negli script di download, e la copia di
 `update_ec50.yml` della v1.5.0 rimasta sul branch (spinge su `main` se lanciata a mano; con `main`
 protetto fallirebbe).

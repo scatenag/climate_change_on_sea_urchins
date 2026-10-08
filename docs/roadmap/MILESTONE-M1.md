@@ -1,6 +1,6 @@
 # Milestone M1 · Lo strumento generico da capo a fondo
 
-> **Stato (2/10/2026):** definizione fissata dal proprietario; decisioni D1–D9 approvate il
+> **Stato (aggiornato l'8/10/2026):** definizione fissata dal proprietario; decisioni D1–D9 approvate il
 > 2/10 con le precisazioni riportate in §5; piano riordinato il 2/10 come fetta verticale (§6), che
 > si approva con la fusione di questo documento. Nessuna scadenza: la milestone si chiude quando
 > i criteri di §4 sono soddisfatti.
@@ -14,7 +14,7 @@ registrabile in un video per i convegni. Alla presentazione si usa il video: l'a
 reggere una dimostrazione dal vivo davanti a un pubblico, ma deve funzionare davvero, su dati
 veri scaricati in quel momento.
 
-Il manoscritto citato (in revisione) afferma che la pipeline è un modello adattabile da altri programmi di
+Il manoscritto citato afferma che la pipeline è un modello adattabile da altri programmi di
 monitoraggio; oggi `docs/ADAPTING.md` ammette che cambiare sito è facile e cambiare indicatore
 no. M1 è ciò che rende vera quella frase: alla fine `ADAPTING.md` va riscritto.
 
@@ -66,6 +66,9 @@ V3.2.
   mai nella cache di Streamlit (`st.cache_*` usa gli argomenti come chiave); mai negli argomenti
   o nell'ambiente di un sottoprocesso; ogni messaggio d'errore passa da un filtro che le
   maschera.
+- **Dove avviene il download.** Nel processo dell'app, che chiama `subset()` con le credenziali
+  della sessione. Il processo che esegue lo studio (`ccsu-run-study`) riceve solo file (specifica,
+  CSV, dati scaricati) e non vede mai le credenziali, né come argomenti né nell'ambiente.
 
 ### Stato e ripresa
 - A ogni passo l'utente può scaricare un **pacchetto** con `study.yaml`, CSV della risposta, dati
@@ -93,7 +96,7 @@ V3.2.
 | 1 | Livorno passa dal motore generico con deriva zero nel golden master, e la dashboard generica lo mostra senza codice specifico per Livorno | golden master sul comando unico; guardia che rende la dashboard con l'etichetta RSPTEST e fallisce su qualunque letterale del caso |
 | 2 | Partendo da zero, su coordinate mai usate, si scaricano dati veri, si carica una serie e si arriva alla dashboard; il ritardo noto della serie fittizia compare nei risultati | test automatico del motore su fixture (ritardo ritrovato, e nessun ritardo dove non ce n'è); prova manuale con credenziali vere |
 | 3 | Le analisi con requisiti non soddisfatti compaiono spente, con il motivo | test su uno studio sintetico senza pH, senza dati per prova, senza `split_date` |
-| 4 | Un pacchetto scaricato e ricaricato riproduce gli stessi risultati | test di andata e ritorno: stessi file di risultato, byte per byte, sulla stessa macchina |
+| 4 | Un pacchetto scaricato e ricaricato riproduce gli stessi risultati | test di andata e ritorno: stessi file di risultato, byte per byte, sulla stessa macchina, esclusi i campi di provenienza che cambiano a ogni esecuzione; i file confrontati solo nella struttura (#9) si confrontano come nel golden master |
 | 5 | Il caso dei ricci si apre senza credenziali e senza conoscere lo strumento | test dell'app (`streamlit.testing`) senza credenziali né variabili d'ambiente; prova con una persona esterna al progetto |
 
 ## 5. Decisioni (approvate il 2/10/2026)
@@ -124,6 +127,15 @@ Per questo la dashboard generica non le legge mai.
   risultati precalcolati, in sola lettura). Il contesto si passa esplicitamente a ogni pannello, e
   i pannelli leggono i file con funzioni che ricevono i percorsi come argomenti (parametri nuovi
   dei lettori di `common.py`, con i valori attuali come default per la pipeline).
+- **Reimport forzato e lock globale di `app.py`.** Per `app.py` (`docs/COME_SI_LAVORA.md` §6) il
+  pacchetto `dashboard` è reimportato a ogni esecuzione e un lock globale serializza le sessioni.
+  Conseguenze per la dashboard generica: (1) nessuno stato di studio sta in variabili di modulo, che a
+  ogni esecuzione ripartono da zero; sta in `st.session_state`; (2) le cache (`st.cache_*`) hanno
+  come chiave il percorso e l'impronta dei file dello studio, mai il solo nome; (3) il lock fa
+  attendere le altre sessioni durante un'esecuzione, quindi nessuna analisi lenta gira sotto il
+  lock: parte in un processo separato e la sessione ne legge l'avanzamento; (4) il test delle due
+  sessioni parte da `app.py`, il punto d'ingresso vero. M1.13 verifica se la causa originale del
+  reimport e del lock è ancora presente prima di toglierli.
 - **Verifica.** Un test statico vieta al codice della dashboard generica di usare `common.DATA`,
   `common.RESULTS`, `common.SPLIT_DATE`, `common.WINDOWS` e `config`. Un test dell'app apre nello
   stesso processo due sessioni con studi diversi (etichette EC50 e RSPTEST) e controlla che
@@ -147,7 +159,7 @@ ritrova il ritardo noto della serie a verità nota.
 | **M1.3 Sorgente CSV della risposta** | Valori per prova o aggregati, risoluzione delle date dichiarata, intervalli come estremi, unità e verso; errori leggibili con il numero di riga | I dati per prova di Livorno, esportati nel formato e riletti, danno la stessa serie mensile; un test per ogni classe di errore |
 | **M1.4 Costruttore del dataset (SST e risposta)** | Aggregazione della risposta, imputazione come dichiarata, rilevamento MHW, temperatura mensile; con le funzioni di `common.py` (una sola implementazione). Per la fetta la temperatura mensile è la media mensile della SST giornaliera (confermato il 2/10), sostituita dalla variabile mensile del catalogo con M1.8. **Mesi incompleti (approvato il 3/10): un mese con anche un solo giorno di SST mancante è mancante**, senza un campo per una soglia di copertura finché non arriva una fonte con buchi veri. Motivo: la SST di rianalisi non ha buchi interni, quindi la regola scatta sui mesi ai bordi, dove una media parziale è distorta dal ciclo stagionale e cadrebbe sui mesi che i ritardi usano di più. I mesi esclusi sono riportati nella copertura dei risultati | Dalla SST e dai dati per prova della fixture: catalogo MHW identico a quello della fixture; Livorno, con la sua imputazione dichiarata, identico a `data_ec50_ci.csv` della fixture. La regola dei mesi incompleti scatta sia su un mese finale incompleto sia su un mese iniziale incompleto (periodo che comincia a metà mese), e i mesi esclusi compaiono nella copertura riportata nei risultati |
 | **M1.5 `ccsu-run-study` con la sola CCF** | Comando unico: costruzione, CCF variabile → risposta (D3) con il numero di test dichiarato, risultati in `results/<study_id>/` con la provenienza; un processo per studio; avanzamento leggibile da un altro processo | Uno studio sintetico gira da capo a fondo in CI, senza rete |
-| **M1.6 Serie a verità nota (uscita della fetta)** | Generatore con seme esposto. Riproduce i caratteri della serie reale: risposta che scende quando la temperatura sale, ritardo *k* né 0 né multiplo di 12 (proposta: 3 mesi), da 1 a 6 prove per mese da aggregare, mesi mancanti in sequenze come nel foglio dei ricci (circa metà dei mesi), rumore autocorrelato | Automatico, sulla SST della fixture: il ritardo *k* sopravvive a FDR e ha il segno negativo; con una serie indipendente nessun ritardo sopravvive. A mano, con credenziali: il criterio di uscita su coordinate mai usate |
+| **M1.6 Serie a verità nota (uscita della fetta)** | Generatore con seme esposto. Riproduce i caratteri della serie reale: risposta che scende quando la temperatura sale, ritardo *k* né 0 né multiplo di 12 (proposta: 3 mesi), da 1 a 6 prove per mese da aggregare, mesi mancanti in sequenze come nel foglio dei ricci (circa metà dei mesi), rumore autocorrelato | Il profilo della CCF su una serie che dipende dalla SST grezza ha, sulle differenze prime, un picco negativo a *k*, uno positivo a *k*+6 di ampiezza simile quando domina il ciclo stagionale, e valori alti ai ritardi vicini a *k*. Per questo il criterio non è «*k* è l'unico ritardo che sopravvive»: **il massimo di \|r\| cade su *k* con il segno atteso, e gli altri ritardi che superano FDR sono riportati**. Se la serie dipende dalla SST grezza o dalle sue anomalie si decide all'inizio di M1.6, guardando il profilo della CCF misurato sulla fixture nei due casi. Con una serie indipendente il massimo di \|r\| non cade su *k* o nessun ritardo supera FDR. A mano, con credenziali: il criterio di uscita su coordinate mai usate |
 
 ### Allargamento (una variabile e un'analisi alla volta)
 
@@ -156,7 +168,7 @@ ritrova il ritardo noto della serie a verità nota.
 | **M1.7 Requisiti dichiarati** | Ogni analisi dichiara cosa le serve (variabili, SST giornaliera, dati per prova, controlli, `split_date`, mesi minimi, contaminante, R); `analyses.json` con stato ed eventuale motivo | Uno studio senza pH: speciazione e forecast spenti con il motivo, nessun loro file scritto (criterio 3, motore) |
 | **M1.8 Variabili mensili**, una PR per variabile | Temperatura 0–10 m, salinità, O₂, pH, CO₂ con la conversione Pa→µatm nominata nel catalogo | Voce di catalogo uguale a quella usata oggi per Livorno; a mano, sulle coordinate di Livorno, serie uguale a `data/env_copernicus.csv` nei mesi comuni |
 | **M1.9 Analisi nel comando unico**, una PR per analisi o famiglia | Le analisi della pipeline, ciascuna con i propri requisiti, fino a Livorno completo; alla fine il job di Livorno usa `ccsu-run-study` (PR su `update_ec50.yml`) | Deriva zero sul golden master a ogni PR; alla fine il golden master intero eseguito dal comando unico (criterio 1, motore) |
-| **M1.10 Pacchetto e caricamento non fidato** | Esportazione e caricamento (D4); YAML sicuro; `data_dir` e sorgenti remote ignorati con avviso | Andata e ritorno con risultati identici byte per byte (criterio 4); archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio) |
+| **M1.10 Pacchetto e caricamento non fidato** | Esportazione e caricamento (D4); YAML sicuro; `data_dir` e sorgenti remote ignorati con avviso | Andata e ritorno con risultati identici (criterio 4): il confronto byte per byte esclude i campi di provenienza che cambiano a ogni esecuzione (data e ora, durata, versione del codice), e l'impronta del pacchetto tratta i file che il golden master confronta solo nella struttura (`STRUCTURAL_ONLY_FILES`, #9) allo stesso modo, cioè sulla struttura, così un pacchetto ricaricato su un'altra macchina non risulta diverso senza esserlo; archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio) |
 
 ### Interfaccia
 
@@ -203,6 +215,12 @@ spariscono da `main`; quelle da tenere diventano analisi della pipeline, ciascun
   quasi tutte in M1.9 (16 moduli). **Dashboard** (M1.11–M1.13): 6–8. **Tre passi e prova
   generale** (M1.14–M1.17): 5–6. In tutto **32–42 sessioni**, una PR ciascuna. La stima si
   rivede alla chiusura di M1.6 con i tempi reali della fetta, prima di cominciare M1.7.
+- **Tappe con demo.** `METODO_E_FASI.md` chiede una tappa con la sua demo ogni tre-sei settimane,
+  e la milestone ne stima 32–42 sessioni. La chiusura della fetta verticale (M1.6) è la prima
+  tappa, con la sua demo da riga di comando: su coordinate mai usate, un comando scarica la SST,
+  costruisce il dataset dalla serie fittizia e ritrova il ritardo noto. Le tappe successive: fine
+  dell'allargamento (M1.10, Livorno completo dal comando unico e pacchetto), dashboard generica
+  (M1.13), prova generale (M1.17).
 
 ## 9. Fuori dalla milestone
 

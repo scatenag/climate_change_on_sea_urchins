@@ -291,8 +291,10 @@ nessuno lo fa contando i test.
 **Cosa contiene.**
 - Riorganizzazione dell'interfaccia: il dashboard oggi è un blocco unico di quasi tremila
   righe con un aggiramento del sistema di import e un lock globale che serializza tutte le
-  sessioni. Va spezzato per schede, dietro interruttori, una alla volta. È il lavoro più a
-  rischio di rotture silenziose di tutto il piano: isolalo, non mescolarlo ad altro.
+  sessioni. Va riscritto, guidato da risultati e specifica, per gruppi di pannelli e una PR alla
+  volta (decisione dell'ottobre 2026, `MILESTONE-M1.md` §7: la dashboard di Livorno resta sul
+  branch del lavoro, quindi la riscrittura non mette a rischio l'app citata). È il lavoro più a
+  rischio di rotture silenziose di tutto il piano: isolarlo, non mescolarlo ad altro.
 - Riga di comando come interfaccia di pari dignità (per molti utenti sarà la principale).
 - Installazione documentata, guida di avvio, esempi eseguibili, dati di esempio.
 - **Prova di verità**: un collega installa e fa girare un proprio studio senza che chi l'ha
@@ -417,9 +419,11 @@ quanto è costato.
 
 1. **Rifattorizzare a lungo prima di avere il secondo caso.** Il design sbagliato si vede
    solo col secondo caso. Per questo V2.2 è presto e non alla fine.
-2. **Il grande rifacimento del dashboard.** È il pezzo più grosso e più fragile: per schede,
-   dietro interruttori, mai tutto insieme, e mai mescolato ad altro lavoro nello stesso
-   branch.
+2. **Il grande rifacimento del dashboard.** È il pezzo più grosso e più fragile: per gruppi di
+   pannelli, una PR alla volta, e mai mescolato ad altro lavoro nello stesso branch. La regola
+   originale (togliere il caso dalle righe esistenti, per schede e dietro interruttori) è
+   superata dalla decisione di riscriverlo: l'app citata vive sul branch del lavoro, e un
+   interruttore sul codice esistente costerebbe più di una riscrittura (`MILESTONE-M1.md` §7).
 3. **Rincorrere la piattaforma condivisa prima che il motore sia stabile.** È la trappola
    più costosa perché sembra progresso. Gli invarianti della Parte 1 sono lì apposta: tengono
    la porta aperta a costo zero, così la si può ignorare per sei mesi senza pentirsene.

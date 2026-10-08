@@ -3,7 +3,8 @@
 Rilevato il 12/08/2026 ispezionando il foglio che la pipeline già usa
 (`sheet_id` in `examples/livorno_paracentrotus/study.yaml`, esportato come CSV → viene letta
 **solo la prima scheda**, l'unica descritta qui).
-Ultima modifica del foglio: 30/07/2026, coerente con il recupero dei controlli negativi.
+Ultima modifica del foglio al momento del rilevamento: 30/07/2026, coerente con il recupero dei
+controlli negativi; anteriore alla correzione della prova 224 del 28/9/2026 (vedi sotto).
 
 Serve come materiale di progetto per V2.1: la specifica della serie di risposta va disegnata
 contro questa realtà, non contro un caso ideale.
