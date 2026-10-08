@@ -384,6 +384,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   series start comes back (sabotage-verified). The months without SST attributed in #33 to the
   product's delay were partly this. Data and results on `main` change at the next monthly update
   (the 5th), when July and August 2026 arrive.
+  Verified on 2026-10-05: the monthly job brought `data/sst_daily.csv` to 2026-08-31. The same
+  fix and test were ported to `paper/mpb-2026` on 2026-10-08 (`d090d1d`, on the owner's explicit
+  request, ADR-0009); a forced rebuild of that branch with Copernicus active (`88af03a`) fetched
+  July and August 2026 and recomputed its results, which match an independent local recomputation
+  within the known ARIMA noise.
 
 - **The development dashboard's live values differed from the update job's.** The dashboard
   prepared its data a second time: its own copy of the sheet's monthly aggregation, one
