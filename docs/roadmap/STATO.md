@@ -55,8 +55,14 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 ## Da fare con i dati del 5/10
 
 - Primo push del job con il ruleset attivo: verificare che sia passato (solo con dati nuovi).
-- Misura per il branch del lavoro (senza push) con la SST fino al 31/8/2026 arrivata su `main`:
-  vedi il rapporto della sessione dell'8/10. La correzione sul branch solo su richiesta esplicita.
+- Misura per il branch del lavoro, fatta l'8/10 in locale e senza push (copia `paper-measure`, branch
+  locale `measure/paper-sst`, da non spingere): con la SST di `main` fino al 31/8/2026 entrano 62 giorni
+  (2 mesi, luglio e agosto) e un evento MHW nuovo (7/7–31/8, severo, 56 giorni); il 2026 annuale passa
+  da 1 evento/34 giorni a 2/93. Nessuna correlazione cambia significatività, nessun p<0.05 della CCF
+  grezza cambia; nella CCF sulle differenze prime O2 e salinità al lag 0 passano da p 0.050 a 0.040.
+  Cambiano di più: finestra di dose termica a 36 mesi (Bonferroni 0.059→0.037, ora «sopravvive» nel
+  test sui ranghi, non nel parziale), forecast finale scenario peggiore 12.7→11.8 µg/L, pre/post MHW
+  +167%→+180%. Il DLNM in R non è stato rieseguito. La correzione sul branch solo su richiesta esplicita.
 
 ## In attesa del proprietario
 
