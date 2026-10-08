@@ -29,16 +29,16 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 - **Job.** `update_ec50.yml` (EC50 ogni giorno, Copernicus il 5 del mese) spinge su `main`;
   `update_paper_branch.yml` spinge su `paper/mpb-2026` e ha l'input `force_rebuild`; `tests.yml`
   gira anche dopo ogni aggiornamento e apre una issue se fallisce; `validate_data.yml` ogni giorno.
-- **Protezione.** Ruleset su `main` e `sartori-2023-supplement`: niente cancellazione né force
-  push, nessuna eccezione. `paper/mpb-2026`: protezione classica, idem. **Protezione completa di
-  `main` approvata, in corso.** Fatto (#46, 3/10): `update_ec50.yml` spinge con una deploy key con
-  scrittura; il segreto `UPDATE_EC50_DEPLOY_KEY` sta solo nell'environment `auto-update-main`,
-  limitato al branch `main` e dichiarato solo da quel job; il token del job è in sola lettura.
-  Verificato il 3/10 con un'esecuzione a mano: segreto letto, checkout via SSH riuscito, nessun
-  push (nessun dato nuovo). **Il ruleset (PR obbligatoria senza approvazioni, controllo `test`
-  verde, unica eccezione le deploy key) si attiva solo dopo che il job del 5/10 avrà spinto su
-  `main` con la chiave**; poi si leggono con l'API le regole effettive di `main` e si verifica il
-  primo push successivo del job. I branch delle PR fuse si cancellano da soli.
+- **Protezione.** `main`: due ruleset attivi. Il primo (24362986, anche per
+  `sartori-2023-supplement`): niente cancellazione né force push. Il secondo (24719143, attivato l'8/10):
+  PR obbligatoria con 0 approvazioni e controllo `test` obbligatorio (non «aggiornato a main»); unica
+  eccezione le deploy key (`DeployKey`, sempre), nessuna per persone o amministratori. Il segreto
+  `UPDATE_EC50_DEPLOY_KEY` sta solo nell'environment `auto-update-main` (limitato a `main`,
+  dichiarato solo da `update_ec50.yml`); il token di quel job è in sola lettura. Il ruleset è stato
+  attivato dopo il primo push reale con la chiave: l'aggiornamento Copernicus del 5/10 ha spinto
+  `43f35dd..170ce7a` via SSH. **Da verificare** al primo push del job con il ruleset attivo (si
+  ha solo quando arrivano dati nuovi). `paper/mpb-2026`: protezione classica, niente cancellazione
+  né force push. I branch delle PR fuse si cancellano da soli.
 - **Branch**: `main`, `paper/mpb-2026`, `sartori-2023-supplement` (riferimento del lavoro del
   2023, tag `v0.1.0-sartori-2023`).
 
@@ -52,16 +52,11 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 | `paper/mpb-2026` | Riceve solo dati nuovi e correzioni di affermazioni false | Su richiesta esplicita: prima su `main`, poi sul branch in un commit a sé, `force_rebuild`, verifica dell'app (ADR-0009). La data di fine della SST (#45) verrà richiesta dopo la misura dell'effetto sull'app citata. Altri candidati: copia del forecast (#39), riempimento a 0 nel DLNM (#38), `update_ec50.yml` di v1.5.0 rimasto sul branch |
 | Logo dell'app di sviluppo (#32) | In attesa del parere del proprietario | — |
 
-## Dopo il 5/10 (aggiornamento mensile Copernicus)
+## Da fare con i dati del 5/10
 
-- Verificare che il job abbia spinto su `main` con la chiave e che `data/sst_daily.csv` arrivi al
-  31/8/2026 (#44, fusa il 3/10).
-- Attivare il ruleset di `main`, leggerne le regole effettive con l'API e riportarle; al push
-  successivo del job verificare che sia passato.
-- Misura per il branch del lavoro, senza push: in una copia locale di `paper/mpb-2026`, con la SST
-  scaricata da `main`, ricalcolare e riportare mesi di SST e di ondate in più, eventi nuovi e valori
-  cambiati nell'app citata. Le credenziali Copernicus restano fuori dalle sessioni
-  dell'assistente. Poi la correzione sul branch solo su richiesta esplicita.
+- Primo push del job con il ruleset attivo: verificare che sia passato (solo con dati nuovi).
+- Misura per il branch del lavoro (senza push) con la SST fino al 31/8/2026 arrivata su `main`:
+  vedi il rapporto della sessione dell'8/10. La correzione sul branch solo su richiesta esplicita.
 
 ## In attesa del proprietario
 
