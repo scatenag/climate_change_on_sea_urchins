@@ -106,7 +106,9 @@ leggibile nel file di studio è un difetto. Emerse leggendo i moduli per le fine
 serve ai prerequisiti di V2.2.
 
 **Contesto, una voce per scelta:**
-- **Imputazione della risposta**: media mobile centrata di `IMPUTE_WINDOW_MONTHS = 12` mesi con
+- **Imputazione della risposta** (sciolta il 2/10/2026 per la milestone M1, decisione D8: si
+  dichiara nella specifica, assente per default, e lo `study.yaml` di Livorno dichiara quella
+  qui sotto; resta aperto se la doppia passata sia voluta): media mobile centrata di `IMPUTE_WINDOW_MONTHS = 12` mesi con
   `IMPUTE_MIN_PERIODS = 3` (`common.impute_response`, condivisa da `scripts/build_dataset.py`).
   È applicata **due volte**: una da `build_dataset.py` sui valori reali, una di nuovo da
   `common.load_data()` sulla serie già imputata. La seconda passata riempie 8 mesi che la
@@ -165,3 +167,113 @@ dopo? Oggi i moduli non la usano in modo uniforme, e allinearli cambierebbe valo
 Allineare significa scegliere una convenzione per tutti i moduli, correggere le medie di
 `regime_shift` e aggiornare i valori salvati e il riferimento del golden master: una modifica
 di risultati, da decidere esplicitamente.
+
+---
+
+## 10. Prewhitening ARIMA riproducibile fra macchine
+
+**Domanda:** con quale procedura rendere deterministici la selezione dell'ordine ARIMA e il
+calcolo dei ranghi nel prewhitening della CCF, e se tenerlo fra le analisi.
+
+**Contesto:** issue #9. La selezione dell'ordine cambia fra due run della CI sullo stesso codice;
+anche a ordine fissato la parte MA trasforma le sequenze di mesi a zero in residui quasi pari, che
+Spearman ordina secondo l'aritmetica della macchina. Oggi il golden master confronta quei file solo
+nella struttura. Rimandata a V3.1, quando ogni analisi riceverà la forma comune dei risultati.
+
+**Che cosa si riporta nel frattempo.** La tabella del test multiplo del manoscritto (10/9) riporta le
+griglie ARIMA-prewhitened (39 test mensili: tre driver MHW per 13 ritardi contro l'EC50; 26 test sulle
+ondate severe: 13 ritardi del braccio ARIMA e 13 delle differenze prime) con i conteggi dei test
+significativi: la frase «nessun numero del prewhitening è riportato», presente in questa voce fino
+all'8/10/2026, era falsa. Misura dell'8/10/2026 sulla fixture del manoscritto
+(`tests/fixtures/paper_mpb_2026`; script e dati in `drafts/`, non versionati):
+- *Perturbazione del driver* (rumore additivo 1e-10, 30 semi, come nella #9): i conteggi non
+  cambiano. Griglia da 39: 0 test con p<0.05, con BH e con Bonferroni in 30 casi su 30, massimo
+  \|r\| sempre su `mhw_days` al ritardo 9, segno negativo. Braccio ARIMA severo (13 test): 11 con
+  p<0.05, 9 con BH, ritardo 10 positivo in 30 su 30.
+- *Ordine ARIMA scelto altrove.* Ordini entro 2 punti di AIC dal migliore (per ogni driver quelli che
+  un'altra macchina può scegliere, 40 combinazioni per la griglia da 39, 3 ordini per l'ondata severa):
+  griglia da 39 sempre 0; braccio severo 10–11 con p<0.05, 8–9 con BH, 7 con Bonferroni, picco sempre
+  al ritardo 10, positivo. Fra tutti gli ordini che convergono (3600 combinazioni, 15 ordini severi) i
+  conteggi vanno da 0 a 39 (e da 0 a 13). Gli ordini lontani dal migliore per AIC sono tipicamente di
+  bassa dimensione; se i loro residui siano rumore bianco (Ljung-Box) non è stato verificato.
+- Il braccio ARIMA dell'ondata severa è dichiarato non applicabile nel codice attuale
+  (`robustness_severe_ccf_note.json`, #7): i suoi conteggi sono un'osservazione sulla fixture, non un
+  risultato dello strumento.
+In sintesi: l'esito (nessun test significativo sulla griglia da 39; picco al ritardo 10 e un gruppo di
+ritardi significativi sull'ondata severa) è stabile alla perturbazione e fra ordini quasi equivalenti
+per AIC; il conteggio esatto fuori da questo insieme non lo è.
+
+---
+
+## 11. Finestre temporali nei moduli non ancora migrati
+
+**Domanda:** come applicare la regola delle finestre (a/b/c, `tests/test_windows.py`) ai moduli
+rimasti (5b-2 `timeseries`, `correlations`, `cu_speciation`, `negative_control`; 5b-3
+`mhw_analysis`, `mhw_robustness`, `mhw_lag_extra`; 5b-4 `mhw_lag_annual`, `regime_shift`), e se
+marcare l'anno parziale all'origine, in `mhw_detection` (`mhw_annual.csv` conta come intero l'anno
+in corso).
+
+**Contesto:** parcheggiata il 2/10/2026 per la milestone M1. Non è un rischio silenzioso: un modulo
+che non dichiara `SUPPORTS_WINDOW` non gira per una finestra e `window.json` lo registra. La regola
+degli anni completi vale per tutti i lettori della serie annuale MHW, anche senza finestre.
+
+---
+
+## 12. Valori di §3.6 del manoscritto e tag `v1.5.1`
+
+**Domanda:** quali valori riporta §3.6 nel manoscritto finale, e se serve un rilascio con il dato
+corretto della prova 224.
+
+**Contesto:** collegata alla voce 1. Dalla risposta dipendono lo spostamento del confronto pre/post
+alla data pubblicata di `negative_control` (oggi ancora nell'output) in `test_paper_values.py`, il
+tag `v1.5.1` sullo stato del branch del lavoro, e l'eventuale aggiornamento del DOI nelle bozze. La
+fixture congelata conserva il valore 1 della prova 224, corretto in 11 nel foglio sorgente.
+
+---
+
+## 13. Che cosa portare ancora sul branch del lavoro
+
+**Domanda:** quali correzioni fatte o da fare su `main` vanno anche su `paper/mpb-2026`.
+
+**Contesto:** per ADR-0009 il branch riceve solo dati nuovi e correzioni di affermazioni false, su
+richiesta esplicita. Candidati noti al 2/10/2026: la seconda implementazione del forecast nel
+dashboard (scarto al più 3e-6 µg/L, misure dell'1–2/10/2026), il riempimento a 0 delle metriche MHW nello script R del
+DLNM, la data di fine della SST giornaliera scritta a mano negli script di download, e la copia di
+`update_ec50.yml` della v1.5.0 rimasta sul branch (spinge su `main` se lanciata a mano; con `main`
+protetto fallirebbe).
+
+---
+
+## 14. Tecnologia dell'istanza condivisa
+
+**Domanda:** con quale tecnologia, autenticazione e isolamento dei dati realizzare un'istanza
+multi-utente. **Quando:** V5, e solo se c'è domanda reale (`METODO_E_FASI.md`).
+
+---
+
+## 15. Se e quando sostituire Streamlit
+
+**Domanda:** se Streamlit resta l'interfaccia, o se riga di comando e API diventano il prodotto
+primario e il dashboard un consumatore fra tanti. **Quando:** dopo V3.3.
+
+---
+
+## 16. Formato di pubblicazione dei risultati e sede editoriale
+
+**Domanda:** in che forma pubblicare i risultati dello strumento generico, e dove. **Quando:** dopo
+V3.2.
+
+---
+
+## 17. Analisi che esistono solo nella dashboard
+
+**Domanda:** quali delle analisi calcolate oggi solo dalla dashboard di `main` diventano analisi
+della pipeline, e con quale metodo.
+
+**Contesto:** la scheda dei ritardi della dashboard calcola dal vivo una ventina di test che la
+pipeline non ha (`compute_mhw_deep`: confronto della risposta con e senza ondata a ritardo fisso di
+2 mesi, dose-risposta per terzili di intensità, correlazioni stagionali, estate→autunno, serie
+annuali; accelerazione del declino). Il ritardo di 2 mesi è scritto nel codice ed è specifico di
+Livorno; nessuno di questi test è contato fra quelli eseguiti. Con la milestone M1 la dashboard di
+Livorno esce da `main` (M1.13) e queste analisi restano solo nell'app del lavoro. Portarne una nella
+pipeline è una scelta di metodo, da fare una per una.
