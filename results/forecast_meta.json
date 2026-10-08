@@ -7,19 +7,19 @@
   ],
   "scenarios": {
     "bad": {
-      "final_mean": 12.713664789590041,
-      "final_ci_lower": 1.7647217063251386,
-      "final_ci_upper": 23.66260787285494
+      "final_mean": 11.795709247489519,
+      "final_ci_lower": 0.8467659832245893,
+      "final_ci_upper": 22.74465251175445
     },
     "mean": {
-      "final_mean": 20.693494005271873,
-      "final_ci_lower": 9.74455092200697,
-      "final_ci_upper": 31.642437088536774
+      "final_mean": 20.234516332205338,
+      "final_ci_lower": 9.285573067940408,
+      "final_ci_upper": 31.183459596470268
     },
     "good": {
-      "final_mean": 24.53605530262431,
-      "final_ci_lower": 13.587112219359406,
-      "final_ci_upper": 35.48499838588921
+      "final_mean": 24.306566589278756,
+      "final_ci_lower": 13.357623325013826,
+      "final_ci_upper": 35.255509853543685
     }
   }
 }
