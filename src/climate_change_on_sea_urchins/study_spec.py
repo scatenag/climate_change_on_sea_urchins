@@ -21,6 +21,14 @@ assay count):
   - ResponseAggregationSpec: how that per-trial source rolls up into the
     period-level series most analyses actually run on.
 
+Format versions (M1.1). `format_version: 1` is the Livorno study as it has always been written
+(the key may be absent); `format_version: 2` adds what a study of anyone's own data needs: the
+environment named by id in the variable catalogue (catalog.py) instead of dataset names, a CSV
+response source, `split_date` optional, the response imputation declared (absent unless declared)
+and the contaminant of the endpoint declared. A format this version does not know is refused,
+naming it. A format-2 study loads and validates here but the pipeline does not run it yet
+(ccsu-run-study, M1.5): common.py says so explicitly.
+
 VariableSpec and WindowSpec exist as models (and appear in the example
 study.yaml) for completeness but aren't wired to any fetch script or
 consumed anywhere yet -- that is v2.1/provider-adapters (see docs/adr/
@@ -32,11 +40,16 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import re
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+from . import catalog
+
+SUPPORTED_FORMATS = (1, 2)
 
 
 class SiteSpec(BaseModel):
@@ -83,6 +96,50 @@ class ResponseSourceSpec(BaseModel):
     )
 
 
+class ResponseCsvColumnMap(BaseModel):
+    """Column mapping for a CSV response source: explicit, never deduced from names. The
+    confidence interval is optional, but its two ends come together."""
+    model_config = ConfigDict(extra="forbid")
+    date: str
+    value: str
+    ci_low: str | None = None
+    ci_high: str | None = None
+
+    @model_validator(mode="after")
+    def _ci_in_pairs(self):
+        if (self.ci_low is None) != (self.ci_high is None):
+            raise ValueError("ci_low and ci_high must be given together, or both left out")
+        return self
+
+
+_BARE_CSV_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$")
+
+
+class ResponseCsvSourceSpec(BaseModel):
+    """A response series in a CSV file the user provides (format 2). The file is named, never
+    located: a bare file name, resolved by whoever loads the study (the package, the upload),
+    so a study can never point the tool at a path of its own choosing."""
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["csv"]
+    file: str
+    temporal_resolution: Literal["day", "month"] = Field(
+        ..., description="Declared, not implied, as for the sheet source.")
+    granularity: Literal["per_trial", "aggregated"] = Field(
+        ..., description="per_trial: one row per determination, rolled up by `aggregation`; "
+        "aggregated: one row per period already.")
+    column_map: ResponseCsvColumnMap
+    control_columns: list[str] | None = None
+
+    @field_validator("file")
+    @classmethod
+    def _file_is_a_bare_csv_name(cls, v: str) -> str:
+        if not _BARE_CSV_NAME.match(v):
+            raise ValueError(
+                f"file {v!r} must be a bare file name ending in .csv (letters, digits, '.', '_', '-'; "
+                "no directories, not starting with a dot)")
+        return v
+
+
 class ResponseAggregationSpec(BaseModel):
     """How the per-trial source above rolls up into a period-level series.
     A distinct representation from the source itself: the count this
@@ -95,6 +152,31 @@ class ResponseAggregationSpec(BaseModel):
         "count (e.g. 'n_assays'). Deliberately not 'n': that reads as "
         "biological sample size, which this is not."
     )
+
+
+class ImputationSpec(BaseModel):
+    """How months without a real measurement are filled. A scientific choice, written in the
+    study (CLAUDE.md invariant 6); a response that declares none is never imputed."""
+    model_config = ConfigDict(extra="forbid")
+    method: Literal["centered_rolling_mean"]
+    window_months: int = Field(..., ge=2)
+    min_periods: int = Field(..., ge=1)
+    passes: int = Field(..., ge=1, le=3, description="How many times the fill is applied, each "
+                        "pass on the series the previous one produced.")
+
+    @model_validator(mode="after")
+    def _min_periods_fit_the_window(self):
+        if self.min_periods > self.window_months:
+            raise ValueError("min_periods cannot exceed window_months")
+        return self
+
+
+class ContaminantSpec(BaseModel):
+    """The substance an ecotoxicological endpoint is about; analyses specific to a substance
+    (copper speciation) declare they need it."""
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    cas: str | None = None
 
 
 class ResponseSpec(BaseModel):
@@ -123,18 +205,38 @@ class ResponseSpec(BaseModel):
         "must not."
     )
     unit: str = Field(..., description="UCUM unit string, e.g. 'ug/L'")
-    split_date: str = Field(
-        ..., description="ISO date (YYYY-MM-DD): the pre/post regime-shift "
+    split_date: str | None = Field(
+        default=None, description="ISO date (YYYY-MM-DD): the pre/post regime-shift "
         "boundary estimated for THIS response series (docs/adr/0001 -- a "
         "rank-based estimate, deliberately not reconciled with "
         "changepoint.py's own QLR/AR(1) estimate on the same series). Per-"
         "response, not a shared constant: a second response series has its "
-        "own regime shift, possibly at a different date. Validated at "
-        "common.py's load time against the actual response series' date "
-        "range, not here (this module never reads data/)."
+        "own regime shift, possibly at a different date. Required in format 1; "
+        "optional in format 2, where without it the pre/post analyses are switched "
+        "off with the reason. Validated at common.py's load time against the actual "
+        "response series' date range, not here (this module never reads data/)."
     )
-    source: ResponseSourceSpec
-    aggregation: ResponseAggregationSpec
+    source: Annotated[ResponseSourceSpec | ResponseCsvSourceSpec, Field(discriminator="type")]
+    aggregation: ResponseAggregationSpec | None = None
+    imputation: ImputationSpec | None = None
+    contaminant: ContaminantSpec | None = None
+
+    @field_validator("split_date")
+    @classmethod
+    def _split_date_is_iso(cls, v: str | None) -> str | None:
+        if v is not None:
+            try:
+                dt.date.fromisoformat(v)
+            except ValueError:
+                raise ValueError(f"split_date {v!r} is not an ISO date (YYYY-MM-DD)") from None
+        return v
+
+    @model_validator(mode="after")
+    def _aggregation_when_rows_are_trials(self):
+        needs = isinstance(self.source, ResponseSourceSpec) or self.source.granularity == "per_trial"
+        if needs and self.aggregation is None:
+            raise ValueError(f"response {self.id!r}: per-trial rows need an `aggregation` rule")
+        return self
 
 
 class VariableSpec(BaseModel):
@@ -146,6 +248,12 @@ class VariableSpec(BaseModel):
     dataset: str
     variable: str
     unit: str
+
+
+class EnvironmentRef(BaseModel):
+    """An environmental variable named by its id in the catalogue (format 2)."""
+    model_config = ConfigDict(extra="forbid")
+    catalog_id: str
 
 
 class WindowSpec(BaseModel):
@@ -181,19 +289,68 @@ class StudySpec(BaseModel):
     """Top-level study specification: everything a case declares about
     itself. See examples/livorno_paracentrotus/study.yaml for the current
     case, described with exactly today's config.py values."""
+    model_config = ConfigDict(extra="forbid")
+    format_version: int = Field(default=1, description="Format of this file; absent means 1.")
     id: str
     description: str
-    data_dir: str = Field(
-        ..., description="Where this study's data/ lives, relative to this "
-        "study.yaml's own location. Resolved to an absolute path by "
+    data_dir: str | None = Field(
+        default=None, description="Where this study's data/ lives, relative to this "
+        "study.yaml's own location. Required in format 1. Resolved to an absolute path by "
         "load_study(), which also checks it exists -- callers (common.py) "
         "always see an absolute, existing directory."
     )
     mhw_climatology: MhwClimatologySpec
     sites: list[SiteSpec]
     responses: list[ResponseSpec]
-    environment: list[VariableSpec] = Field(default_factory=list)
+    environment: list[VariableSpec | EnvironmentRef] = Field(default_factory=list)
     windows: list[WindowSpec] = Field(default_factory=list)
+
+    @field_validator("format_version")
+    @classmethod
+    def _format_is_known(cls, v: int) -> int:
+        if v not in SUPPORTED_FORMATS:
+            raise ValueError(
+                f"format_version {v} is not supported (this version reads formats "
+                f"{' and '.join(map(str, SUPPORTED_FORMATS))})")
+        return v
+
+    @model_validator(mode="after")
+    def _rules_of_the_declared_format(self):
+        if self.format_version == 1:
+            if self.data_dir is None:
+                raise ValueError("data_dir is required in format 1")
+            for ref in self.environment:
+                if isinstance(ref, EnvironmentRef):
+                    raise ValueError(
+                        f"environment entry {{catalog_id: {ref.catalog_id}}} needs format_version 2")
+            for r in self.responses:
+                if r.split_date is None:
+                    raise ValueError(f"response {r.id!r}: split_date is required in format 1")
+                if isinstance(r.source, ResponseCsvSourceSpec):
+                    raise ValueError(f"response {r.id!r}: a csv source needs format_version 2")
+            return self
+        # format 2
+        for ref in self.environment:
+            if not isinstance(ref, EnvironmentRef):
+                raise ValueError(
+                    "format_version 2 environment entries refer to the variable catalogue "
+                    "({catalog_id: ...}), not to datasets")
+        ids = [ref.catalog_id for ref in self.environment]
+        for dup in sorted({i for i in ids if ids.count(i) > 1}):
+            raise ValueError(f"environment lists {dup!r} more than once")
+        for catalog_id in ids:
+            try:
+                variable = catalog.get(catalog_id)
+            except catalog.CatalogError as e:
+                raise ValueError(str(e)) from None
+            for site in self.sites:
+                if not catalog.covers(variable, site.lat, site.lon):
+                    d = variable.domain
+                    raise ValueError(
+                        f"site {site.name!r} (lat {site.lat}, lon {site.lon}): catalogue variable "
+                        f"{catalog_id!r} has no data there, outside its domain "
+                        f"(lat {d.lat_min:.2f} to {d.lat_max:.2f}, lon {d.lon_min:.2f} to {d.lon_max:.2f})")
+        return self
 
     @model_validator(mode="after")
     def _window_ids_unique(self):
@@ -236,12 +393,13 @@ def load_study(path: str | Path) -> StudySpec:
     except ValidationError as e:
         raise StudySpecError(f"{path}: invalid study spec:\n{e}") from e
 
-    resolved_data_dir = (path.parent / spec.data_dir).resolve()
-    if not resolved_data_dir.is_dir():
-        raise StudySpecError(
-            f"{path}: data_dir {spec.data_dir!r} does not exist ({resolved_data_dir})"
-        )
-    spec.data_dir = str(resolved_data_dir)
+    if spec.data_dir is not None:
+        resolved_data_dir = (path.parent / spec.data_dir).resolve()
+        if not resolved_data_dir.is_dir():
+            raise StudySpecError(
+                f"{path}: data_dir {spec.data_dir!r} does not exist ({resolved_data_dir})"
+            )
+        spec.data_dir = str(resolved_data_dir)
     return spec
 
 

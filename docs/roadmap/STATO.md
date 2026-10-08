@@ -14,7 +14,7 @@ fondo**: un'app generica, un percorso per i propri dati, una demo registrata. Il
 finestre di V2.2 è parcheggiato (sotto).
 Definizione fissata dal proprietario; decisioni D1–D9 approvate il 2/10; piano riordinato come
 fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusione di
-`MILESTONE-M1.md`. Nessuna scadenza. Nessun codice della milestone è ancora scritto.
+`MILESTONE-M1.md`. Nessuna scadenza. M1.1 (formato 2 della specifica e catalogo con la sola SST) in PR; poi M1.2.
 
 ## Stato attuale
 
@@ -92,5 +92,5 @@ di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel
 
 ## Prossimo passo
 
-**M1.1 Specifica formato 2 e catalogo con la sola SST**, primo pezzo della fetta verticale. La regola
+**M1.2 Download della SST per coordinate nuove** (M1.1, formato 2 e catalogo, è in PR). La regola
 per i mesi incompleti della SST (M1.4) è approvata: un giorno mancante rende mancante il mese.
