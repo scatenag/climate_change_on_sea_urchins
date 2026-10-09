@@ -8,6 +8,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Download of the daily SST for a site, from the variable catalogue** (milestone M1.2, new
+  `download.py`, console script `ccsu-download-sst`). The dataset, variable and depth come from the
+  catalogue, the series ends where the Copernicus catalogue says the product ends (an earlier end is
+  honoured, a later one cut and both recorded; a start before the product is refused). A site is
+  refused with the reason before any multi-day download: outside the catalogue's domain; a land cell
+  (the nearest sea cell is named, with the distance); a point inside the domain's bounding box but in
+  no sea the product covers (the two cases have different messages). The credentials are arguments of
+  the calls: both required, never read from the environment or a file, never in an error message or
+  its chain, never in the manifest; `copernicusmarine login` is never used. A day without data stays
+  missing (no interpolation) and is listed in the manifest, which also records product, dataset
+  version, site, period requested/obtained/covered, sea cells and the series' hash. The logic runs on
+  an injectable client, so it is tested in CI (which has neither copernicusmarine nor xarray); the
+  adapter to the real toolbox is tested against a stand-in toolbox that writes a real NetCDF
+  (skipped without xarray), checking that no file appears in the home directory and the environment
+  is untouched. The update job keeps its own script until it moves to `ccsu-run-study` (M1.9); a test
+  keeps the two readings of the product's coverage equal. Coverage is read for the dataset version
+  that `subset()` downloads (the first listed, requested explicitly), recorded with the other
+  versions' coverage in the manifest, never merged across versions. Without sea cells in the 1-degree
+  probe the message does not choose between an inland point and a sea the product does not cover (the
+  product's static land/sea mask, `cmems_mod_med_phy_my_4.2km_static`, has the same grid and marks both
+  alike). Checked against the real service on 2026-10-09 by the new manual workflow
+  `verify_download.yml` (workflow_dispatch, or the label `verifica-download` on a pull request from this
+  repository; it uses the repository's Copernicus secrets, writes nothing in the repository and
+  publishes the series and manifests as an artifact; its script is `scripts/verify_download.py`):
+  Livorno from 2003-01-01 downloaded in 18 s, 8644 days equal to `data/sst_daily.csv` on all of them
+  (max |diff| 3.2e-6 degC), ending 2026-08-31; Pisa refused as a land cell with the nearest sea cell
+  about 15 km away; a Black Sea point inside the domain's box refused with the message that does not
+  choose between inland and an uncovered sea.
+  The `acquisition` extra now lists `h5py`: `h5netcdf` >= 1.8 made it optional, and without it the
+  NetCDF cannot be read (found by the first run of that workflow).
+
 - **Study specification, format 2, and the variable catalogue** (milestone M1.1, ADR-0010).
   `study.yaml` carries a `format_version` (absent means 1, Livorno's, unchanged; an unknown one is
   refused naming it). Format 2: environment by catalogue id (new `catalog.py`, starting with the

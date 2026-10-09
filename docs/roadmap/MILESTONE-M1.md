@@ -229,3 +229,12 @@ dal Mediterraneo, il confronto fra casi e la contabilità dei test (V3.2), auten
 utenti (V5), la rinomina del progetto, la rimozione dello stato di modulo dal nucleo (D2). Ogni
 difetto trovato lungo la strada che non blocca il percorso della milestone va in una issue e non
 si tocca.
+
+### Decisioni rimandate dalla milestone
+
+- **La coda analysis-forecast della SST giornaliera.** La serie giornaliera scaricata (M1.2) finisce dove
+  finisce il prodotto multiyear. Il catalogo registra il dataset analysis-forecast che lo segue nel tempo,
+  ma non lo si scarica. Aggiungere quella coda è una **scelta di metodo**, non una comodità: i due prodotti
+  non sono la stessa serie (reanalisi contro analisi operative), e cambia la SST degli ultimi mesi e quindi
+  le ondate di calore rilevate proprio dove i ritardi più recenti pesano di più. Da decidere insieme alla
+  regola dei mesi incompleti (M1.4); registrata in `docs/adr/0000-decisioni-rimandate.md`, voce 18.

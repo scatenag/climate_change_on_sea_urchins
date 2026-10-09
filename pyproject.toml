@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-acquisition = ["copernicusmarine", "xarray", "netcdf4", "h5netcdf"]
+acquisition = ["copernicusmarine", "xarray", "netcdf4", "h5netcdf", "h5py"]
 notebook = ["jupyter", "nbconvert"]
 test = ["pytest>=7.0"]
 
@@ -56,6 +56,7 @@ Documentation = "https://github.com/scatenag/climate_change_on_sea_urchins/blob/
 ccsu-run-pipeline = "climate_change_on_sea_urchins.pipeline:main"
 ccsu-dashboard     = "climate_change_on_sea_urchins._launch_dashboard:main"
 ccsu-validate-study = "climate_change_on_sea_urchins.study_spec:validate_study_cli"
+ccsu-download-sst   = "climate_change_on_sea_urchins.download:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
