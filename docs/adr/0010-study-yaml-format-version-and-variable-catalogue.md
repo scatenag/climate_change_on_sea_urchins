@@ -37,9 +37,11 @@ un'unità dichiarata in nessun punto).
   campo eseguibile né percorso): provider, dataset del prodotto reprocessato e di quello che lo
   segue, variabile, profondità, cadenza, unità nativa e di analisi, conversione nominata, dominio.
   Parte con la sola SST giornaliera (fetta verticale); le variabili mensili una alla volta (M1.8).
-- Un modello nuovo rifiuta i campi che non conosce; `StudySpec` ora fa lo stesso a livello di
-  radice (un refuso come `split_dat` era ignorato in silenzio). I sotto-modelli del formato 1 già
-  esistenti restano come sono.
+- **Un campo sconosciuto è rifiutato a ogni livello della specifica**, in entrambi i formati: radice,
+  sito, risposta, sorgente, mappa delle colonne, aggregazione, imputazione, contaminante, ambiente,
+  finestre, climatologia MHW. Un refuso dove un utente lo scriverebbe (`imputaton` o `split_dat` dentro
+  la risposta, `metod` dentro l'aggregazione) spegnerebbe in silenzio una scelta facoltativa:
+  l'imputazione risulterebbe assente. Lo studio di Livorno e le fixture dei test si validano così.
 - Uno studio di formato 2 si carica e si valida, ma la pipeline non lo esegue ancora: `common.py` lo
   dice esplicitamente invece di fallire più avanti. Lo sbloccherà `ccsu-run-study` (M1.5).
 

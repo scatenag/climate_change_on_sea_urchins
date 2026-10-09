@@ -56,6 +56,7 @@ class SiteSpec(BaseModel):
     """An oceanographic monitoring site -- in practice, a Copernicus Marine
     grid cell (a nearest-cell approximation of the real site; see CLAUDE.md's
     "Contesto scientifico utile" on when that approximation breaks down)."""
+    model_config = ConfigDict(extra="forbid")
     id: str
     lat: float
     lon: float
@@ -71,6 +72,7 @@ class ResponseColumnMap(BaseModel):
     (see note-dati-sorgente.md). Declaring the mapping explicitly is what
     keeps that kind of misreading from happening again, to a human or to
     code working from the sheet."""
+    model_config = ConfigDict(extra="forbid")
     date: str
     value: str
     ci_low: str
@@ -79,6 +81,7 @@ class ResponseColumnMap(BaseModel):
 
 class ResponseSourceSpec(BaseModel):
     """The per-trial (single-bioassay) source: one row per determination."""
+    model_config = ConfigDict(extra="forbid")
     type: Literal["google_sheet"]
     sheet_id: str
     temporal_resolution: str = Field(
@@ -145,6 +148,7 @@ class ResponseAggregationSpec(BaseModel):
     A distinct representation from the source itself: the count this
     produces exists only here, never per trial -- it counts trials
     aggregated into a period, not a biological sample size."""
+    model_config = ConfigDict(extra="forbid")
     period: str = Field(..., description="e.g. 'month'")
     method: Literal["mean"]
     count_field: str = Field(
@@ -184,6 +188,7 @@ class ResponseSpec(BaseModel):
     and how the raw per-trial source becomes the aggregated series most
     analyses run on. See docs/roadmap/note-dati-sorgente.md for why each
     field here is shaped the way it is."""
+    model_config = ConfigDict(extra="forbid")
     id: str
     label: str = Field(
         ..., description="Human-readable name for output artifacts (results/ "
@@ -243,6 +248,7 @@ class VariableSpec(BaseModel):
     """An environmental variable fetched from a provider. Declared for this
     step's completeness; not yet consumed by any fetch script -- see module
     docstring."""
+    model_config = ConfigDict(extra="forbid")
     id: str
     provider: str
     dataset: str
@@ -261,6 +267,7 @@ class WindowSpec(BaseModel):
     declared window's statistics into results/<study_id>/<window_id>/.
     Checked here against itself only; overlap with the actual data is
     checked in common.py (this module never reads data/)."""
+    model_config = ConfigDict(extra="forbid")
     id: str = Field(
         ..., pattern=r"^[a-z0-9][a-z0-9_-]*$",
         description="Becomes a directory name under results/<study_id>/, "
@@ -281,6 +288,7 @@ class MhwClimatologySpec(BaseModel):
     al. 2016) computes its per-day-of-year threshold from. A scientific
     choice, not a code default (CLAUDE.md invariant #6) -- previously
     mhw_detection.py's own CLIM_START/CLIM_END module constants."""
+    model_config = ConfigDict(extra="forbid")
     baseline_start_year: int
     baseline_end_year: int
 

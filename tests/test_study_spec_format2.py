@@ -88,10 +88,71 @@ def test_unsupported_version_message_lists_the_supported_ones(tmp_path):
         load_study(_write(tmp_path, text))
 
 
+# Unknown fields are refused at EVERY level of the specification, not only at the root: a typo
+# where a user would write one ("imputaton", "split_dat") must not silently switch the choice off.
+# Each case: (where, how to introduce the typo into the response / site / aggregation).
+
+def _typo_in_response(name, value="x"):
+    return lambda d: d["responses"][0].__setitem__(name, value)
+
+def _typo_in_site(d):
+    d["sites"][0]["lattitude"] = 43.0
+
+def _typo_in_aggregation(d):
+    d["responses"][0]["aggregation"]["metod"] = "mean"
+
+TYPOS = [
+    pytest.param(_typo_in_response("split_dat", "2016-06-01"), "split_dat", id="split_dat-in-response"),
+    pytest.param(_typo_in_response("imputaton", {"method": "centered_rolling_mean", "window_months": 12,
+                                                  "min_periods": 3, "passes": 1}), "imputaton", id="imputaton-in-response"),
+    pytest.param(_typo_in_site, "lattitude", id="field-in-site"),
+    pytest.param(_typo_in_aggregation, "metod", id="field-in-aggregation"),
+]
+
+
 def test_unknown_top_level_field_is_rejected(tmp_path):
     text = FORMAT2 + "split_dat: 2016-06-01\n"
     with pytest.raises(StudySpecError, match="split_dat"):
         load_study(_write(tmp_path, text))
+
+
+@pytest.mark.parametrize("mutate,field", TYPOS)
+def test_nested_typo_is_rejected_in_format_2(tmp_path, mutate, field):
+    with pytest.raises(StudySpecError, match=field):
+        load_study(_write(tmp_path, _modified(mutate)))
+
+
+@pytest.mark.parametrize("mutate,field", TYPOS)
+def test_nested_typo_is_rejected_in_format_1(tmp_path, mutate, field):
+    with pytest.raises(StudySpecError, match=field):
+        load_study(_livorno_variant(tmp_path, mutate))
+
+
+@pytest.mark.parametrize("path,field", [
+    (("responses", 0, "source"), "sheet_idd"),
+    (("responses", 0, "source", "column_map"), "ci_lo"),
+    (("mhw_climatology",), "baseline_start"),
+    (("environment", 0), "datasett"),
+])
+def test_typos_in_other_format_1_blocks_are_rejected(tmp_path, path, field):
+    def add(d):
+        node = d
+        for key in path:
+            node = node[key]
+        node[field] = "x"
+    with pytest.raises(StudySpecError, match=field):
+        load_study(_livorno_variant(tmp_path, add))
+
+
+def test_typo_in_csv_source_and_column_map_is_rejected_in_format_2(tmp_path):
+    for path, field in [(("responses", 0, "source"), "granularty"), (("responses", 0, "source", "column_map"), "vale")]:
+        def add(d, path=path, field=field):
+            node = d
+            for key in path:
+                node = node[key]
+            node[field] = "x"
+        with pytest.raises(StudySpecError, match=field):
+            load_study(_write(tmp_path, _modified(add)))
 
 
 # --- environment by catalogue id ------------------------------------------------------------

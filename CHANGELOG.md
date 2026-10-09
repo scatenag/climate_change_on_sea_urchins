@@ -15,7 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   an unknown id or a site outside the product's domain is refused with the reason), a `csv` response
   source (bare file name, per-trial or aggregated, confidence interval optional but in pairs),
   `split_date` optional, `imputation` declared and absent unless declared, `contaminant` declared.
-  `StudySpec` now refuses unknown top-level fields (a typo like `split_dat` was ignored silently).
+  Unknown fields are refused at every level of the specification, in both formats (a typo such as
+  `imputaton` or `split_dat` inside the response, or `metod` inside the aggregation, was accepted and
+  switched the optional choice off silently).
   Livorno's `study.yaml` declares its imputation (centered rolling mean, 12 months, `min_periods` 3,
   applied twice, as the code does) and its contaminant (copper); a test keeps the declaration equal
   to the code until the dataset builder reads it (M1.4). A format-2 study loads and validates, but
