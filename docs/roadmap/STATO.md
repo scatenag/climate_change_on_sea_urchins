@@ -14,7 +14,7 @@ fondo**: un'app generica, un percorso per i propri dati, una demo registrata. Il
 finestre di V2.2 è parcheggiato (sotto).
 Definizione fissata dal proprietario; decisioni D1–D9 approvate il 2/10; piano riordinato come
 fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusione di
-`MILESTONE-M1.md`. Nessuna scadenza. M1.1 (formato 2 e catalogo con la sola SST) approvata dal proprietario; M1.2 (download della SST) in PR.
+`MILESTONE-M1.md`. Nessuna scadenza. M1.1 (formato 2 e catalogo con la sola SST) approvata dal proprietario; M1.2 (download della SST) verificata sul servizio vero e in fusione.
 
 ## Stato attuale
 
@@ -86,11 +86,11 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 unità del CO₂ in `fetch_copernicus.py` · #41 interpolazione dei buchi della SST · #42 rimandi a
 documenti non versionati · #43 percorsi risolti all'import negli script (tutte, tranne la #9, difetti
 noti che non bloccano M1). Chiuse l'8/10: #23 (esercitazione) e #45 (data di fine della SST, corretta
-su `main` con la #44 e sul branch del lavoro). Difetto noto non ancora in una issue: l'id del dataset
+su `main` con la #44 e sul branch del lavoro). Difetti noti non ancora in una issue: l'extra `acquisition` di `pyproject.toml` non include `h5py` (con `h5netcdf` ≥ 1.8 è opzionale e la lettura del NetCDF fallisce senza; il job di aggiornamento lo ha dalla sua installazione dei requisiti);  l'id del dataset
 di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel catalogo (quello giusto è
 `…phy-tem_anfc_4.2km_P1D-m`); il ripiego non è mai stato usato.
 
 ## Prossimo passo
 
-**M1.3 Sorgente CSV della risposta** (M1.2, download della SST, è in PR; manca la verifica a mano con le credenziali: Livorno, serie uguale a `data/sst_daily.csv` nei giorni comuni, tempo misurato). La regola
+**M1.3 Sorgente CSV della risposta.** M1.2 è verificata sul servizio vero (9/10, workflow `verify_download.yml`): Livorno dal 2003 in 18 s, 8644 giorni uguali a `data/sst_daily.csv` (scarto massimo 3.2e-6 °C); Pisa rifiutata come cella di terra con il mare a circa 15 km; un punto del Mar Nero rifiutato senza scegliere fra entroterra e mare non coperto. La regola
 per i mesi incompleti della SST (M1.4) è approvata: un giorno mancante rende mancante il mese.
