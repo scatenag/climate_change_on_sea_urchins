@@ -1,0 +1,50 @@
+name: Verify download
+
+# Manual verification of ccsu-download-sst against the real Copernicus service (milestone M1.2).
+# Runs by hand (workflow_dispatch) or when a pull request from this repository gets the label
+# `verifica-download`. It uses the repository's Copernicus secrets: they are given only to the step that
+# runs the script, which passes them to the download as arguments and checks they appear in no output.
+# It writes nothing in the repository (read-only token, no credentials persisted) and publishes the
+# series and manifests as an artifact. Who can label a pull request can run its code with the secrets:
+# keep the label to the repository owner, and fork pull requests are skipped.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'verifica-download' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the package with the acquisition extra
+        run: pip install -e ".[acquisition]"
+
+      - name: Download three points and compare
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/verify_download.py "$RUNNER_TEMP/download-check" data/sst_daily.csv
+
+      - name: Publish series, manifests and messages
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: download-check
+          path: ${{ runner.temp }}/download-check
+          if-no-files-found: warn
