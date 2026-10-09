@@ -77,12 +77,19 @@ IMPUTE_WINDOW_MONTHS = 12
 IMPUTE_MIN_PERIODS = 3
 
 
-def impute_response(values: pd.Series) -> pd.Series:
+def impute_series(values: pd.Series, window_months: int, min_periods: int) -> pd.Series:
     """Fill NaNs with the centered rolling mean of `values` itself --
-    whatever `values` covers is all the imputation ever sees."""
+    whatever `values` covers is all the imputation ever sees. The one
+    implementation: impute_response() below (Livorno's constants) and the
+    dataset builder (the parameters a study declares) both call it."""
     return values.fillna(
-        values.rolling(window=IMPUTE_WINDOW_MONTHS, min_periods=IMPUTE_MIN_PERIODS, center=True).mean()
+        values.rolling(window=window_months, min_periods=min_periods, center=True).mean()
     )
+
+
+def impute_response(values: pd.Series) -> pd.Series:
+    """impute_series() with the parameters Livorno's code applies."""
+    return impute_series(values, IMPUTE_WINDOW_MONTHS, IMPUTE_MIN_PERIODS)
 
 
 def aggregate_period(raw: pd.DataFrame, *, date: str, value: str, ci_low: str | None = None,
