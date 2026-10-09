@@ -248,6 +248,34 @@
           ],
           "default": null,
           "title": "Control Columns"
+        },
+        "delimiter": {
+          "default": ",",
+          "description": "Field separator. Declared, never guessed: a file that does not match is refused with what it looks like.",
+          "enum": [
+            ",",
+            ";",
+            "\t",
+            "|"
+          ],
+          "title": "Delimiter",
+          "type": "string"
+        },
+        "decimal": {
+          "default": ".",
+          "description": "Decimal separator of the numbers.",
+          "enum": [
+            ".",
+            ","
+          ],
+          "title": "Decimal",
+          "type": "string"
+        },
+        "date_format": {
+          "default": "%Y-%m-%d",
+          "description": "strptime format of the date column (ISO by default). A file whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing. %b and %B read month names in English (Jan, January), whatever the language of the system. Two-digit years (%y) are not accepted: export with four digits.",
+          "title": "Date Format",
+          "type": "string"
         }
       },
       "required": [

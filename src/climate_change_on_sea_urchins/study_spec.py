@@ -116,6 +116,7 @@ class ResponseCsvColumnMap(BaseModel):
 
 
 _BARE_CSV_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$")
+_DATE_FORMAT = re.compile(r"^(%[YmdHMSbB]|[-/.: T])+$")
 
 
 class ResponseCsvSourceSpec(BaseModel):
@@ -132,6 +133,37 @@ class ResponseCsvSourceSpec(BaseModel):
         "aggregated: one row per period already.")
     column_map: ResponseCsvColumnMap
     control_columns: list[str] | None = None
+    delimiter: Literal[",", ";", "\t", "|"] = Field(
+        default=",", description="Field separator. Declared, never guessed: a file that does not match is "
+        "refused with what it looks like.")
+    decimal: Literal[".", ","] = Field(default=".", description="Decimal separator of the numbers.")
+    date_format: str = Field(
+        default="%Y-%m-%d", description="strptime format of the date column (ISO by default). A file "
+        "whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing. "
+        "%b and %B read month names in English (Jan, January), whatever the language of the system. "
+        "Two-digit years (%y) are not accepted: export with four digits.")
+
+    @field_validator("date_format")
+    @classmethod
+    def _date_format_is_plain(cls, v: str) -> str:
+        if "%y" in v:
+            raise ValueError(
+                f"date_format {v!r}: %y (two-digit year) is not accepted, because the century would be decided "
+                "by the parser; export the dates with a four-digit year (%Y)")
+        has_month = any(d in v for d in ("%m", "%b", "%B"))
+        if not _DATE_FORMAT.match(v) or "%Y" not in v or not has_month:
+            raise ValueError(
+                f"date_format {v!r} must use only %Y %m %d %H %M %S %b %B and the separators - / . : T and space, "
+                "and contain a four-digit year (%Y) and a month (%m, or %b / %B for month names)")
+        return v
+
+    @model_validator(mode="after")
+    def _format_is_coherent(self):
+        if self.delimiter == self.decimal:
+            raise ValueError("delimiter and decimal separator cannot be the same character")
+        if self.temporal_resolution == "day" and "%d" not in self.date_format:
+            raise ValueError("temporal_resolution day needs a date_format with %d")
+        return self
 
     @field_validator("file")
     @classmethod

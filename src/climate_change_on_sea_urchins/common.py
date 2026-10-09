@@ -85,49 +85,64 @@ def impute_response(values: pd.Series) -> pd.Series:
     )
 
 
-def aggregate_monthly(raw: pd.DataFrame) -> pd.DataFrame:
+def aggregate_period(raw: pd.DataFrame, *, date: str, value: str, ci_low: str | None = None,
+                     ci_high: str | None = None) -> pd.DataFrame:
     """
-    Aggregate multiple within-month measurements to a single monthly value.
-    The one implementation: scripts/fetch_ec50.py (the update job) and the
-    dashboard's live read of the sheet both call it.
+    Aggregate within-month determinations to one value per month, for any response series.
+    The one implementation of the aggregation: aggregate_monthly() (the sheet of the update job and the
+    dashboard's live read) and the CSV response source (response_csv.py) both call it.
+    Columns out: Datetime (first of the month), value, ci_upper, ci_lower, n (determinations with a value).
 
     Strategy:
-    - EC50: arithmetic mean of all measurements in the month
-    - CI: use the mean of individual half-widths (UL-EC50, EC50-LL),
-          then compute standard error across replicates and take
-          the wider of the two as the final CI bound.
+    - value: arithmetic mean of all determinations in the month
+    - CI: the mean of the individual half-widths (ci_high - value, value - ci_low), then the standard
+          error across replicates; the final bound is the wider of the two. Without individual
+          intervals the bounds stay missing: none is made up.
     """
     raw = raw.copy()
-    raw["DATE"] = pd.to_datetime(raw["DATE"], dayfirst=False)
+    raw["_date"] = pd.to_datetime(raw[date], dayfirst=False)
     # Normalize to first-of-month
-    raw["Datetime"] = raw["DATE"].dt.to_period("M").dt.to_timestamp()
+    raw["Datetime"] = raw["_date"].dt.to_period("M").dt.to_timestamp()
+    raw["_v"] = raw[value]
 
     # Half-widths from individual bioassay CI
-    raw["hw_upper"] = raw["UL"] - raw["EC50"]
-    raw["hw_lower"] = raw["EC50"] - raw["LL"]
+    raw["hw_upper"] = raw[ci_high] - raw[value] if ci_high else np.nan
+    raw["hw_lower"] = raw[value] - raw[ci_low] if ci_low else np.nan
 
     agg = raw.groupby("Datetime").agg(
-        EC50=("EC50", "mean"),
-        EC50_std=("EC50", "std"),
-        EC50_n=("EC50", "count"),
+        value=("_v", "mean"),
+        std=("_v", "std"),
+        n=("_v", "count"),
         mean_hw_upper=("hw_upper", "mean"),
         mean_hw_lower=("hw_lower", "mean"),
     ).reset_index()
 
     # Standard error across replicates
-    agg["se"] = agg["EC50_std"] / np.sqrt(agg["EC50_n"])
+    agg["se"] = agg["std"] / np.sqrt(agg["n"])
 
     # Final CI: use the larger of (propagated bioassay CI) vs (replicate SE * 1.96)
-    agg["EC50_ci_upper"] = agg["EC50"] + np.maximum(
+    agg["ci_upper"] = agg["value"] + np.maximum(
         agg["mean_hw_upper"], 1.96 * agg["se"].fillna(0)
     )
-    agg["EC50_ci_lower"] = agg["EC50"] - np.maximum(
+    agg["ci_lower"] = agg["value"] - np.maximum(
         agg["mean_hw_lower"], 1.96 * agg["se"].fillna(0)
     )
 
-    result = agg[["Datetime", "EC50", "EC50_ci_upper", "EC50_ci_lower", "EC50_n"]].copy()
+    result = agg[["Datetime", "value", "ci_upper", "ci_lower", "n"]].copy()
     result = result.sort_values("Datetime").reset_index(drop=True)
     return result
+
+
+def aggregate_monthly(raw: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate multiple within-month measurements to a single monthly value, for the sheet's columns
+    (DATE, EC50, UL, LL), under the names data/ has always used (Datetime, EC50, EC50_ci_upper,
+    EC50_ci_lower, EC50_n). A wrapper of aggregate_period(): scripts/fetch_ec50.py (the update job) and
+    the dashboard's live read of the sheet both call it.
+    """
+    out = aggregate_period(raw, date="DATE", value="EC50", ci_low="LL", ci_high="UL")
+    return out.rename(columns={"value": "EC50", "ci_upper": "EC50_ci_upper",
+                               "ci_lower": "EC50_ci_lower", "n": "EC50_n"})
 
 
 def impute_ec50(monthly_full: pd.DataFrame, ec50: pd.DataFrame) -> pd.DataFrame:
