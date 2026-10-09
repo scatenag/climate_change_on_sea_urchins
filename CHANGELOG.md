@@ -419,6 +419,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The test job was red on `main` from 2026-10-09 (pyarrow 26 against NumPy 1.26).** `pyarrow` is not a
+  direct dependency: Streamlit asks `pyarrow>=7.0`, and pyarrow 26.0.0 (published that day) requires NumPy
+  2, which the requirements exclude; scikit-learn imports pyarrow when it is installed, so two test
+  modules failed at collection. `requirements.txt` now bounds `pyarrow<26`. The environments pinned
+  by `requirements-lock.txt` (23.0.1) were not affected.
+
 - **The daily SST stopped at a date written in the code.** `scripts/fetch_copernicus_daily.py`
   downloaded up to `END = "2026-06-30"`, so `data/sst_daily.csv`, the MHW catalogue and every MHW
   analysis stayed at June 2026 although the multiyear product covers up to 2026-08-31 (catalogue
