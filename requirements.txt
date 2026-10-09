@@ -58,6 +58,12 @@ plotly==6.6.0
 # Revisit once that migration has had time to mature upstream.
 streamlit==1.56.0
 Pillow==10.4.0
+# pyarrow is not a direct dependency: streamlit asks only pyarrow>=7.0, and the line above does not reach
+# it. pyarrow 26.0.0 (published 2026-10-09) requires NumPy 2 and fails at import with the numpy pinned
+# above ("pyarrow requires NumPy 2.0 or newer, found 1.26.4"), so the next reinstallation of this app on
+# Streamlit Cloud would have picked it up and the app would not start. Pinned to the version in
+# requirements-lock.txt, the environment the job computes with.
+pyarrow==23.0.1
 
 # Marine Heatwave detection: own implementation in mhw_detection.py, no
 # install needed. marineHeatWaves.py is vendored at the repo root for
