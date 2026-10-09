@@ -11,6 +11,7 @@
 # range directly; wiring that up is a later branch
 # (note-tecniche.md's v2.1/provider-adapters), not this one.
 
+format_version: 1
 id: livorno-paracentrotus
 description: >
   Paracentrotus lividus gamete EC50 sensitivity to copper, North Tyrrhenian
@@ -58,6 +59,18 @@ responses:
       period: month
       method: mean
       count_field: n_assays
+    # The imputation the code applies (common.impute_response): months without a real
+    # measurement filled with a centered rolling mean. Applied twice in effect -- by
+    # scripts/build_dataset.py and again by common.load_data() -- see docs/adr/0000, item 8.
+    # Until the dataset builder reads this block (M1.4) a test keeps it equal to the code.
+    imputation:
+      method: centered_rolling_mean
+      window_months: 12
+      min_periods: 3
+      passes: 2
+    contaminant:
+      name: copper
+      cas: "7440-50-8"
 
 environment:
   - id: medsea-temperature

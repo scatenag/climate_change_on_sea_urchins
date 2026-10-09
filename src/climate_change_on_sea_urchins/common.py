@@ -10,6 +10,12 @@ from .study_spec import StudySpecError, load_selected_study
 
 ROOT  = Path(__file__).resolve().parent.parent.parent
 _study = load_selected_study()
+if _study.format_version != 1:
+    # A format-2 study validates (study_spec.py) but the pipeline cannot run it yet: the dataset
+    # builder and ccsu-run-study (milestone M1) are what will. Say so here, not somewhere downstream.
+    raise StudySpecError(
+        f"study {_study.id!r} is format_version {_study.format_version}: the pipeline does not run "
+        "format_version 2 studies yet (ccsu-run-study, milestone M1.5)")
 
 # Where this study's data/ lives -- resolved to an absolute, existing
 # directory by load_study() from the spec's data_dir (relative to the
