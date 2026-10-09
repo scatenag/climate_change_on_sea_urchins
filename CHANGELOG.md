@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The dataset builder** (milestone M1.4, new `dataset_builder.py`). From the daily SST and a monthly
+  response series to the monthly table (`monthly.csv`: temperature, response, `response_imputed`,
+  interval, count), the heatwave catalogue (events, monthly, annual) and a manifest with the coverage,
+  the declared choices and the files' hashes. The monthly temperature is the mean of the daily SST; **a
+  month with any missing day is missing** (decision of 2026-10-03), on an incomplete last month and on an
+  incomplete first month alike, and the months left out are listed in the coverage and left out of the
+  monthly heatwave metrics too (an event spanning them stays in the catalogue). The response is imputed
+  only as the study declares (none unless declared), `passes` times; heatwaves are detected with the
+  climatology baseline the study declares, which the SST must cover in full; a gap inside the daily SST
+  is refused with the days named (what to do about gaps is not decided, issue #41). Everything comes
+  from the functions Livorno's pipeline uses: `common.impute_series` (parametrised; `impute_response` is
+  its wrapper with Livorno's constants, same result) and the functions of `mhw_detection`. Tested
+  against the fixture: the heatwave catalogue from its SST equals its `mhw_events/monthly/annual.csv`; the
+  sheet's monthly series with the declared imputation equals `data_ec50_ci.csv` (one pass) and
+  `load_data()`'s response (two passes, as Livorno's study declares) on every month of the builder (the
+  fixture's grid has one month more, from the environment table). Unlike `load_data`, which fills
+  Temperature gaps from partial months of the SST, the builder leaves them missing.
+
 - **The CSV response source** (milestone M1.3, ADR-0011, new `response_csv.py`). A response series in a
   file the user provides, read strictly, with the format declared in the study, never guessed:
   `delimiter`, `decimal` and `date_format` of the csv source (ISO, comma and point by default). A file
