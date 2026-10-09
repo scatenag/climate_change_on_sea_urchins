@@ -229,6 +229,23 @@ alla data pubblicata di `negative_control` (oggi ancora nell'output) in `test_pa
 tag `v1.5.1` sullo stato del branch del lavoro, e l'eventuale aggiornamento del DOI nelle bozze. La
 fixture congelata conserva il valore 1 della prova 224, corretto in 11 nel foglio sorgente.
 
+**Aggiunta dell'8/10/2026: la tabella del test multiplo.** La tabella del test multiplo del manoscritto
+(Tabella S3: i test raggruppati per griglia, con i conteggi dei test sotto 0.05 e sopra le correzioni
+BH e Bonferroni calcolate sull'insieme) dipende, in alcune righe, da scelte fatte nel codice di allora
+(l'intervallo dei ritardi annuali, l'ordine ARIMA scelto) e non solo dai dati. Il rilascio `v1.5.1` deve **riprodurre quella tabella così come risulterà
+dopo la revisione**, riga per riga, da un comando e su una fixture congelata (`test_paper_values.py`),
+con l'ordine ARIMA dichiarato o l'esito stabile alle scelte equivalenti (voce 10, e la regola «un numero
+che dipende dalla macchina non si riporta come valore esatto», `docs/COME_SI_LAVORA.md` §2). Condizioni:
+- **la griglia annuale con i ritardi annuali 4 e 5**: oggi il modulo `mhw_lag_annual.py` calcola solo i
+  ritardi da 0 a 3 (issue #48), quindi la riga annuale non è riproducibile dal pacchetto;
+- le righe che dipendono dal prewhitening ARIMA sono quelle che la revisione deciderà di tenere; il
+  braccio ARIMA delle ondate severe non è riproducibile con un ordine convergente (voce 10);
+- nessun conteggio entra nei test come valore scritto a mano: viene dal calcolo sulla fixture.
+
+Il materiale per la revisione (valori sottomessi, valori del pacchetto archiviato, intervalli sugli ordini
+equivalenti e comandi che riproducono ogni numero) sta nel dossier locale `drafts/dossier-tabella-S3-revisione/`,
+fuori da git.
+
 ---
 
 ## 13. Che cosa portare ancora sul branch del lavoro
