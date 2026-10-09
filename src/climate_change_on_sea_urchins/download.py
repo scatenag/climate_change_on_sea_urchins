@@ -26,7 +26,7 @@ import hashlib
 import json
 import math
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
 from typing import Callable, Protocol
@@ -64,10 +64,12 @@ class Credentials:
 
 @dataclass(frozen=True)
 class Coverage:
-    """The time range a product covers, as the Copernicus catalogue declares it."""
+    """The time range of the dataset version the toolbox downloads, as the Copernicus catalogue declares
+    it, and the coverage of the dataset's other versions (recorded, never merged into this one)."""
     start: dt.date
     end: dt.date
     version: str | None = None
+    other_versions: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -86,7 +88,8 @@ class Client(Protocol):
     def coverage_of(self, variable: CatalogVariable) -> Coverage: ...
 
     def subset(self, variable: CatalogVariable, *, lat_min: float, lat_max: float, lon_min: float,
-               lon_max: float, start: dt.date, end: dt.date, credentials: Credentials) -> Cube: ...
+               lon_max: float, start: dt.date, end: dt.date, credentials: Credentials,
+               dataset_version: str | None = None) -> Cube: ...
 
 
 @dataclass
@@ -131,28 +134,46 @@ def _ms_to_date(ms: float) -> dt.date:
     return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).date()
 
 
+def _version_coverage(version, variable: str):
+    """(start, end) in ms of `variable` in one dataset version: the stretch every service of it covers
+    (latest start, earliest end); None if the version does not list it."""
+    starts, ends = [], []
+    for part in version.parts:
+        for service in part.services:
+            for var in service.variables:
+                if var.short_name != variable:
+                    continue
+                for coord in var.coordinates:
+                    if coord.coordinate_id == "time":
+                        if coord.minimum_value is not None:
+                            starts.append(coord.minimum_value)
+                        if coord.maximum_value is not None:
+                            ends.append(coord.maximum_value)
+    return (max(starts), min(ends)) if starts and ends else None
+
+
 def coverage_from_description(description, variable: str) -> Coverage:
-    """Coverage of `variable` from a copernicusmarine.describe() result. Where the services disagree,
-    the stretch every service covers (latest start, earliest end)."""
-    starts, ends, version = [], [], None
+    """Coverage of `variable` from a copernicusmarine.describe() result, for the dataset version that
+    `subset()` downloads: the toolbox takes the first version of the dataset's list unless one is forced
+    (it is, below, with the label read here). A merge over versions would let an old version that ended
+    earlier cut the series without warning. The other versions are returned as `other_versions`."""
+    chosen, others = None, {}
     for product in description.products:
         for dataset in product.datasets:
-            for v in dataset.versions:
-                for part in v.parts:
-                    for service in part.services:
-                        for var in service.variables:
-                            if var.short_name != variable:
-                                continue
-                            for coord in var.coordinates:
-                                if coord.coordinate_id == "time":
-                                    if coord.minimum_value is not None:
-                                        starts.append(coord.minimum_value)
-                                    if coord.maximum_value is not None:
-                                        ends.append(coord.maximum_value)
-                                    version = version or getattr(v, "label", None)
-    if not ends or not starts:
-        raise DownloadError(f"the Copernicus catalogue reports no time coverage for {variable!r}")
-    return Coverage(start=_ms_to_date(max(starts)), end=_ms_to_date(min(ends)), version=version)
+            for position, version in enumerate(dataset.versions):
+                span = _version_coverage(version, variable)
+                if span is None:
+                    continue
+                if position == 0:
+                    chosen = (getattr(version, "label", None), span)
+                else:
+                    others[getattr(version, "label", str(position))] = {
+                        "start": _ms_to_date(span[0]).isoformat(), "end": _ms_to_date(span[1]).isoformat()}
+    if chosen is None:
+        raise DownloadError(f"the Copernicus catalogue reports no time coverage for {variable!r} "
+                            "in the version that would be downloaded")
+    label, (lo, hi) = chosen
+    return Coverage(start=_ms_to_date(lo), end=_ms_to_date(hi), version=label, other_versions=others)
 
 
 # ── the site ─────────────────────────────────────────────────────────────────────────────────────
@@ -186,9 +207,10 @@ def _site_problem(probe: Cube, site, variable: CatalogVariable) -> str | None:
                 f"cell is at lat {probe.lats[i]:.3f}, lon {probe.lons[j]:.3f}, about {d[i, j]:.0f} km away. "
                 "Move the site to the sea, or to that cell.")
     km = PROBE_DELTA_DEG * 111
-    return (f"site {where}: no sea cell of the product ({variable.id}) within about {km:.0f} km, although the point "
-            "lies inside the bounding box of the product's domain: it is outside the area the product covers "
-            "(a sea can lie inside the box and not be part of the product).")
+    return (f"site {where}: no sea cell of the product ({variable.id}) within about {km:.0f} km. The point is "
+            "inland, or in a sea the product does not cover although it lies inside the bounding box of its "
+            "domain; the product's land/sea mask cannot tell the two apart (both are non-sea cells), so this "
+            "check does not choose.")
 
 
 # ── the download ─────────────────────────────────────────────────────────────────────────────────
@@ -237,18 +259,22 @@ def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credent
     box = dict(lat_min=site.lat - site.bbox_delta, lat_max=site.lat + site.bbox_delta,
                lon_min=site.lon - site.bbox_delta, lon_max=site.lon + site.bbox_delta)
     # One day first: a site that cannot work is refused before a multi-year download.
-    first = _call(lambda: client.subset(variable, start=start, end=start, credentials=credentials, **box),
+    ver = coverage.version
+    first = _call(lambda: client.subset(variable, start=start, end=start, credentials=credentials,
+                                        dataset_version=ver, **box),
                   credentials, "downloading the first day")
     if not _sea_cells(first).any():
         wide = dict(lat_min=site.lat - PROBE_DELTA_DEG, lat_max=site.lat + PROBE_DELTA_DEG,
                     lon_min=site.lon - PROBE_DELTA_DEG, lon_max=site.lon + PROBE_DELTA_DEG)
-        probe = _call(lambda: client.subset(variable, start=start, end=start, credentials=credentials, **wide),
+        probe = _call(lambda: client.subset(variable, start=start, end=start, credentials=credentials,
+                                            dataset_version=ver, **wide),
                       credentials, "probing the surroundings of the site")
         problem = _site_problem(probe, site, variable)
         if problem:
             raise SiteError(problem)
 
-    cube = _call(lambda: client.subset(variable, start=start, end=obtained_end, credentials=credentials, **box),
+    cube = _call(lambda: client.subset(variable, start=start, end=obtained_end, credentials=credentials,
+                                       dataset_version=ver, **box),
                  credentials, "downloading the series")
     series = _daily_series(cube, start, obtained_end)
     missing = [x.date().isoformat() for x in series.index[series.isna()]]
@@ -260,13 +286,15 @@ def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credent
         "format": 1,
         "kind": "daily_sst",
         "catalog_id": variable.id,
-        "dataset": {"id": variable.dataset_multiyear, "version": cube.dataset_version or coverage.version,
+        "dataset": {"id": variable.dataset_multiyear, "version": coverage.version,
                     "variable": variable.variable, "depth_m": [variable.depth_min_m, variable.depth_max_m]},
         "site": {"id": site.id, "name": site.name, "lat": site.lat, "lon": site.lon, "bbox_delta": site.bbox_delta},
         "period": {
             "requested": {"start": start.isoformat(), "end": end.isoformat() if end else None},
             "obtained": {"start": start.isoformat(), "end": obtained_end.isoformat()},
-            "product_coverage": {"start": coverage.start.isoformat(), "end": coverage.end.isoformat()},
+            "product_coverage": {"start": coverage.start.isoformat(), "end": coverage.end.isoformat(),
+                                 "version": coverage.version},
+            "other_versions_coverage": coverage.other_versions,
         },
         "cells": {"in_box": int(sea.size), "sea_with_data": int(sea.sum())},
         "n_days": int(len(series)),
@@ -314,11 +342,13 @@ class CopernicusClient:
         description = self._tb.describe(dataset_id=variable.dataset_multiyear, disable_progress_bar=True)
         return coverage_from_description(description, variable.variable)
 
-    def subset(self, variable, *, lat_min, lat_max, lon_min, lon_max, start, end, credentials) -> Cube:
+    def subset(self, variable, *, lat_min, lat_max, lon_min, lon_max, start, end, credentials,
+               dataset_version=None) -> Cube:
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             self._tb.subset(
-                dataset_id=variable.dataset_multiyear, variables=[variable.variable],
+                dataset_id=variable.dataset_multiyear, dataset_version=dataset_version,
+                variables=[variable.variable],
                 minimum_latitude=lat_min, maximum_latitude=lat_max,
                 minimum_longitude=lon_min, maximum_longitude=lon_max,
                 minimum_depth=variable.depth_min_m, maximum_depth=variable.depth_max_m,

@@ -57,8 +57,8 @@ class FakeClient:
         self.calls.append(("coverage", variable.id))
         return self.coverage
 
-    def subset(self, variable, *, lat_min, lat_max, lon_min, lon_max, start, end, credentials):
-        self.calls.append(("subset", lat_min, lat_max, lon_min, lon_max, start, end))
+    def subset(self, variable, *, lat_min, lat_max, lon_min, lon_max, start, end, credentials, dataset_version=None):
+        self.calls.append(("subset", lat_min, lat_max, lon_min, lon_max, start, end, dataset_version))
         if self.fail_with:
             raise RuntimeError(self.fail_with)
         days = pd.date_range(start, end, freq="D")
@@ -143,18 +143,30 @@ def test_a_land_cell_is_told_apart_and_the_nearest_sea_is_named():
     assert not any(c[0] == "subset" and c[6] > c[5] for c in client.calls), "no multi-day download for a refused site"
 
 
-def test_a_point_in_the_domain_box_but_not_in_the_product_is_told_apart():
+def test_without_sea_in_the_surroundings_the_message_does_not_choose_between_inland_and_uncovered_sea():
+    # The product's static land/sea mask has the same grid and marks land and a sea the product does not
+    # model alike (both are non-sea cells), so it cannot tell them apart; neither can this check.
     client = FakeClient(sea=lambda lat, lon: False)
     with pytest.raises(SiteError) as e:
         _fetch(client)
     msg = str(e.value)
-    assert "outside the area" in msg and "bounding box" in msg
-    assert "land cell" not in msg
+    assert "inland" in msg and "does not cover" in msg and "bounding box" in msg
+    assert "land cell" not in msg and "nearest" not in msg
+
+
+def test_an_inland_point_far_from_the_coast_gets_the_same_unchosen_message():
+    # Po valley: well over 100 km from any sea of the product. It must not be declared a sea the
+    # product does not cover.
+    po_valley = SiteSpec(id="p", lat=45.0, lon=10.0, name="Po valley", bbox_delta=0.1)
+    with pytest.raises(SiteError) as e:
+        _fetch(FakeClient(sea=lambda lat, lon: lat < 43.5), site=po_valley)
+    msg = str(e.value)
+    assert "inland" in msg and "or in a sea" in msg
+    assert "Po valley" in msg and "is outside the area" not in msg
 
 
 def test_the_two_site_messages_differ():
-    land = pytest.raises(SiteError)
-    with land as a:
+    with pytest.raises(SiteError) as a:
         _fetch(FakeClient(sea=lambda lat, lon: lon < 10.25))
     with pytest.raises(SiteError) as b:
         _fetch(FakeClient(sea=lambda lat, lon: False))
@@ -176,7 +188,7 @@ def test_an_end_beyond_the_product_is_cut_and_both_are_recorded():
     result = _fetch(client, end=dt.date(2024, 1, 10))
     assert result.series["Datetime"].iloc[-1] == pd.Timestamp("2024-01-05")
     assert result.manifest["period"]["requested"]["end"] == "2024-01-10"
-    assert result.manifest["period"]["product_coverage"] == {"start": "1987-01-01", "end": "2024-01-05"}
+    assert result.manifest["period"]["product_coverage"] == {"start": "1987-01-01", "end": "2024-01-05", "version": "202511"}
 
 
 def test_a_start_before_the_product_is_refused():
@@ -187,6 +199,43 @@ def test_a_start_before_the_product_is_refused():
 def test_a_period_entirely_after_the_product_is_refused():
     with pytest.raises(DownloadError, match="2026-08-31"):
         _fetch(start=dt.date(2026, 10, 1), end=dt.date(2026, 10, 5))
+
+
+def _two_version_description(first_end, second_end, first="202511", second="202411"):
+    import types
+    ns = types.SimpleNamespace
+    ms = lambda d: dt.datetime.fromisoformat(d).replace(tzinfo=dt.timezone.utc).timestamp() * 1000
+
+    def version(label, end):
+        return ns(label=label, parts=[ns(services=[ns(service_name="arco-time-series", variables=[ns(
+            short_name="thetao", coordinates=[ns(coordinate_id="time", minimum_value=ms("1987-01-01"),
+                                                  maximum_value=ms(end))])])])])
+    return ns(products=[ns(datasets=[ns(versions=[version(first, first_end), version(second, second_end)])])])
+
+
+def test_coverage_is_that_of_the_version_the_toolbox_downloads_not_a_union_of_versions():
+    # subset() downloads the dataset's first listed version; an older one that ended earlier must not cut
+    # the series, and a newer one must not extend it past what is downloaded.
+    cov = download.coverage_from_description(_two_version_description("2026-08-31", "2025-06-30"), "thetao")
+    assert (cov.version, cov.end.isoformat()) == ("202511", "2026-08-31")
+    cov = download.coverage_from_description(_two_version_description("2025-06-30", "2026-08-31", "202411", "202511"), "thetao")
+    assert (cov.version, cov.end.isoformat()) == ("202411", "2025-06-30")
+
+
+def test_the_other_versions_are_recorded_with_their_coverage():
+    cov = download.coverage_from_description(_two_version_description("2026-08-31", "2025-06-30"), "thetao")
+    assert cov.other_versions == {"202411": {"start": "1987-01-01", "end": "2025-06-30"}}
+
+
+def test_the_downloaded_version_is_requested_explicitly_and_recorded():
+    client = FakeClient(coverage=Coverage(dt.date(1987, 1, 1), dt.date(2026, 8, 31), "202511",
+                                          {"202411": {"start": "1987-01-01", "end": "2025-06-30"}}))
+    result = _fetch(client)
+    assert {c[7] for c in client.calls if c[0] == "subset"} == {"202511"}
+    m = result.manifest
+    assert m["dataset"]["version"] == "202511"
+    assert m["period"]["product_coverage"] == {"start": "1987-01-01", "end": "2026-08-31", "version": "202511"}
+    assert m["period"]["other_versions_coverage"] == {"202411": {"start": "1987-01-01", "end": "2025-06-30"}}
 
 
 # --- the series -----------------------------------------------------------------------------------

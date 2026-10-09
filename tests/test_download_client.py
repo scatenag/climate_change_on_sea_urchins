@@ -69,6 +69,7 @@ def test_credentials_go_to_subset_as_arguments_and_nowhere_else(tmp_path, monkey
         assert kw["username"] == USER and kw["password"] == PASSWORD
         assert "credentials_file" not in kw
         assert kw["dataset_id"] == catalog.get("sst_daily").dataset_multiyear
+        assert kw["dataset_version"] == "202511", "the version whose coverage was read must be the one requested"
         assert (kw["minimum_depth"], kw["maximum_depth"]) == (0.0, 5.0)
     assert dict(os.environ) == env_before, "the process environment was changed"
     assert list(home.iterdir()) == [], "something was written in the home directory"

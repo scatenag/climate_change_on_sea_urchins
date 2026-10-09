@@ -23,8 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   adapter to the real toolbox is tested against a stand-in toolbox that writes a real NetCDF
   (skipped without xarray), checking that no file appears in the home directory and the environment
   is untouched. The update job keeps its own script until it moves to `ccsu-run-study` (M1.9); a test
-  keeps the two readings of the product's coverage equal. Not yet checked against the real
-  Copernicus service with credentials (a manual step: see the PR).
+  keeps the two readings of the product's coverage equal. Coverage is read for the dataset version
+  that `subset()` downloads (the first listed, requested explicitly), recorded with the other
+  versions' coverage in the manifest, never merged across versions. Without sea cells in the 1-degree
+  probe the message does not choose between an inland point and a sea the product does not cover (the
+  product's static land/sea mask, `cmems_mod_med_phy_my_4.2km_static`, has the same grid and marks both
+  alike). Not yet checked against the real Copernicus service with credentials (a manual step: see the PR).
 
 - **Study specification, format 2, and the variable catalogue** (milestone M1.1, ADR-0010).
   `study.yaml` carries a `format_version` (absent means 1, Livorno's, unchanged; an unknown one is

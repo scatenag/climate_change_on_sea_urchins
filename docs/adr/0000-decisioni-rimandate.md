@@ -294,3 +294,17 @@ annuali; accelerazione del declino). Il ritardo di 2 mesi è scritto nel codice 
 Livorno; nessuno di questi test è contato fra quelli eseguiti. Con la milestone M1 la dashboard di
 Livorno esce da `main` (M1.13) e queste analisi restano solo nell'app del lavoro. Portarne una nella
 pipeline è una scelta di metodo, da fare una per una.
+
+---
+
+## 18. La coda analysis-forecast della SST giornaliera
+
+**Domanda:** se la serie giornaliera di SST scaricata per uno studio debba proseguire oltre la fine del
+prodotto multiyear con il prodotto analysis-forecast.
+
+**Contesto:** il download (M1.2) si ferma dove finisce il prodotto multiyear (la sua fine è letta dal
+catalogo Copernicus a ogni esecuzione). Il catalogo delle variabili (`catalog.py`) registra l'id del
+prodotto analysis-forecast, ma non lo si usa. È una scelta di metodo: reanalisi e analisi operative non sono
+la stessa serie, e aggiungere la coda cambia la SST degli ultimi mesi e quindi le ondate di calore rilevate
+dove i ritardi più recenti pesano di più. Se si decide di sì, andranno dichiarati nella specifica quale
+coda e da quando, e il manifest dovrà distinguere i giorni dei due prodotti.
