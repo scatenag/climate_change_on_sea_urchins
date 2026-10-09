@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The CSV response source** (milestone M1.3, ADR-0011, new `response_csv.py`). A response series in a
+  file the user provides, read strictly, with the format declared in the study, never guessed:
+  `delimiter`, `decimal` and `date_format` of the csv source (ISO, comma and point by default). A file
+  that does not match is refused with line, column, value and what the file looks like (a European CSV
+  with `;`, decimal commas and `31/01/2020` is told apart, ambiguous dates are said to be ambiguous);
+  also refused: no data rows, missing or repeated columns, wrong field counts, dates with a time of day,
+  non-finite numbers, a value outside its own interval, two rows in one period when rows are declared
+  aggregated, non-UTF-8 files, files over 10 MB or 200 000 rows. Problems are collected (20 shown).
+  An empty value stays a missing measurement and is counted; no month and no interval is made up.
+  `suggest_format()` reports what a file looks like (for the guided input, M1.15). The per-trial
+  aggregation is the one implementation: `common.aggregate_period` (neutral names), of which
+  `aggregate_monthly` is now a wrapper with the names `data/` has always used, bit-for-bit the same
+  output (tested against a frozen copy of the old function; golden master unchanged). Livorno's trials
+  exported to CSV, in ISO and in a European format, and read back give the monthly series of the fixture.
+
 - **Download of the daily SST for a site, from the variable catalogue** (milestone M1.2, new
   `download.py`, console script `ccsu-download-sst`). The dataset, variable and depth come from the
   catalogue, the series ends where the Copernicus catalogue says the product ends (an earlier end is

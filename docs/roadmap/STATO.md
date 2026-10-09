@@ -92,5 +92,5 @@ di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel
 
 ## Prossimo passo
 
-**M1.3 Sorgente CSV della risposta.** M1.2 è verificata sul servizio vero (9/10, workflow `verify_download.yml`): Livorno dal 2003 in 18 s, 8644 giorni uguali a `data/sst_daily.csv` (scarto massimo 3.2e-6 °C); Pisa rifiutata come cella di terra con il mare a circa 15 km; un punto del Mar Nero rifiutato senza scegliere fra entroterra e mare non coperto. La regola
+**M1.4 Costruttore del dataset (SST e risposta).** M1.3 (CSV della risposta, ADR-0011) è in PR. M1.2 è verificata sul servizio vero (9/10, workflow `verify_download.yml`): Livorno dal 2003 in 18 s, 8644 giorni uguali a `data/sst_daily.csv` (scarto massimo 3.2e-6 °C); Pisa rifiutata come cella di terra con il mare a circa 15 km; un punto del Mar Nero rifiutato senza scegliere fra entroterra e mare non coperto. La regola
 per i mesi incompleti della SST (M1.4) è approvata: un giorno mancante rende mancante il mese.
