@@ -139,15 +139,22 @@ class ResponseCsvSourceSpec(BaseModel):
     decimal: Literal[".", ","] = Field(default=".", description="Decimal separator of the numbers.")
     date_format: str = Field(
         default="%Y-%m-%d", description="strptime format of the date column (ISO by default). A file "
-        "whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing.")
+        "whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing. "
+        "%b and %B read month names in English (Jan, January), whatever the language of the system. "
+        "Two-digit years (%y) are not accepted: export with four digits.")
 
     @field_validator("date_format")
     @classmethod
     def _date_format_is_plain(cls, v: str) -> str:
-        if not _DATE_FORMAT.match(v) or "%Y" not in v or "%m" not in v:
+        if "%y" in v:
+            raise ValueError(
+                f"date_format {v!r}: %y (two-digit year) is not accepted, because the century would be decided "
+                "by the parser; export the dates with a four-digit year (%Y)")
+        has_month = any(d in v for d in ("%m", "%b", "%B"))
+        if not _DATE_FORMAT.match(v) or "%Y" not in v or not has_month:
             raise ValueError(
                 f"date_format {v!r} must use only %Y %m %d %H %M %S %b %B and the separators - / . : T and space, "
-                "and contain at least %Y and %m")
+                "and contain a four-digit year (%Y) and a month (%m, or %b / %B for month names)")
         return v
 
     @model_validator(mode="after")

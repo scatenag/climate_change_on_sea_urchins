@@ -22,6 +22,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `aggregate_monthly` is now a wrapper with the names `data/` has always used, bit-for-bit the same
   output (tested against a frozen copy of the old function; golden master unchanged). Livorno's trials
   exported to CSV, in ISO and in a European format, and read back give the monthly series of the fixture.
+  `%b` / `%B` read month names in English whatever the system locale (the reader has its own, because
+  `strptime`'s follows LC_TIME) and stand for the month; `%y` (two-digit year) is refused, with a
+  message asking for four digits; a file that is not UTF-8 is told how to save it from Excel
+  ("CSV UTF-8"). The formats `suggest_format` proposes are all accepted by the validator.
 
 - **Download of the daily SST for a site, from the variable catalogue** (milestone M1.2, new
   `download.py`, console script `ccsu-download-sst`). The dataset, variable and depth come from the

@@ -17,8 +17,12 @@ date: `01/02/2020` è il primo febbraio o il 2 gennaio, e nessuna analisi dei da
 ## Decisione
 
 - `ResponseCsvSourceSpec` dichiara `delimiter` (`,` `;` tab `|`), `decimal` (`.` `,`) e `date_format`
-  (strptime, solo direttive `%Y %m %d %H %M %S %b %B` e separatori semplici, con almeno anno e mese). Valori
-  predefiniti: virgola, punto, ISO `%Y-%m-%d`. Delimitatore e decimale non possono coincidere; la
+  (strptime, solo direttive `%Y %m %d %H %M %S %b %B` e separatori semplici, con l'anno a quattro cifre
+  `%Y` e un mese: `%m`, oppure `%b`/`%B` per i nomi dei mesi, **letti in inglese** qualunque sia la lingua del
+  sistema, con un lettore proprio perché quello di `strptime` segue il locale). L'anno a due cifre (`%y`) è
+  rifiutato, perché il secolo lo deciderebbe il parser: il messaggio chiede di esportare con quattro cifre.
+  Valori predefiniti: virgola, punto, ISO `%Y-%m-%d`. I formati che `suggest_format` può proporre sono tutti
+  accettati dal validatore (un test li tiene uniti). Delimitatore e decimale non possono coincidere; la
   risoluzione giornaliera richiede `%d`.
 - Il lettore (`response_csv.py`) è rigoroso: un file che non coincide con la dichiarazione è rifiutato, con
   riga, colonna, valore e ciò che il file sembra essere. Le date con l'ora non sono troncate; `nan`/`inf` e

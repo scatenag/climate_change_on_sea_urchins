@@ -273,7 +273,7 @@
         },
         "date_format": {
           "default": "%Y-%m-%d",
-          "description": "strptime format of the date column (ISO by default). A file whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing.",
+          "description": "strptime format of the date column (ISO by default). A file whose dates do not match is refused; dd/mm and mm/dd are never told apart by guessing. %b and %B read month names in English (Jan, January), whatever the language of the system. Two-digit years (%y) are not accepted: export with four digits.",
           "title": "Date Format",
           "type": "string"
         }

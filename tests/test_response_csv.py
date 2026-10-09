@@ -78,6 +78,94 @@ def test_the_delimiter_cannot_also_be_the_decimal_separator():
         _response(delimiter=",", decimal=",")
 
 
+# --- the suggestions and the validator say the same thing ----------------------------------------------
+
+def test_every_format_suggest_format_can_propose_is_accepted_by_the_validator():
+    from climate_change_on_sea_urchins import response_csv
+    for fmt in response_csv._DATE_CANDIDATES:
+        assert _response(date_format=fmt).source.date_format == fmt, fmt
+
+
+def test_the_month_name_stands_for_the_month_in_the_validator():
+    assert _response(date_format="%d-%b-%Y").source.date_format == "%d-%b-%Y"
+    assert _response(date_format="%d %B %Y").source.date_format == "%d %B %Y"
+
+
+@pytest.mark.parametrize("bad", ["%d-%b-%y", "%d/%m/%y", "%Y", "%d-%Y"])
+def test_two_digit_years_and_dates_without_a_month_are_refused_by_the_validator(bad):
+    with pytest.raises((StudySpecError, ValueError)) as e:
+        _response(date_format=bad)
+    if bad.endswith("%y"):
+        assert "two-digit" in str(e.value) and "four-digit" in str(e.value)
+
+
+def test_the_date_format_description_says_month_names_are_english():
+    from climate_change_on_sea_urchins.study_spec import ResponseCsvSourceSpec
+    assert "English" in ResponseCsvSourceSpec.model_fields["date_format"].description
+
+
+SHEET_STYLE = "when,value\n16-Jan-2008,10\n03-Feb-2008,12\n21-Mar-2008,8\n"
+
+
+def test_the_sheets_date_style_with_a_four_digit_year_is_suggested_and_read():
+    fmt = suggest_format(SHEET_STYLE, date_column="when", value_column="value")
+    assert fmt["date_formats"] == ["%d-%b-%Y"] and fmt["date_ambiguous"] is False and fmt["two_digit_year"] is False
+    r = _response(date_format="%d-%b-%Y", column_map={"date": "when", "value": "value"})
+    data = read_response_text(SHEET_STYLE, r)
+    assert data.series["Datetime"].tolist() == [pd.Timestamp("2008-01-01"), pd.Timestamp("2008-02-01"), pd.Timestamp("2008-03-01")]
+
+
+def test_a_two_digit_year_is_never_proposed_and_the_message_asks_for_four_digits():
+    text = "when,value\n16-Jan-08,10\n03-Feb-08,12\n"
+    fmt = suggest_format(text, date_column="when", value_column="value")
+    assert fmt["date_formats"] == [] and fmt["two_digit_year"] is True
+    r = _response(date_format="%d-%b-%Y", column_map={"date": "when", "value": "value"})
+    with pytest.raises(ResponseCsvError) as e:
+        read_response_text(text, r)
+    assert "four-digit" in str(e.value) and "line 2" in str(e.value)
+
+
+def test_two_digit_numeric_years_get_the_same_message():
+    with pytest.raises(ResponseCsvError, match="four-digit"):
+        read_response_text("date,value\n16/01/08,10\n", _response(date_format="%d/%m/%Y"))
+
+
+@pytest.mark.parametrize("name", ["Jan", "JAN", "jan", "January"])
+def test_english_month_names_are_read_whatever_their_case(name):
+    r = _response(date_format="%d-%B-%Y" if len(name) > 3 else "%d-%b-%Y", column_map={"date": "when", "value": "value"})
+    assert len(read_response_text(f"when,value\n16-{name}-2008,1\n", r).series) == 1
+
+
+def test_month_names_do_not_depend_on_the_system_locale(monkeypatch):
+    # strptime's %b follows the locale (LC_TIME); the reader's must not. Make strptime believe it runs in
+    # an Italian locale and check that English names are still read.
+    import _strptime
+    lt = _strptime.LocaleTime()
+    lt.a_month = ["", "gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+    lt.f_month = ["", "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+    monkeypatch.setattr(_strptime, "_TimeRE_cache", _strptime.TimeRE(lt))
+    monkeypatch.setattr(_strptime, "_regex_cache", {})
+    with pytest.raises(ValueError):                         # the premise: plain strptime now fails on "Jan"
+        __import__("datetime").datetime.strptime("16-Jan-2008", "%d-%b-%Y")
+    r = _response(date_format="%d-%b-%Y", column_map={"date": "when", "value": "value"})
+    assert len(read_response_text("when,value\n16-Jan-2008,1\n", r).series) == 1
+
+
+def test_italian_month_names_are_refused_and_the_message_says_english():
+    r = _response(date_format="%d-%b-%Y", column_map={"date": "when", "value": "value"})
+    with pytest.raises(ResponseCsvError) as e:
+        read_response_text("when,value\n16-Gen-2008,1\n", r)
+    assert "English" in str(e.value) and "line 2" in str(e.value)
+
+
+def test_the_non_utf8_message_names_the_excel_option():
+    with pytest.raises(ResponseCsvError) as e:
+        read_response_text(b"date,value\n2020-01-05,\xe91\n", _response())
+    msg = str(e.value)
+    assert "CSV UTF-8 (Comma delimited)" in msg and "delimitato da virgole" in msg and "Excel" in msg
+    assert "delimiter ';'" in msg   # Excel writes the separator of the system settings
+
+
 # --- one test per class of error ------------------------------------------------------------------
 
 def _problems(text, **kw):

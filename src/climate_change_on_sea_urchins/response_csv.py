@@ -41,7 +41,14 @@ MAX_BYTES = 10_000_000
 MAX_ROWS = 200_000
 MAX_PROBLEMS = 20
 _DELIMITERS = [",", ";", "\t", "|"]
-_DATE_CANDIDATES = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%Y-%m", "%d-%b-%y", "%d-%b-%Y"]
+# Formats suggest_format may propose: every one is accepted by the validator of the study (a test holds
+# the two together). No two-digit year: the century would be decided by the parser.
+_DATE_CANDIDATES = ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%Y-%m", "%d-%b-%Y"]
+_MONTH_NAMES = {name.lower(): i for i, (abbr, full) in enumerate(zip(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"],
+    ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]), 1)
+    for name in (abbr, full)}
+_TWO_DIGIT_YEAR = re.compile(r"^\d{1,2}[-/. ]([A-Za-z]{3,9}|\d{1,2})[-/. ]\d{2}$")
 _PLAIN_NUMBER = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$")
 
 
@@ -65,6 +72,20 @@ class ResponseData:
 
 # ── what a file looks like ───────────────────────────────────────────────────────────────────────
 
+def _parse_date(token: str, fmt: str) -> dt.datetime:
+    """strptime, with %b / %B read as English month names whatever the system locale (strptime's own
+    follow LC_TIME)."""
+    if "%b" in fmt or "%B" in fmt:
+        def month(m):
+            n = _MONTH_NAMES.get(m.group(0).lower())
+            if n is None:
+                raise ValueError(f"{m.group(0)!r} is not an English month name")
+            return f"{n:02d}"
+        token = re.sub(r"[A-Za-z]{3,9}", month, token)
+        fmt = fmt.replace("%b", "%m").replace("%B", "%m")
+    return dt.datetime.strptime(token, fmt)
+
+
 def _rows(text: str, delimiter: str) -> list[tuple[int, list[str]]]:
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     return [(reader.line_num, [c.strip() for c in row]) for row in reader if any(c.strip() for c in row)]
@@ -77,7 +98,7 @@ def suggest_format(text: str, *, date_column: str, value_column: str) -> dict:
     header_line = next((l for l in text.splitlines() if l.strip()), "")
     counts = {d: header_line.count(d) for d in _DELIMITERS}
     delimiter = max(counts, key=counts.get) if any(counts.values()) else None
-    out = {"delimiter": delimiter, "decimal": None, "date_formats": [], "date_ambiguous": False}
+    out = {"delimiter": delimiter, "decimal": None, "date_formats": [], "date_ambiguous": False, "two_digit_year": False}
     if delimiter is None:
         return out
     rows = _rows(text, delimiter)
@@ -91,10 +112,11 @@ def suggest_format(text: str, *, date_column: str, value_column: str) -> dict:
     elif any(re.fullmatch(r"[+-]?\d+\.\d+", v) for v in values):
         out["decimal"] = "."
     dates = [r[di] for r in body if r[di]]
+    out["two_digit_year"] = bool(dates) and all(_TWO_DIGIT_YEAR.match(d) for d in dates)
     for fmt in _DATE_CANDIDATES:
         try:
             for d in dates:
-                dt.datetime.strptime(d, fmt)
+                _parse_date(d, fmt)
         except ValueError:
             continue
         if dates:
@@ -139,7 +161,11 @@ def read_response_text(text: str | bytes, response) -> ResponseData:
         try:
             text = text.decode("utf-8-sig")
         except UnicodeDecodeError as e:
-            raise ResponseCsvError([f"the file is not UTF-8 (byte {e.start}); save it as UTF-8"]) from None
+            raise ResponseCsvError([
+                f"the file is not UTF-8 (byte {e.start}). In Excel, save it with \"Save as\" > \"CSV UTF-8 (Comma delimited)\" "
+                "(\"CSV UTF-8 (delimitato da virgole)\" in the Italian version), not plain \"CSV\". Excel writes the "
+                "separator of the system settings: with Italian settings that is ';' and the decimal ',', so declare "
+                "delimiter ';' and decimal ',' in the study."]) from None
     if not text.strip():
         raise ResponseCsvError(["the file is empty"])
 
@@ -201,12 +227,16 @@ def read_response_text(text: str | bytes, response) -> ResponseData:
         rec = {"line": line}
         tok = row[idx["date"]]
         try:
-            d = dt.datetime.strptime(tok, src.date_format)
+            d = _parse_date(tok, src.date_format)
             rec["date"] = d
         except ValueError:
             s = suggest()
             look = (f"; the dates of this file look like {', '.join(s['date_formats'])}" +
                     (" (more than one fits: say which)" if s["date_ambiguous"] else "")) if s["date_formats"] else ""
+            if s["two_digit_year"]:
+                look += "; the years have two digits, which are not accepted: export the dates with a four-digit year"
+            if "%b" in src.date_format or "%B" in src.date_format:
+                look += "; month names are read in English (Jan, January)"
             problem(f"line {line}, column {cm.date!r}: {tok!r} does not match the date format {src.date_format!r}{look}")
             continue
         for name in ["value"] + (["ci_low", "ci_high"] if cm.ci_low else []) + controls:
