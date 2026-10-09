@@ -33,9 +33,8 @@ jobs:
           cache: pip
 
       - name: Install the package with the acquisition extra
-        # h5py is installed explicitly: h5netcdf >= 1.8 made it optional and the extra does not list it
-        # (a gap in the extra itself, reported separately).
-        run: pip install -e ".[acquisition]" h5py
+        # Only the extra, as a user would install it.
+        run: pip install -e ".[acquisition]"
 
       - name: Download three points and compare
         env:

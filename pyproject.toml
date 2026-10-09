@@ -43,7 +43,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-acquisition = ["copernicusmarine", "xarray", "netcdf4", "h5netcdf"]
+acquisition = ["copernicusmarine", "xarray", "netcdf4", "h5netcdf", "h5py"]
 notebook = ["jupyter", "nbconvert"]
 test = ["pytest>=7.0"]
 

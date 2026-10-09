@@ -86,7 +86,7 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 unità del CO₂ in `fetch_copernicus.py` · #41 interpolazione dei buchi della SST · #42 rimandi a
 documenti non versionati · #43 percorsi risolti all'import negli script (tutte, tranne la #9, difetti
 noti che non bloccano M1). Chiuse l'8/10: #23 (esercitazione) e #45 (data di fine della SST, corretta
-su `main` con la #44 e sul branch del lavoro). Difetti noti non ancora in una issue: l'extra `acquisition` di `pyproject.toml` non include `h5py` (con `h5netcdf` ≥ 1.8 è opzionale e la lettura del NetCDF fallisce senza; il job di aggiornamento lo ha dalla sua installazione dei requisiti);  l'id del dataset
+su `main` con la #44 e sul branch del lavoro). Difetto noto non ancora in una issue: l'id del dataset
 di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel catalogo (quello giusto è
 `…phy-tem_anfc_4.2km_P1D-m`); il ripiego non è mai stato usato.
 

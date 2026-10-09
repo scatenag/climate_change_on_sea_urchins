@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (max |diff| 3.2e-6 degC), ending 2026-08-31; Pisa refused as a land cell with the nearest sea cell
   about 15 km away; a Black Sea point inside the domain's box refused with the message that does not
   choose between inland and an uncovered sea.
+  The `acquisition` extra now lists `h5py`: `h5netcdf` >= 1.8 made it optional, and without it the
+  NetCDF cannot be read (found by the first run of that workflow).
 
 - **Study specification, format 2, and the variable catalogue** (milestone M1.1, ADR-0010).
   `study.yaml` carries a `format_version` (absent means 1, Livorno's, unchanged; an unknown one is
