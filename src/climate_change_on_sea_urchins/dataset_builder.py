@@ -16,7 +16,8 @@ mhw_detection.py, the fill in common.impute_series), driven by what the study de
 - Heatwaves: Hobday et al. (2016) on the daily SST, with the climatology baseline the study declares, which
   the SST must cover in full. The detection needs a continuous daily series: a gap inside it is refused
   with the days named (what to do about gaps is a method choice, issue #41); missing days at the very ends
-  are just where the series starts and stops.
+  are just where the series starts and stops. The annual table gains `sst_days` and `days_in_year`: the
+  detection's own table does not say how much of a year the SST covers, so a partial year looked quiet.
 
 Nothing here reads or writes data/: the inputs arrive as frames and the outputs are written where the
 caller says (`write_dataset`).
@@ -127,6 +128,12 @@ def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, base
     excluded_info = [m for m in temp_report["incomplete_months"] if m["month"] in set(mhw_monthly.loc[dropped, "Datetime"].dt.strftime("%Y-%m"))]
     mhw_monthly = mhw_monthly[~dropped].reset_index(drop=True)
     mhw_annual = mhw_detection.to_annual(events)
+    if not mhw_annual.empty:
+        # mhw_detection's table does not say how much of each year the SST covers, so a partial year looks
+        # like a quiet one: add the days covered and the days of the year (the table itself is unchanged).
+        covered = daily["Datetime"].dt.year.value_counts()
+        mhw_annual["sst_days"] = mhw_annual["year"].map(covered).fillna(0).astype(int)
+        mhw_annual["days_in_year"] = mhw_annual["year"].map(lambda y: 366 if calendar.isleap(int(y)) else 365)
 
     first = min(temperature["Datetime"].min(), resp["Datetime"].min())
     last = max(temperature["Datetime"].max(), resp["Datetime"].max())

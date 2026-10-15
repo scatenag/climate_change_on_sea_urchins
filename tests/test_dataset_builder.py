@@ -147,6 +147,22 @@ def test_an_incomplete_first_month_is_reported_in_the_coverage():
     assert [m["month"] for m in ds.coverage["temperature"]["incomplete_months"]] == ["2002-12"]
 
 
+def test_each_year_of_the_annual_table_says_how_many_days_the_sst_covers():
+    # A partial last year is recognisable: Jan 1 to Sep 30 2008 is 274 of 366 days, and its events
+    # (here one in August) are counted over those days only.
+    sst = _sst("2003-01-01", "2008-09-30", hot=[("2005-07-01", "2005-07-20", 4.0), ("2008-08-01", "2008-08-20", 4.0)])
+    ds = _build(sst, _response(["2004-03-01"], [10.0]), imputation=None)
+    a = ds.mhw_annual.set_index("year")
+    assert a.loc[2008, "sst_days"] == 274 and a.loc[2008, "days_in_year"] == 366
+    assert a.loc[2005, "sst_days"] == 365 and a.loc[2005, "days_in_year"] == 365
+
+
+def test_an_annual_table_without_events_stays_empty():
+    ds = _build(_sst("2003-01-01", "2006-12-31", amp=8.0, seed=3), _response(["2004-03-01"], [10.0]), imputation=None)
+    if len(ds.mhw_events) == 0:
+        assert ds.mhw_annual.empty
+
+
 def test_a_heat_spell_is_found():
     ds = _build(_long_sst(), _response(["2004-03-01"], [10.0]), imputation=None)
     assert len(ds.mhw_events) >= 1
@@ -219,6 +235,9 @@ def test_livornos_heatwave_catalogue_is_the_fixtures(livorno):
                              (ds.mhw_monthly, "mhw_monthly.csv", dict(parse_dates=["Datetime"])),
                              (ds.mhw_annual, "mhw_annual.csv", {})]:
         ref = pd.read_csv(FIXTURE / theirs, **kw)
+        if theirs == "mhw_annual.csv":      # the builder adds the days the SST covers in each year; mhw_detection's table has not
+            assert {"sst_days", "days_in_year"} <= set(ours.columns)
+            ours = ours.drop(columns=["sst_days", "days_in_year"])
         pd.testing.assert_frame_equal(ours.reset_index(drop=True), ref, check_exact=False, rtol=1e-12, atol=1e-12)
 
 

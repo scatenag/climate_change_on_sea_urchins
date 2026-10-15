@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `load_data()`'s response (two passes, as Livorno's study declares) on every month of the builder (the
   fixture's grid has one month more, from the environment table). Unlike `load_data`, which fills
   Temperature gaps from partial months of the SST, the builder leaves them missing.
+  The annual heatwave table gains `sst_days` and `days_in_year` (mhw_detection's own table, and Livorno's
+  files, are unchanged), so a partial year is recognisable.
 
 - **The CSV response source** (milestone M1.3, ADR-0011, new `response_csv.py`). A response series in a
   file the user provides, read strictly, with the format declared in the study, never guessed:
