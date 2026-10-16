@@ -86,10 +86,10 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 unità del CO₂ in `fetch_copernicus.py` · #41 interpolazione dei buchi della SST · #42 rimandi a
 documenti non versionati · #43 percorsi risolti all'import negli script (tutte, tranne la #9, difetti
 noti che non bloccano M1). Chiuse l'8/10: #23 (esercitazione) e #45 (data di fine della SST, corretta
-su `main` con la #44 e sul branch del lavoro). Difetto noto non ancora in una issue: l'id del dataset
+su `main` con la #44 e sul branch del lavoro). Difetto noto non ancora in una issue (aggiunto il 16/10): `ccsu-dashboard` (`_launch_dashboard.py`) lancia `dashboard.py` come script e fallisce con un import relativo, già prima di MA.1; funziona solo `streamlit run app.py`. Difetto noto non ancora in una issue: l'id del dataset
 di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel catalogo (quello giusto è
 `…phy-tem_anfc_4.2km_P1D-m`); il ripiego non è mai stato usato.
 
 ## Prossimo passo
 
-**App minima (MA.1–MA.5), piano approvato il 16/10 (#59).** La fetta verticale è chiusa (M1.6 fusa, ADR-0013: ritardo noto ritrovato in 100 semi su 100 sulla fixture e in 6 casi su 6 su SST vera in due punti mai usati). Si parte da MA.1 (ingresso, contesto di sessione, instradamento). Baseline per uno studio nuovo: 1991–2020, modificabile, copertura letta dal catalogo (ADR-0014); fissa o mobile per le metriche delle ondate: aperto prima di M1.9 (ADR-0000 voce 21). Dopo MA.5 si decide quali analisi di Livorno entrano nel motore generico (`MILESTONE-M1.md`, dopo la tabella MA). Il driver della CCF generica è l'anomalia mensile della SST (ADR-0012; tasso nullo sopra il 5%: ADR-0000 voce 20).
+**App minima (MA.1–MA.5), piano approvato il 16/10 (#59).** La fetta verticale è chiusa (M1.6 fusa, ADR-0013: ritardo noto ritrovato in 100 semi su 100 sulla fixture e in 6 casi su 6 su SST vera in due punti mai usati). MA.1 (ingresso, contesto di sessione, instradamento; ADR-0015) è in PR; segue MA.2 (passo 1: sito, periodo, credenziali, download). Baseline per uno studio nuovo: 1991–2020, modificabile, copertura letta dal catalogo (ADR-0014); fissa o mobile per le metriche delle ondate: aperto prima di M1.9 (ADR-0000 voce 21). Dopo MA.5 si decide quali analisi di Livorno entrano nel motore generico (`MILESTONE-M1.md`, dopo la tabella MA). Il driver della CCF generica è l'anomalia mensile della SST (ADR-0012; tasso nullo sopra il 5%: ADR-0000 voce 20).

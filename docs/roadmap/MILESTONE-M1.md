@@ -189,9 +189,10 @@ analisi oltre la CCF (M1.7–M1.9): chi chiude la scheda perde il lavoro, e l'ap
 - *`app.py` diventa l'instradatore.* A ogni esecuzione chiama `app_entry.render()`: mostra la scelta e, per i
   ricci, esegue **identico il blocco di oggi** (lock, rimozione dal `sys.modules`, `import dashboard`) e solo in
   quel ramo. Per i propri dati chiama le funzioni dei tre passi. L'indirizzo d'ingresso per Streamlit Cloud
-  resta `app.py`; `ccsu-dashboard` continua a funzionare.
+  resta `app.py`. (`ccsu-dashboard` non funzionava già prima: lancia `dashboard.py` come script e fallisce con un import
+  relativo; difetto noto, non toccato, segnalato in STATO.)
 - *Unica modifica a `dashboard.py`:* `st.set_page_config` passa ad `app.py` (deve essere il primo comando
-  d'interfaccia e l'ingresso ora ne scrive prima). Il branch del lavoro ha la sua copia e non è toccato.
+  d'interfaccia e l'ingresso ora ne scrive prima; fatto in MA.1). Il branch del lavoro ha la sua copia e non è toccato.
 - *Il lock per i propri dati.* Si prende **solo attorno ai calcoli numerici brevi in processo** (lettura e
   parsing del CSV, rilevamento delle ondate per la visualizzazione) e mai durante il download (decine di
   secondi) né durante l'attesa del calcolo, o ogni altra sessione si fermerebbe. Il calcolo vero gira in un
