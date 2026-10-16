@@ -1,9 +1,11 @@
 """
-Climate Change on Sea Urchins — Streamlit Dashboard entry point.
+Climate Change on Sea Urchins — Streamlit app entry point.
 
-The dashboard itself lives in the installable package, at
-src/climate_change_on_sea_urchins/dashboard.py. This file exists so that
-`streamlit run app.py` keeps working from a repo checkout (and so the
+The app lives in the installable package: the entry (the choice between the
+sea-urchin case and the user's own data, and the study context of the session)
+in src/climate_change_on_sea_urchins/app_entry.py, and the sea-urchin case's
+dashboard in src/climate_change_on_sea_urchins/dashboard.py. This file exists
+so that `streamlit run app.py` keeps working from a repo checkout (and so the
 existing Streamlit Community Cloud deployment, which points at this exact
 path, requires no reconfiguration).
 
@@ -12,7 +14,21 @@ Equivalent, once the package is installed (`pip install -e .`):
 """
 import sys
 
+import streamlit as st
+
 import climate_change_on_sea_urchins as _ccsu  # never touched by the deletion loop below; see its RERUN_LOCK docstring
+from climate_change_on_sea_urchins import app_entry  # functions only: imported once, its interface runs in render()
+
+# The first Streamlit command of every run (it used to be dashboard.py's; the entry is drawn before the dashboard runs).
+# The icon is an emoji on purpose: an image icon hung the app on Streamlit Cloud's media-file cleanup.
+st.set_page_config(
+    page_title="Climate Response Explorer",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+_choice = app_entry.render()
 
 # Streamlit re-executes THIS file's bytecode on every rerun, but a plain
 # `import climate_change_on_sea_urchins.dashboard` is only a fresh import
@@ -38,8 +54,12 @@ import climate_change_on_sea_urchins as _ccsu  # never touched by the deletion l
 # a theoretical one. Holding the lock through the reimport (which runs
 # dashboard.py's entire top-level body -- the whole app) also prevents two
 # reruns from concurrently executing heavy numpy/scipy/pandas C calls.
-with _ccsu.RERUN_LOCK:
-    for _mod_name in [m for m in sys.modules if m.startswith("climate_change_on_sea_urchins.dashboard")]:
-        del sys.modules[_mod_name]
+# The sea-urchin case runs today's dashboard, unchanged, and only in this branch: the lock and the forced reimport
+# belong to a module that has its whole interface in its body. The user's own data are drawn by app_entry.render()
+# above (functions called at every run, no reimport needed, and no lock held for a download or a wait).
+if _choice == app_entry.RICCI:
+    with _ccsu.RERUN_LOCK:
+        for _mod_name in [m for m in sys.modules if m.startswith("climate_change_on_sea_urchins.dashboard")]:
+            del sys.modules[_mod_name]
 
-    import climate_change_on_sea_urchins.dashboard  # noqa: F401
+        import climate_change_on_sea_urchins.dashboard  # noqa: F401

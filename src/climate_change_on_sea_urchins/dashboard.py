@@ -53,12 +53,9 @@ from statsmodels.stats.multitest import multipletests
 # files this page registered (this icon + the logo below) -- the CSV
 # download's file is never involved. An emoji page_icon never touches
 # MediaFileManager at all, sidestepping whatever the underlying bug is.
-st.set_page_config(
-    page_title="Climate Response Explorer",
-    page_icon="🌍",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
+# The page configuration (title, emoji icon, wide layout, collapsed sidebar) is set by app.py, which draws the entry
+# before this module runs and so must make the first Streamlit command. The emoji icon is not an image on purpose
+# (see the note in app.py's history: an image icon hung the app on Streamlit Cloud's media-file cleanup).
 
 
 EXPORT_URL = EC50_EXPORT_URL
