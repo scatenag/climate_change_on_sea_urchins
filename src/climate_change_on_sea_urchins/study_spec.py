@@ -325,6 +325,13 @@ class MhwClimatologySpec(BaseModel):
     baseline_end_year: int
 
 
+class AnalysisSpec(BaseModel):
+    """Choices of the lagged-correlation analysis that were constants in the code (invariant 6)."""
+    model_config = ConfigDict(extra="forbid")
+    max_lag_months: int = Field(default=12, ge=1, le=60, description="Lags 0..max_lag_months are tested; the "
+                                "number of tests declared in the results comes from it.")
+
+
 class StudySpec(BaseModel):
     """Top-level study specification: everything a case declares about
     itself. See examples/livorno_paracentrotus/study.yaml for the current
@@ -344,6 +351,7 @@ class StudySpec(BaseModel):
     responses: list[ResponseSpec]
     environment: list[VariableSpec | EnvironmentRef] = Field(default_factory=list)
     windows: list[WindowSpec] = Field(default_factory=list)
+    analysis: AnalysisSpec = Field(default_factory=AnalysisSpec)
 
     @field_validator("format_version")
     @classmethod

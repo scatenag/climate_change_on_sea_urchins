@@ -1,5 +1,21 @@
 {
   "$defs": {
+    "AnalysisSpec": {
+      "additionalProperties": false,
+      "description": "Choices of the lagged-correlation analysis that were constants in the code (invariant 6).",
+      "properties": {
+        "max_lag_months": {
+          "default": 12,
+          "description": "Lags 0..max_lag_months are tested; the number of tests declared in the results comes from it.",
+          "maximum": 60,
+          "minimum": 1,
+          "title": "Max Lag Months",
+          "type": "integer"
+        }
+      },
+      "title": "AnalysisSpec",
+      "type": "object"
+    },
     "ContaminantSpec": {
       "additionalProperties": false,
       "description": "The substance an ecotoxicological endpoint is about; analyses specific to a substance\n(copper speciation) declare they need it.",
@@ -617,6 +633,9 @@
       },
       "title": "Windows",
       "type": "array"
+    },
+    "analysis": {
+      "$ref": "#/$defs/AnalysisSpec"
     }
   },
   "required": [
