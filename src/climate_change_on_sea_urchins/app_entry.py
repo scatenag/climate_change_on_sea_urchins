@@ -16,7 +16,7 @@ import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import streamlit as st
@@ -40,6 +40,7 @@ class SessionContext:
     session_id: str
     workdir: Path
     label: str | None = None
+    data: dict = field(default_factory=dict)      # what the steps have produced in this session (never credentials)
 
     @classmethod
     def new(cls, label: str | None = None) -> "SessionContext":
@@ -96,6 +97,13 @@ def _change_choice() -> None:
     """Back to the entry, leaving nothing of the other way: every key but the session's own goes."""
     for key in [k for k in st.session_state if k not in KEEP_KEYS]:
         del st.session_state[key]
+    ctx = st.session_state.get(CONTEXT_KEY)
+    if ctx is not None:                      # what the steps produced goes too (the catalogue's coverage is public: it stays)
+        for key in [k for k in ctx.data if k != "coverage"]:
+            del ctx.data[key]
+        for child in ctx.workdir.iterdir():
+            if child.name != ALIVE_FILE:
+                shutil.rmtree(child, ignore_errors=True) if child.is_dir() else child.unlink(missing_ok=True)
     st.session_state[CHOICE_KEY] = None
 
 

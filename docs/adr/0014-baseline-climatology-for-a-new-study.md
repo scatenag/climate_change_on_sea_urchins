@@ -26,8 +26,9 @@ proprietario, 16/10/2026).
   catalogo a ogni esecuzione, come già si fa per la fine (M1.2). Se la copertura non comprende il 1991, l'app lo
   dice e propone **il primo trentennio coperto**; se è più corta di trent'anni propone tutto il periodo coperto
   con l'avviso della lunghezza.
-- Modificabile dall'utente entro gli anni coperti, con due avvisi: baseline più corta di 15 anni (soglia al 90°
-  percentile rumorosa), e baseline che non finisce prima dell'ultimo anno coperto (nessun anno «dopo»).
+- Modificabile dall'utente entro gli anni coperti. **Errore** sotto i 10 anni (decisione provvisoria di MA.2, ADR-0016: con
+  pochi anni il 90° percentile di un giorno è fatto dei valori stessi); avvisi: baseline più corta di 15 anni (soglia
+  rumorosa) e baseline che non finisce prima dell'ultimo anno coperto (nessun anno «dopo»).
 - Il download parte dal più antico fra l'inizio della baseline e il primo mese della serie di risposta meno
   `analysis.max_lag_months` (i ritardi usano la temperatura dei mesi precedenti), entro l'inizio della copertura.
 - Livorno resta con la baseline che dichiara (2003–2012): è una scelta diversa, scritta nel suo studio, e il

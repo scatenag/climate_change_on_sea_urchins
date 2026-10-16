@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Step 1 of the user's own data** (milestone MA.2, new `step_site.py` and `baseline.py`, ADR-0016). Site (latitude,
+  longitude, name, nothing pre-filled), baseline years (proposed 1991–2020 when the product covers them, else the first
+  thirty covered years, from the coverage read in the Copernicus catalogue; ADR-0014), the optional first year of the
+  measurements, and the credentials in a self-clearing form; the daily SST is downloaded in the app's own process without
+  holding the global lock, written with its manifest (and the download duration) in the session folder, and shown with the
+  marine heatwaves detected on it. Refusals come with their reason before any download call (outside the domain, baseline
+  not covered, land cell, sea the product does not cover). The credentials are in no file, state, cache, log, environment
+  variable or message (tests, seen failing on sabotage). A baseline under 10 years is refused (provisional, ADR-0016). The
+  masking of messages (`download._mask`) now covers one secret inside the other, quoted and URL-encoded forms, and withholds a
+  message when a credential is too short to be masked. `requirements.txt` now installs the `acquisition` extra, pinned to
+  ranges in `pyproject.toml`.
+  `scripts/verify_home_clean.py` (a step of `verify_slice.yml`) checks with the real toolbox that `describe` and `subset`
+  write nothing in the home directory.
 - **App entry** (milestone MA.1, new `app_entry.py` and `own_data.py`, ADR-0015). `app.py` now draws an entry
   with the choice between the sea-urchin case (today's dashboard, unchanged, run with its lock and forced
   reimport in that branch only) and the user's own data (three steps, present and empty until MA.2–MA.4). The
