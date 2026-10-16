@@ -20,6 +20,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   previous month imputed; that pipeline is unchanged). One driver in this version: the monthly SST.
   Refuses, with the reason, a format-1 study, a non-CSV response source, more than one site or response,
   and a study without `sst_daily`.
+- **The driver of `ccsu-run-study` is the monthly SST anomaly** (`anomaly_mean`, against the climatology the study
+  declares), not the temperature (owner's decision of 2026-10-16, ADR-0012). With the temperature, a response with
+  only a seasonal cycle and no link to the SST had at least one lag significant after BH in 83–97% of simulations
+  (on the anomaly: 5–6%). The correlation therefore looks for the non-seasonal association only: a dependence that
+  goes through the seasonal part of the temperature alone is not seen by it. `ccf.csv` and `run.json` say
+  «SST anomaly» and carry the baseline. Known limit (ADR-0000 item 20): with an independent response the share of
+  analyses with a lag significant after BH is 6–8% rather than 5%, caused by the autocorrelation of the first
+  differences (per-lag uncorrected p<0.05 in 5.6–6.3% of cases, 5% once either side is permuted).
 - **`analysis.max_lag_months`** in the study file (default 12, 1–60); Livorno declares 12, equal to
   `common.TAU_MAX` (a test keeps them equal). `mhw_analysis.ccf_at_lags` is the lag-parametrised core of
   `compute_ccf` (same result).

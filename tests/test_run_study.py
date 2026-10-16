@@ -103,7 +103,7 @@ def test_runs_from_the_study_and_the_inputs_to_results_and_provenance(study):
     ccf = pd.read_csv(out / "ccf.csv")
     assert list(ccf.columns) == ["driver", "response", "lag", "n", "spearman_r", "p_value", "p_bh", "r_toward_adverse"]
     assert ccf["lag"].tolist() == list(range(13))
-    assert (ccf["driver"] == "Temperature").all() and (ccf["response"] == "Fertility").all()
+    assert (ccf["driver"] == "SST anomaly").all() and (ccf["response"] == "Fertility").all()
 
 
 def test_the_number_of_tests_is_declared_and_comes_from_max_lag(tmp_path):
@@ -157,8 +157,9 @@ def test_provenance_records_study_inputs_code_and_parameters(study):
     assert run["inputs"]["sst_daily.csv"]["sha256"] == hashlib.sha256((inputs / "sst_daily.csv").read_bytes()).hexdigest()
     assert run["download_manifest"]["dataset"]["version"] == "202511"
     p = run["parameters"]
-    assert p["driver"] == "Temperature" and p["transform"] == "first differences" and p["pairs"] == "consecutive months, both real"
+    assert p["driver"] == "SST anomaly" and p["transform"] == "first differences" and p["pairs"] == "consecutive months, both real"
     assert p["correction"] == "Benjamini-Hochberg" and p["response_label"] == "Fertility"
+    assert p["climatology_baseline"] == [2003, 2004]      # the anomaly is against the climatology the study declares
     assert run["coverage"]["temperature"]["rule"].startswith("a month with any missing")
     assert "climate_change_on_sea_urchins" in run["versions"]
     text = json.dumps(run)
@@ -168,6 +169,39 @@ def test_provenance_records_study_inputs_code_and_parameters(study):
 def test_the_dataset_is_written_next_to_the_results(study):
     _, out = _run(study)
     assert (out / "dataset" / "monthly.csv").exists() and (out / "dataset" / "dataset.manifest.json").exists()
+
+
+# --- the driver is the SST anomaly -------------------------------------------------------------------
+
+def test_the_driver_is_the_anomaly_the_dataset_builder_writes(study):
+    from scipy import stats
+    _, out = _run(study)
+    monthly = pd.read_csv(out / "dataset" / "monthly.csv", parse_dates=["Datetime"])
+    mhw = pd.read_csv(out / "dataset" / "mhw_monthly.csv", parse_dates=["Datetime"])
+    anomaly = monthly[["Datetime"]].merge(mhw, on="Datetime", how="left")["anomaly_mean"].to_numpy()
+    dx = np.r_[np.nan, np.diff(anomaly)]
+    dy = consecutive_real_difference(monthly, "response", "response_imputed")
+    ccf = pd.read_csv(out / "ccf.csv")
+    for lag in (0, 3):
+        x, y = (dx, dy) if lag == 0 else (dx[:-lag], dy[lag:])
+        ok = np.isfinite(x) & np.isfinite(y)
+        r, p = stats.spearmanr(x[ok], y[ok])
+        row = ccf[ccf["lag"] == lag].iloc[0]
+        assert row["n"] == ok.sum() and row["spearman_r"] == pytest.approx(r) and row["p_value"] == pytest.approx(p)
+
+
+def test_a_purely_seasonal_response_gives_no_significant_lag(tmp_path):
+    """The seasonal cycle of the temperature is not the driver: a response that only has its own seasonal cycle,
+    independent of the anomaly, must not come out associated at several lags (it does with the raw temperature)."""
+    spec = _write_study(tmp_path / "study", imputation=False)
+    _write_inputs(tmp_path / "inputs")
+    months = pd.date_range("2003-06-01", "2008-06-01", freq="MS")
+    rng = np.random.default_rng(5)
+    value = 30 + 8 * np.sin(2 * np.pi * months.month / 12 + 0.7) + rng.normal(0, 1.0, len(months))
+    pd.DataFrame({"date": months.strftime("%Y-%m-%d"), "value": value}).to_csv(tmp_path / "inputs" / "response.csv", index=False)
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 0
+    ccf = pd.read_csv(tmp_path / "out" / "ccf.csv")
+    assert ccf["n"].min() >= 40 and (ccf["p_bh"] >= 0.05).all()
 
 
 # --- consecutive real pairs -------------------------------------------------------------------------
@@ -194,7 +228,9 @@ def test_pairs_are_counted_in_the_results(tmp_path):
     run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK)
     monthly = pd.read_csv(tmp_path / "out" / "dataset" / "monthly.csv", parse_dates=["Datetime"])
     real = ~monthly["response_imputed"].astype(bool).to_numpy() & monthly["response"].notna().to_numpy()
-    pairs = real & np.r_[False, real[:-1]] & monthly["Temperature"].notna().to_numpy() & np.r_[False, monthly["Temperature"].notna().to_numpy()[:-1]]
+    anomaly = monthly[["Datetime"]].merge(pd.read_csv(tmp_path / "out" / "dataset" / "mhw_monthly.csv", parse_dates=["Datetime"]),
+                                          on="Datetime", how="left")["anomaly_mean"].notna().to_numpy()
+    pairs = real & np.r_[False, real[:-1]] & anomaly & np.r_[False, anomaly[:-1]]
     assert pd.read_csv(tmp_path / "out" / "ccf.csv").query("lag == 0")["n"].iloc[0] == int(pairs.sum())
 
 

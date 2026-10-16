@@ -10,7 +10,12 @@ at t, lags 0..`analysis.max_lag_months` of the study, on pairs of **consecutive 
 (a real measurement, not an imputed one) whatever imputation the study declares: a difference with an
 imputed end is not an observation. Benjamini-Hochberg over the lags performed. The number of tests is
 declared in `run.json`; a lag with fewer than MIN_PAIRS pairs is listed there with its reason, not dropped.
-This slice has one driver (the monthly SST temperature); the heatwave metrics join later (M1.9).
+
+The driver is the **monthly SST anomaly** (`anomaly_mean` of the dataset builder: the monthly mean of the daily
+anomalies against the climatology of the baseline years the study declares), not the temperature: with the
+temperature the seasonal cycle alone makes several lags significant (ADR-0012). So this correlation looks for
+the non-seasonal association only: a dependence that goes through the seasonal part of the temperature alone
+is not seen by it. The heatwave metrics join later (M1.9).
 
 Limit accepted for milestone M1 (docs/adr/0000, item 19): `common` loads the Livorno study when it is
 imported, so this command runs in a process where that state exists. Nothing on the path of this command may
@@ -41,7 +46,7 @@ from .study_spec import load_study
 
 STEPS = ["load_study", "read_response", "read_sst", "build_dataset", "correlate", "write_results"]
 MIN_PAIRS = 10        # a lag with fewer pairs is not tested (the rule of mhw_analysis.ccf_at_lags)
-DRIVER = "Temperature"
+DRIVER = "SST anomaly"
 SST_FILE = "sst_daily.csv"
 SST_MANIFEST = "sst_daily.manifest.json"
 
@@ -164,7 +169,8 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
 
         begin("correlate")
         monthly = ds.monthly
-        frame = pd.DataFrame({DRIVER: monthly[DRIVER].diff(),
+        anomaly = monthly[["Datetime"]].merge(ds.mhw_monthly[["Datetime", "anomaly_mean"]], on="Datetime", how="left")["anomaly_mean"]
+        frame = pd.DataFrame({DRIVER: anomaly.diff(),
                               "response": consecutive_real_difference(monthly, "response", "response_imputed")})
         raw = mhw_analysis.ccf_at_lags(frame, DRIVER, ["response"], max_lag)
         ok = raw["p_value"].notna()
@@ -215,7 +221,10 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
 
 def main(argv: list[str] | None = None) -> int:
     """`ccsu-run-study STUDY.yaml --inputs FOLDER [--out FOLDER]`."""
-    ap = argparse.ArgumentParser(prog="ccsu-run-study", description=main.__doc__)
+    ap = argparse.ArgumentParser(prog="ccsu-run-study", description=main.__doc__, epilog=(
+        "The correlation is between the first differences of the monthly SST anomaly (against the climatology the "
+        "study declares) and of the response, on consecutive real months. It looks for the non-seasonal association "
+        "only: a dependence that goes through the seasonal part of the temperature alone is not seen."))
     ap.add_argument("study", type=Path)
     ap.add_argument("--inputs", type=Path, required=True, help="folder with the response CSV and sst_daily.csv")
     ap.add_argument("--out", type=Path, default=None, help="default: results/<study id>")
