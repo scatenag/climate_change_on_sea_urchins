@@ -47,12 +47,15 @@ pip install -e .
 ```
 
 This installs the `climate_change_on_sea_urchins` package (analysis pipeline + dashboard)
-and two console scripts:
+and console scripts:
 
 ```bash
 ccsu-run-pipeline   # re-run the full statistical pipeline, populating results/
 ccsu-dashboard      # launch the Streamlit dashboard (equivalent to streamlit run app.py)
+ccsu-run-study STUDY.yaml --inputs DIR   # generic study: SST anomaly vs response, lagged correlation
 ```
+
+`ccsu-run-study` runs a generic study (format 2) from a folder with the response CSV and the downloaded SST. It correlates the first differences of the monthly SST anomaly (against the climatology the study declares) with those of the response, at lags 0 to `analysis.max_lag_months`, on pairs of consecutive real months, with Benjamini–Hochberg correction. **It looks only for the non-seasonal association: a dependence that goes through the seasonal part of the temperature alone is not seen by it.** It runs from a checkout of this repository (ADR-0012).
 
 Or use it as a library:
 

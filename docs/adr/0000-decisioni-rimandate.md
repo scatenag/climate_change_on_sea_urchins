@@ -325,3 +325,25 @@ statico che vieta quei riferimenti nel codice del comando e da un test che confr
 in processi con studi diversi caricati (ADR-0012). Separare davvero tocca ogni modulo della pipeline di
 Livorno e il golden master: è una decisione di struttura, non un dettaglio di M1.5. Da riprendere se il
 pacchetto deve essere installato da PyPI (D2) o se i due test diventano fragili.
+
+---
+
+## 20. Tasso di falsi positivi della CCF sull'anomalia, sopra il livello nominale
+
+**Domanda:** come far sì che la quota di analisi con almeno un ritardo significativo dopo BH, quando la risposta
+non dipende dalla SST, resti al 5% (V3.2).
+
+**Contesto:** nella simulazione nulla della CCF generica (`ccsu-run-study`, driver anomalia mensile della SST,
+risposta AR(1) indipendente, circa metà dei mesi mancanti, 2000 ripetizioni; `drafts/misura-m1-6-potenza/potenza3.py`)
+la quota di ripetizioni con almeno un ritardo BH<0.05 è 6.6% con mancanti indipendenti e 7.4% in sequenze (6.2% e
+7.9% nella misura precedente, 1000 ripetizioni). **Causa misurata:** il p di ogni singolo Spearman, senza alcuna
+correzione, è sotto 0.05 nel 5.6% (indipendenti) e 6.3% (sequenze) dei casi, quindi il difetto è già nel test per
+ritardo e non in BH. Le differenze prime sono autocorrelate (autocorrelazione a ritardo 1: −0.17 per l'anomalia, −0.35
+per la risposta, entrambe negative: il prodotto è positivo e la varianza di r cresce). Permutando le differenze del
+driver, o quelle della risposta, la quota per ritardo torna a 5.0% e 4.7–5.0%; permutandole entrambe (controllo) a
+4.8–4.9%, e la quota di analisi con almeno un ritardo BH<0.05 a 4.0–5.2%. La correlazione fra ritardi (positiva) non
+invalida BH.
+
+**Da decidere:** un p che tenga conto dell'autocorrelazione (permutazione a blocchi, o un modello nullo che la
+conservi), o la dichiarazione del limite in ogni risultato. Nessun rimedio in M1: il tasso è mite (da 1 a 3 punti
+percentuali sopra il nominale) ed è registrato qui.
