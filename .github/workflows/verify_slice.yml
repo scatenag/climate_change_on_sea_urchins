@@ -36,6 +36,14 @@ jobs:
       - name: Install the package with the acquisition extra
         run: pip install -e ".[acquisition]"
 
+      - name: The real toolbox writes nothing in the home directory (MA.2)
+        # describe and subset as the generic app calls them, credentials as arguments only; any file created in
+        # the home directory, a cache included, fails the step and is listed.
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/verify_home_clean.py "$RUNNER_TEMP/home-check"
+
       - name: Download, generate, run and verify
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
@@ -47,5 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: slice-check
-          path: ${{ runner.temp }}/slice-check
+          path: |
+            ${{ runner.temp }}/slice-check
+            ${{ runner.temp }}/home-check
           if-no-files-found: warn

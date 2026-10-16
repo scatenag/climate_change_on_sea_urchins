@@ -16,7 +16,7 @@ import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import streamlit as st
@@ -40,6 +40,7 @@ class SessionContext:
     session_id: str
     workdir: Path
     label: str | None = None
+    data: dict = field(default_factory=dict)      # what the steps have produced in this session (never credentials)
 
     @classmethod
     def new(cls, label: str | None = None) -> "SessionContext":

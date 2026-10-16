@@ -1,7 +1,8 @@
 # This project's own package (src/climate_change_on_sea_urchins/), which
 # provides both the analysis pipeline and the dashboard (app.py imports it).
-# Editable install: pip/Streamlit Cloud build this from pyproject.toml.
--e .
+# Editable install: pip/Streamlit Cloud build this from pyproject.toml. The `acquisition` extra is the download of the
+# user's sea-surface temperature in the generic app (see the NOTE at the end).
+-e .[acquisition]
 
 # Core scientific stack
 # pandas pinned below 3.0: that major bump (mandatory copy-on-write, many
@@ -72,8 +73,7 @@ pyarrow>=7.0,<26
 # Testing
 pytest>=7.0
 
-# NOTE: copernicusmarine, xarray, netcdf4 are NOT listed here.
-# They are only needed locally to run the data download scripts.
-# The Streamlit app reads only precomputed CSVs.
-# To install locally for data download:
-#   pip install copernicusmarine xarray netcdf4 h5netcdf
+# NOTE: copernicusmarine, xarray, netcdf4, h5netcdf and h5py come in through the `acquisition` extra of the package
+# (-e .[acquisition] above): the generic app downloads the sea-surface temperature from Copernicus Marine with the
+# user's own credentials (MA.2, docs/roadmap/MILESTONE-M1.md). The credentials are passed to the calls as arguments and
+# never written anywhere; tests/test_step_site.py and scripts/verify_home_clean.py check it.

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from climate_change_on_sea_urchins import app_entry, own_data
+from climate_change_on_sea_urchins import app_entry, own_data, step_site
 
 ROOT = Path(__file__).resolve().parent.parent
 PKG = ROOT / "src" / "climate_change_on_sea_urchins"
@@ -25,6 +25,7 @@ def _no_credentials_and_private_sessions_root(monkeypatch, tmp_path):
     for var in [v for v in os.environ if v.startswith("COPERNICUSMARINE")]:
         monkeypatch.delenv(var)
     monkeypatch.setattr(app_entry, "SESSIONS_ROOT", tmp_path / "sessions")
+    monkeypatch.setattr(step_site, "acquisition_available", lambda: False)      # no toolbox, no network in these tests
 
 
 def _app():
