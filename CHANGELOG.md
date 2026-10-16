@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **App entry** (milestone MA.1, new `app_entry.py` and `own_data.py`, ADR-0015). `app.py` now draws an entry
+  with the choice between the sea-urchin case (today's dashboard, unchanged, run with its lock and forced
+  reimport in that branch only) and the user's own data (three steps, present and empty until MA.2–MA.4). The
+  study context of a session lives in `st.session_state` and is passed to the pieces explicitly; each session has
+  a working folder under the system temporary folder, removed when the session has not been seen for 6 hours
+  (checked when any session starts) or with *Delete my data*. The page configuration moved from `dashboard.py` to
+  `app.py` (the entry is drawn first). The new modules have only functions, read nothing of the loaded study and
+  use no `st.cache_*`; tests forbid it.
 - **Known-truth series** (milestone M1.6, new `known_truth.py`, ADR-0013). `python -m
   climate_change_on_sea_urchins.known_truth make` writes a study folder whose response depends on the monthly SST
   anomaly at a chosen lag (3 months, 50% of the variance, negative sign) and has the characters of the sea-urchin
