@@ -151,10 +151,10 @@ def read_response(path: str | Path, response) -> ResponseData:
     return read_response_text(path.read_bytes(), response)
 
 
-def read_response_text(text: str | bytes, response) -> ResponseData:
-    src = response.source
-    if src.type != "csv":
-        raise ResponseCsvError([f"the response {response.id!r} has a {src.type!r} source, not a csv one"])
+def decode_text(text: str | bytes) -> str:
+    """The text of a file: bytes are checked against the size limit and read as UTF-8 (a BOM is dropped); a file that is
+    not UTF-8 is refused with the way out of Excel; an empty file is refused. The guided input of the app reads the file
+    through this before asking the user anything about it."""
     if isinstance(text, bytes):
         if len(text) > MAX_BYTES:
             raise ResponseCsvError([f"the file is {len(text)} bytes, over the limit of {MAX_BYTES}"])
@@ -168,6 +168,14 @@ def read_response_text(text: str | bytes, response) -> ResponseData:
                 "delimiter ';' and decimal ',' in the study."]) from None
     if not text.strip():
         raise ResponseCsvError(["the file is empty"])
+    return text
+
+
+def read_response_text(text: str | bytes, response) -> ResponseData:
+    src = response.source
+    if src.type != "csv":
+        raise ResponseCsvError([f"the response {response.id!r} has a {src.type!r} source, not a csv one"])
+    text = decode_text(text)
 
     cm = src.column_map
     wanted = {"date": cm.date, "value": cm.value}
