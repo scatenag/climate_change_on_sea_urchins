@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Known-truth series** (milestone M1.6, new `known_truth.py`, ADR-0013). `python -m
+  climate_change_on_sea_urchins.known_truth make` writes a study folder whose response depends on the monthly SST
+  anomaly at a chosen lag (3 months, 50% of the variance, negative sign) and has the characters of the sea-urchin
+  sheet, measured on 2026-10-16: 42% of the months without a measurement, in runs of 2.5 months on average, one to six
+  trials per month. Every choice is declared in `response.manifest.json`, which `ccsu-run-study` copies into
+  `run.json` (`response_manifest`, null if the response has none). `verify RUN_DIR` says whether the largest |r| fell on
+  the known lag with the expected sign and BH p<0.05, and lists the other lags that pass BH. End to end on the frozen
+  fixture, 100 seeds: lag found in 100 of 100 at 50% of the variance (68 at 20%), in 0 of 100 for an independent
+  response. `scripts/verify_slice.py` and the workflow `verify_slice.yml` (label `verifica-fetta`) do the same on
+  real downloaded SST at two points never used by the project.
+
 - **`ccsu-run-study`** (milestone M1.5, new `run_study.py`, ADR-0012). One study, one process: from a
   format-2 study file and a folder with the response CSV and the downloaded daily SST to `ccf.csv`
   (Spearman between the driver's and the response's first differences, lags 0..`analysis.max_lag_months`,

@@ -1,0 +1,51 @@
+name: Verify slice
+
+# Manual verification of the vertical slice (milestone M1.6) against the real Copernicus service: on two points
+# never used by the project, download the SST, generate a response of known lag, run ccsu-run-study and check the
+# lag is found. Runs by hand (workflow_dispatch) or when a pull request from this repository gets the label
+# `verifica-fetta`. It uses the repository's Copernicus secrets: they are given only to the step that runs the
+# script, which gives them to the download and checks they appear in no output. It writes nothing in the
+# repository (read-only token, no credentials persisted) and publishes the results as an artifact. Who can label a
+# pull request can run its code with the secrets: keep the label to the repository owner, and fork pull requests
+# are skipped.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.label.name == 'verifica-fetta' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the package with the acquisition extra
+        run: pip install -e ".[acquisition]"
+
+      - name: Download, generate, run and verify
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: python scripts/verify_slice.py "$RUNNER_TEMP/slice-check"
+
+      - name: Publish the studies, runs and verdicts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice-check
+          path: ${{ runner.temp }}/slice-check
+          if-no-files-found: warn

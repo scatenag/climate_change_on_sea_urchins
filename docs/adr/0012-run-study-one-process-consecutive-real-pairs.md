@@ -29,7 +29,7 @@ scarta soltanto i mesi in cui è imputato il mese *t*: 48 delle 163 differenze t
 - Un solo driver in questa versione, l'anomalia mensile della SST (revisione del 16/10, sotto); le metriche delle ondate di calore entrano con M1.9.
 - Rifiuti con la ragione: studio di formato 1, sorgente diversa dal CSV, più di un sito o di una risposta,
   `sst_daily` assente dall'ambiente.
-- `run.json` porta: hash dello studio e degli ingressi, il manifest del download, parametri, test dichiarati/eseguiti/
+- `run.json` porta: hash dello studio e degli ingressi, il manifest del download, la dichiarazione accanto al file della risposta se c'è (`<nome>.manifest.json`, null altrimenti: la scrive il generatore di M1.6, ADR-0013), parametri, test dichiarati/eseguiti/
   non eseguiti, copertura (mesi esclusi), note del CSV, versioni e commit del codice. Nessun percorso della home.
 
 ## Revisione del 16/10: il driver è l'anomalia mensile della SST, non la temperatura

@@ -189,11 +189,14 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
         ccf.to_csv(out / "ccf.csv", index=False)
         dataset_builder.write_dataset(ds, out / "dataset", now=now)
         manifest_path = inputs / SST_MANIFEST
+        # a declaration next to the response file (the known-truth generator writes one), copied as it is
+        response_manifest_path = response_file.with_name(response_file.stem + ".manifest.json")
         run_record = {
             "format": 1, "status": "done", "started_at": started, "finished_at": now().isoformat(),
             "study": {"id": spec.id, "sha256": _sha256(study_path)},
             "inputs": {response.source.file: {"sha256": _sha256(response_file)}, SST_FILE: {"sha256": _sha256(sst_file)}},
             "download_manifest": json.loads(manifest_path.read_text()) if manifest_path.is_file() else None,
+            "response_manifest": json.loads(response_manifest_path.read_text()) if response_manifest_path.is_file() else None,
             "site": {"id": site.id, "name": site.name, "lat": site.lat, "lon": site.lon},
             "parameters": {"driver": DRIVER, "transform": "first differences", "pairs": "consecutive months, both real",
                            "max_lag_months": max_lag, "correction": "Benjamini-Hochberg", "min_pairs": MIN_PAIRS,
