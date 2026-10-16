@@ -347,3 +347,20 @@ invalida BH.
 **Da decidere:** un p che tenga conto dell'autocorrelazione (permutazione a blocchi, o un modello nullo che la
 conservi), o la dichiarazione del limite in ogni risultato. Nessun rimedio in M1: il tasso è mite (da 1 a 3 punti
 percentuali sopra il nominale) ed è registrato qui.
+
+---
+
+## 21. Baseline fissa o mobile per le metriche delle ondate di calore
+
+**Domanda:** se la climatologia che definisce le ondate di calore debba restare fissa sugli anni dichiarati o
+muoversi con il tempo, prima che le metriche delle ondate entrino nel motore generico (M1.9).
+
+**Contesto:** lo studio di Livorno dichiara una baseline fissa (2003–2012) e uno studio nuovo parte da 1991–2020
+(ADR-0014). Con una baseline fissa e un mare che si scalda, i giorni di ondata recenti crescono per effetto del
+trend: una parte dell'aumento è la baseline, non il fenomeno. Una baseline mobile (per esempio gli ultimi 30 anni
+a ogni anno) toglie il trend ma cambia che cosa significa «ondata» da un anno all'altro e rende le serie meno
+confrontabili. È una scelta di metodo che tocca le metriche (giorni, intensità, frequenza) usate dalle analisi.
+
+**Da decidere prima di M1.9**, con Livorno come termine di confronto: le metriche delle ondate di Livorno con la
+sua baseline fissa e con una mobile, sullo stesso dato, e che cosa cambia nei risultati mostrati. Nessuna
+anticipazione: finché non si decide, le metriche generiche usano la baseline dichiarata dallo studio, ferma.

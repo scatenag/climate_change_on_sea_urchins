@@ -4,7 +4,7 @@
 > 2/10 con le precisazioni riportate in §5; piano riordinato il 2/10 come fetta verticale (§6), chiusa
 > con M1.6 il 16/10 (ritardo noto ritrovato su coordinate mai usate). Il 16/10 il proprietario ha
 > riordinato il seguito: **prima di M1.7 la fetta prosegue fino all'interfaccia** (pezzo «App minima»,
-> in attesa di approvazione del piano), e da lì ogni variabile o analisi compare nel comando e nell'app
+> piano approvato il 16/10), e da lì ogni variabile o analisi compare nel comando e nell'app
 > nella stessa PR. Nessuna scadenza: la milestone si chiude quando i criteri di §4 sono soddisfatti.
 
 ---
@@ -215,7 +215,34 @@ analisi oltre la CCF (M1.7–M1.9): chi chiude la scheda perde il lavoro, e l'ap
 | **MA.4 Passo 3: esecuzione e risultati** | `ccsu-run-study` in un processo separato con ambiente costruito da zero (nessuna variabile Copernicus, nessuna credenziale fra gli argomenti: riceve solo file); avanzamento da `progress.json` con aggiornamento periodico, fuori dal lock; al più 2 esecuzioni contemporanee; «Interrompi»; fallimento mostrato con passo e motivo. Risultati dalla cartella di sessione: CCF per ritardo (r, p, p BH, coppie), test dichiarati, eseguiti e non eseguiti, copertura, parametri (driver «SST anomaly» e baseline), **limiti dichiarati** (cerca solo l'associazione non stagionale; coppie di mesi consecutivi reali; autocorrelazione delle differenze, ADR-0000 voce 20) e **verdetto**: per una serie di prova `known_truth.verify` (ritrovato o no, massimo di \|r\|, altri ritardi sopra BH), per dati reali una frase dai valori (quali ritardi superano BH e con quale segno rispetto al verso dichiarato; «nessuno» se nessuno), mai una conclusione fissa | `AppTest` con processo vero su una fixture sintetica: serie a verità nota → l'interfaccia dice «ritrovato» al ritardo giusto (uguale a `known_truth.verify` sui file); serie indipendente → «non ritrovato»; una variabile sentinella nell'ambiente dell'app non compare nell'ambiente del processo figlio (vista fallire su sabotaggio); mentre il calcolo gira un'altra sessione risponde; il fallimento di un passo è mostrato con il motivo; la terza esecuzione contemporanea attende |
 | **MA.5 Chiusura della tappa: prova a mano e misura** | Il percorso intero sull'app di sviluppo pubblicata (dopo aver verificato che serva il codice nuovo), con le credenziali del proprietario su coordinate mai usate e la serie di prova: scarica, genera, esegue, ritrova il ritardo noto nell'interfaccia. Misure sul servizio (download, calcolo, memoria); ciò che non regge in issue; nessuna funzione nuova. È la tappa con demo | Criterio 2 di §4 come prova a mano registrata nella PR (tempi, verdetto, messaggi); evidenze e difetti riportati |
 
+**Approvato il 16/10:** il piano in 5 PR, la baseline A, la cartella di sessione cancellata dopo 6 ore di
+inattività e con il pulsante (scostamento da §5.1), le credenziali in un form che si svuota all'invio, le stime.
+
 **Stima dell'app minima:** 5 PR, **6–8 sessioni** (§8).
+
+**Da decidere dopo MA.5: quali analisi di Livorno entrano nel motore generico.** Se l'app generica mostrasse
+Livorno con le sole analisi generiche e rimandasse all'app del lavoro per le altre, M1.9 si ridurrebbe e il
+criterio 1 andrebbe riscritto. Quattro dei quindici moduli di analisi dipendono da un caso, non da requisiti che
+ogni studio può avere: la speciazione del rame (`cu_speciation`, il contaminante è il rame), l'eredità termica a
+24 °C (`thermal_legacy`, una soglia di *P. lividus*), il controllo negativo (`negative_control`, richiede le
+colonne dei controlli del foglio) e il forecast con gli scenari (`forecast`: regressori pH, temperatura e ondate; addestrato su una finestra
+fissata nel codice dal 2016, ADR-0000). Sono circa un terzo delle righe delle analisi e circa un quinto dei file del golden master (misura
+approssimata del 16/10). Differenza stimata:
+
+| | Tutte le analisi nel motore (oggi) | Solo le generiche |
+|---|---|---|
+| M1.9 (base, sessioni) | circa 10–14 | circa 7–10 |
+| Riscrittura del criterio 1 e del job | — | 0,5–1 |
+| **Differenza in sessioni** | | 3–4 di base in meno, meno 0,5–1 per riscrivere il criterio e il job; × 1,3: **circa 3–5 in meno** (resto da 36–48 a circa 32–44) |
+
+Non si risparmia tutto: la pipeline di Livorno con lo stato di modulo (`ccsu-run-pipeline`) non si può ritirare
+(restano le quattro analisi e la separazione di `common`, ADR-0000 voce 19, non si fa), i due percorsi vanno
+mantenuti, e `main` non mostrerebbe più per Livorno la speciazione, l'eredità termica, il controllo negativo
+e il forecast, visibili solo nell'app del lavoro. Il criterio 1 diventerebbe: «Livorno passa dal motore generico
+per le analisi generiche con deriva zero (salvo la CCF sulle differenze prime, M1.9), i file delle analisi
+specifiche restano prodotti dalla pipeline di Livorno e coperti dal golden master, e la dashboard generica mostra
+Livorno senza codice specifico per Livorno, con il rimando all'app del lavoro per il resto». La decisione è del
+proprietario, dopo MA.5, con le misure dell'app minima.
 
 ### 6.1 Baseline climatologica per uno studio nuovo (da decidere prima di MA.2)
 
@@ -230,10 +257,13 @@ la baseline resta e la SST precedente è solo il riferimento. Tre opzioni:
 | **B** | **I primi 10 anni completi della serie di risposta** (come Livorno: 2003–2012) | Scarico minimo; la stessa regola dello studio di Livorno | Dieci anni sono pochi per una soglia al 90º percentile (rumorosa); la baseline coincide con l'inizio dello studio, quindi non confrontabile fra studi; una serie di risposta di 12–15 anni lascia poco da analizzare dopo la baseline |
 | **C** | **I primi 30 anni del prodotto** (dal 1987, da leggere dal catalogo come si fa per la fine) | Trent'anni, indipendente dalla serie, una sola data per tutti | Termina nel 2016: gli anni successivi, quelli della maggior parte delle serie, sono tutti sopra baseline; la data d'inizio del prodotto dipende dal catalogo e può cambiare |
 
-**Raccomandazione: A**, 1991–2020 come valore proposto, modificabile, con due avvisi (baseline più corta di
-15 anni: soglia rumorosa; baseline che non finisce prima dell'ultimo anno coperto: nessun mese «dopo»). Livorno
-resta con la baseline che dichiara (2003–2012, golden master): una scelta diversa, scritta nel suo studio. La
-scelta è del proprietario.
+**Decisione del proprietario (16/10): A**, 1991–2020 come valore proposto, modificabile, con due avvisi (baseline
+più corta di 15 anni: soglia rumorosa; baseline che non finisce prima dell'ultimo anno coperto: nessun mese
+«dopo»). Motivo e citazione di Hobday et al. (2016) in ADR-0014. **L'inizio della copertura del prodotto si
+legge dal catalogo come la fine, senza date scritte nel codice:** se non copre il 1991 l'app lo dice e propone il
+primo trentennio coperto. Livorno resta con la baseline che dichiara (2003–2012, golden master): una scelta
+diversa, scritta nel suo studio. Se la baseline debba essere fissa o mobile per le metriche delle ondate è
+aperto (ADR-0000, voce 21), da decidere prima di M1.9.
 
 ### Allargamento (una variabile e un'analisi alla volta; ogni pezzo comando e app insieme)
 

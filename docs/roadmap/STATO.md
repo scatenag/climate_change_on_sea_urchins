@@ -75,9 +75,6 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 
 ## In attesa del proprietario
 
-- Approvazione del piano dell'app minima (MA.1–MA.5), della scelta della baseline climatologica per uno studio
-  nuovo (opzioni A, B, C in `MILESTONE-M1.md` §6.1), dello scostamento da §5.1 sulla cancellazione delle
-  cartelle di sessione, e delle stime rifatte (§8). Fino ad allora nessun codice dell'app.
 - Rilettura e fusione della #37 (questa memoria); poi: `CLAUDE.md` locale sostituito dalla
   versione breve, `PASSAGGIO.md` cancellato, avvio della fetta verticale.
 - Parte sulla seconda scheda del foglio in `note-dati-sorgente.md`: fuori finché non è chiarito
@@ -95,4 +92,4 @@ di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel
 
 ## Prossimo passo
 
-**App minima (MA.1–MA.5).** La fetta verticale è chiusa (M1.6 fusa il 16/10, ADR-0013: ritardo noto ritrovato in 100 semi su 100 sulla fixture e in 6 casi su 6 su SST vera in due punti mai usati). Il 16/10 il proprietario ha riordinato il piano: prima di M1.7 la fetta prosegue fino all'interfaccia, e da lì ogni variabile o analisi compare nel comando e nell'app nella stessa PR. Il piano dell'app minima, la scelta della baseline climatologica per uno studio nuovo (§6.1) e le stime rifatte sono in `MILESTONE-M1.md`, in attesa di approvazione; nessun codice dell'app prima. Il driver della CCF generica è l'anomalia mensile della SST (16/10, ADR-0012; il tasso nullo sopra il 5% in ADR-0000 voce 20).
+**App minima (MA.1–MA.5), piano approvato il 16/10 (#59).** La fetta verticale è chiusa (M1.6 fusa, ADR-0013: ritardo noto ritrovato in 100 semi su 100 sulla fixture e in 6 casi su 6 su SST vera in due punti mai usati). Si parte da MA.1 (ingresso, contesto di sessione, instradamento). Baseline per uno studio nuovo: 1991–2020, modificabile, copertura letta dal catalogo (ADR-0014); fissa o mobile per le metriche delle ondate: aperto prima di M1.9 (ADR-0000 voce 21). Dopo MA.5 si decide quali analisi di Livorno entrano nel motore generico (`MILESTONE-M1.md`, dopo la tabella MA). Il driver della CCF generica è l'anomalia mensile della SST (ADR-0012; tasso nullo sopra il 5%: ADR-0000 voce 20).
