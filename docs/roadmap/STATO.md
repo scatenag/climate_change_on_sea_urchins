@@ -75,6 +75,9 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 
 ## In attesa del proprietario
 
+- Approvazione del piano dell'app minima (MA.1–MA.5), della scelta della baseline climatologica per uno studio
+  nuovo (opzioni A, B, C in `MILESTONE-M1.md` §6.1), dello scostamento da §5.1 sulla cancellazione delle
+  cartelle di sessione, e delle stime rifatte (§8). Fino ad allora nessun codice dell'app.
 - Rilettura e fusione della #37 (questa memoria); poi: `CLAUDE.md` locale sostituito dalla
   versione breve, `PASSAGGIO.md` cancellato, avvio della fetta verticale.
 - Parte sulla seconda scheda del foglio in `note-dati-sorgente.md`: fuori finché non è chiarito
@@ -92,5 +95,4 @@ di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel
 
 ## Prossimo passo
 
-**M1.7 Requisiti dichiarati.** M1.6 (serie a verità nota, ADR-0013) è in PR: ritrovato il ritardo noto in 100 semi su 100 sulla fixture; la verifica a mano su coordinate mai usate è il workflow `verify_slice.yml`. Il driver della CCF generica è l'anomalia mensile della SST (16/10, ADR-0012; il tasso nullo sopra il 5% in ADR-0000 voce 20). Alla chiusura di M1.6 si rivede la stima complessiva con i tempi reali della fetta. M1.5 (`ccsu-run-study` con la sola CCF, ADR-0012; #55) è fusa; lo sono anche M1.4 (costruttore del dataset, regola dei mesi incompleti) e M1.3 (CSV della risposta, ADR-0011). M1.2 è verificata sul servizio vero (9/10, workflow `verify_download.yml`): Livorno dal 2003 in 18 s, 8644 giorni uguali a `data/sst_daily.csv` (scarto massimo 3.2e-6 °C); Pisa rifiutata come cella di terra con il mare a circa 15 km; un punto del Mar Nero rifiutato senza scegliere fra entroterra e mare non coperto. La regola
-per i mesi incompleti della SST (M1.4) è approvata: un giorno mancante rende mancante il mese.
+**App minima (MA.1–MA.5).** La fetta verticale è chiusa (M1.6 fusa il 16/10, ADR-0013: ritardo noto ritrovato in 100 semi su 100 sulla fixture e in 6 casi su 6 su SST vera in due punti mai usati). Il 16/10 il proprietario ha riordinato il piano: prima di M1.7 la fetta prosegue fino all'interfaccia, e da lì ogni variabile o analisi compare nel comando e nell'app nella stessa PR. Il piano dell'app minima, la scelta della baseline climatologica per uno studio nuovo (§6.1) e le stime rifatte sono in `MILESTONE-M1.md`, in attesa di approvazione; nessun codice dell'app prima. Il driver della CCF generica è l'anomalia mensile della SST (16/10, ADR-0012; il tasso nullo sopra il 5% in ADR-0000 voce 20).

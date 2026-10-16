@@ -1,9 +1,11 @@
 # Milestone M1 · Lo strumento generico da capo a fondo
 
-> **Stato (aggiornato l'8/10/2026):** definizione fissata dal proprietario; decisioni D1–D9 approvate il
-> 2/10 con le precisazioni riportate in §5; piano riordinato il 2/10 come fetta verticale (§6), che
-> si approva con la fusione di questo documento. Nessuna scadenza: la milestone si chiude quando
-> i criteri di §4 sono soddisfatti.
+> **Stato (aggiornato il 16/10/2026):** definizione fissata dal proprietario; decisioni D1–D9 approvate il
+> 2/10 con le precisazioni riportate in §5; piano riordinato il 2/10 come fetta verticale (§6), chiusa
+> con M1.6 il 16/10 (ritardo noto ritrovato su coordinate mai usate). Il 16/10 il proprietario ha
+> riordinato il seguito: **prima di M1.7 la fetta prosegue fino all'interfaccia** (pezzo «App minima»,
+> in attesa di approvazione del piano), e da lì ogni variabile o analisi compare nel comando e nell'app
+> nella stessa PR. Nessuna scadenza: la milestone si chiude quando i criteri di §4 sono soddisfatti.
 
 ---
 
@@ -144,8 +146,11 @@ Per questo la dashboard generica non le legge mai.
 ## 6. Piano
 
 Ogni pezzo è una PR con il proprio criterio di verifica; i pezzi marcati «una PR per…» sono più
-PR. Prima una fetta verticale stretta che attraversa la catena da riga di comando; poi si allarga
-una variabile e un'analisi alla volta; solo dopo vengono la dashboard e i tre passi.
+PR. Prima una fetta verticale stretta che attraversa la catena da riga di comando (chiusa); poi la
+stessa fetta prosegue fino all'interfaccia (**App minima**, sigle MA.1–MA.5, che lasciano invariata la
+numerazione M1.7–M1.17 per non spezzare i rimandi dei documenti e degli ADR); poi si allarga una
+variabile e un'analisi alla volta, **e ogni variabile o analisi compare nel comando e nell'app nella
+stessa PR**, mai l'una senza l'altra.
 
 ### Fetta verticale (riga di comando, senza interfaccia)
 
@@ -161,25 +166,94 @@ ritrova il ritardo noto della serie a verità nota.
 | **M1.5 `ccsu-run-study` con la sola CCF** | Comando unico: costruzione, CCF variabile → risposta (D3) con il numero di test dichiarato, risultati in `results/<study_id>/` con la provenienza; un processo per studio; avanzamento leggibile da un altro processo | Uno studio sintetico gira da capo a fondo in CI, senza rete |
 | **M1.6 Serie a verità nota (uscita della fetta)** | Generatore con seme esposto (`known_truth.py`, ADR-0013). Risposta generata dall'**anomalia mensile della SST** (decisione del 16/10, ADR-0012), che scende quando la temperatura sale, con ritardo *k* né 0 né multiplo di 12 (3 mesi), segnale al 50% della varianza, da 1 a 6 prove per mese da aggregare e mesi mancanti in sequenze come nel foglio dei ricci (42% dei mesi, sequenze di 2.5 mesi in media, misurate il 16/10), rumore AR(1). La dichiarazione sta in `response.manifest.json` e `run.json` la riporta | Il massimo di \|r\| della CCF sulle differenze prime cade su *k* con il segno atteso e BH<0.05 al ritardo (`known_truth.verify`); gli altri ritardi che superano FDR sono riportati. Con una serie indipendente (quota di segnale 0) questo non succede. Test su fixture congelata (8 semi con segnale, 8 senza) visti fallire su sabotaggio. A mano, con credenziali (`verify_slice.yml`, etichetta `verifica-fetta`): il criterio su due punti mai usati, scaricati dal servizio vero |
 
-### Allargamento (una variabile e un'analisi alla volta)
+### App minima (subito dopo la fetta; il piano è da approvare prima di scrivere codice)
+
+**Obiettivo.** Nell'app di sviluppo (`main`) una scelta d'ingresso fra *il caso dei ricci*, che per ora porta
+alla dashboard di Livorno esistente, e *i propri dati*. Per i propri dati, i tre passi sopra ciò che esiste già
+dalla riga di comando: (1) sito, periodo e credenziali con il download della SST; (2) caricamento guidato del CSV
+(`suggest_format`, le domande della specifica, gli errori di M1.3) oppure una serie di prova con ritardo noto;
+(3) esecuzione di `ccsu-run-study` con l'avanzamento e la CCF mostrata con il verdetto e i limiti dichiarati.
+Valgono le regole di §3 (credenziali, download nel processo dell'app, calcolo in un processo separato che non vede
+le credenziali) e il contesto per sessione di §5.1. Non c'è pacchetto da scaricare né da ricaricare (M1.10), né
+analisi oltre la CCF (M1.7–M1.9): chi chiude la scheda perde il lavoro, e l'app lo dice.
+
+**Come convive con `app.py`, il suo reimport forzato e il lock globale.**
+
+- *Perché esistono.* Il reimport a ogni esecuzione esiste perché `dashboard.py` ha tutta l'interfaccia nel
+  corpo del modulo: da una seconda esecuzione un semplice `import` non la rieseguirebbe. Il lock serializza il
+  reimport e le chiamate numeriche pesanti (arresti anomali in produzione, cause non chiuse del tutto).
+- *I moduli nuovi sono funzioni.* L'interfaccia dei propri dati sta in `render()` di moduli senza codice
+  d'interfaccia a livello di modulo (nuovi, nel pacchetto): importati una volta, come qualunque libreria, e
+  chiamati a ogni esecuzione. Non soffrono della causa del reimport e non lo richiedono; nessuno stato di studio
+  sta in variabili di modulo ma in `st.session_state` (§5.1).
+- *`app.py` diventa l'instradatore.* A ogni esecuzione chiama `app_entry.render()`: mostra la scelta e, per i
+  ricci, esegue **identico il blocco di oggi** (lock, rimozione dal `sys.modules`, `import dashboard`) e solo in
+  quel ramo. Per i propri dati chiama le funzioni dei tre passi. L'indirizzo d'ingresso per Streamlit Cloud
+  resta `app.py`; `ccsu-dashboard` continua a funzionare.
+- *Unica modifica a `dashboard.py`:* `st.set_page_config` passa ad `app.py` (deve essere il primo comando
+  d'interfaccia e l'ingresso ora ne scrive prima). Il branch del lavoro ha la sua copia e non è toccato.
+- *Il lock per i propri dati.* Si prende **solo attorno ai calcoli numerici brevi in processo** (lettura e
+  parsing del CSV, rilevamento delle ondate per la visualizzazione) e mai durante il download (decine di
+  secondi) né durante l'attesa del calcolo, o ogni altra sessione si fermerebbe. Il calcolo vero gira in un
+  processo separato (`ccsu-run-study`), fuori dal lock.
+- *Cartella di sessione.* Una per sessione nella cartella temporanea, mai condivisa. Streamlit non offre un
+  evento affidabile di fine sessione: **scostamento da §5.1** («cancellata a fine sessione») da approvare: la
+  cartella si cancella a ogni avvio di sessione se più vecchia di 6 ore e non in uso, e con un pulsante
+  «Cancella i miei dati».
+- *Limite di esecuzioni.* Al massimo 2 processi di calcolo contemporanei sul server; gli altri vedono un
+  messaggio di attesa (memoria del servizio condiviso).
+- *Le credenziali.* Form che si svuota all'invio; non restano in `st.session_state`, mai in `st.cache_*`,
+  mai in ambiente o argomenti di un sottoprocesso; ogni errore passa dal filtro che le maschera.
+- *Streamlit.* L'avanzamento si legge con `st.fragment(run_every=…)`, disponibile dalla 1.37: il vincolo
+  `streamlit>=1.35` di `pyproject.toml` sale in MA.4 se serve (si cita nella PR).
 
 | Pezzo | Contenuto | Criterio di verifica |
 |---|---|---|
-| **M1.7 Requisiti dichiarati** | Ogni analisi dichiara cosa le serve (variabili, SST giornaliera, dati per prova, controlli, `split_date`, mesi minimi, contaminante, R); `analyses.json` con stato ed eventuale motivo | Uno studio senza pH: speciazione e forecast spenti con il motivo, nessun loro file scritto (criterio 3, motore) |
-| **M1.8 Variabili mensili**, una PR per variabile | Temperatura 0–10 m, salinità, O₂, pH, CO₂ con la conversione Pa→µatm nominata nel catalogo | Voce di catalogo uguale a quella usata oggi per Livorno; a mano, sulle coordinate di Livorno, serie uguale a `data/env_copernicus.csv` nei mesi comuni |
-| **M1.9 Analisi nel comando unico**, una PR per analisi o famiglia | Le analisi della pipeline, ciascuna con i propri requisiti, fino a Livorno completo; alla fine il job di Livorno usa `ccsu-run-study` (PR su `update_ec50.yml`) | Deriva zero sul golden master a ogni PR; alla fine il golden master intero eseguito dal comando unico (criterio 1, motore). **Eccezione dichiarata, decisa dal proprietario il 16/10:** quando Livorno passa da `ccsu-run-study`, la CCF sulle differenze prime usa le coppie di mesi consecutivi entrambi reali (ADR-0012), quindi `ccf_results_diff.csv` cambia. Il riferimento del golden master di quel file si aggiorna in modo dichiarato in quella PR, sui numeri, con l'approvazione del proprietario; il resto del golden master resta a deriva zero. L'app del lavoro (`paper/mpb-2026`) non cambia: dice che nessun ritardo è significativo, vero con entrambe le costruzioni (misura del 15/10, `drafts/dossier-tabella-S3-revisione/DOSSIER.md` §6) |
-| **M1.10 Pacchetto e caricamento non fidato** | Esportazione e caricamento (D4); YAML sicuro; `data_dir` e sorgenti remote ignorati con avviso | Andata e ritorno con risultati identici (criterio 4): il confronto byte per byte esclude i campi di provenienza che cambiano a ogni esecuzione (data e ora, durata, versione del codice), e l'impronta del pacchetto tratta i file che il golden master confronta solo nella struttura (`STRUCTURAL_ONLY_FILES`, #9) allo stesso modo, cioè sulla struttura, così un pacchetto ricaricato su un'altra macchina non risulta diverso senza esserlo; archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio) |
+| **MA.1 Ingresso, contesto di sessione, instradamento** | `app.py` instradatore e `app_entry.py` (solo funzioni); scelta ricci/propri dati; contesto di studio per sessione in `st.session_state` passato esplicitamente; cartella di sessione con pulizia; ramo dei ricci identico a oggi; i tre passi presenti ma vuoti | `AppTest` che parte da `app.py` (l'ingresso vero), senza credenziali né variabili d'ambiente: la scelta compare; «ricci» rende la dashboard di oggi e i test esistenti e il golden master restano verdi; due sessioni nello stesso processo con contesti diversi mostrano ciascuna il proprio (etichette EC50 e RSPTEST); cambiare scelta e tornare non lascia stato dell'altra. Test statico che vieta ai moduli nuovi `common.DATA/RESULTS/SPLIT_DATE/WINDOWS`, `config` e `st.cache_*` su funzioni con credenziali. La pulizia cancella le cartelle vecchie e mai quelle in uso. Tutti visti fallire su sabotaggio. **Rischio:** se `AppTest` non regge la dashboard di oggi in tempi ragionevoli (legge il foglio, ricade sull'istantanea), la resa dei ricci si prova con il ramo simulato e una verifica a mano, dichiarato nella PR |
+| **MA.2 Passo 1: sito, periodo, credenziali, download** | Latitudine, longitudine (numeri con anteprima su mappa; la scelta sulla mappa è in M1.14), nome, baseline climatologica (§6.1) e inizio del download derivato: il più antico fra l'inizio della baseline e il primo mese della risposta meno `max_lag_months`; form per le credenziali; `download.fetch_daily_sst` nel processo dell'app con le credenziali come soli argomenti; i rifiuti del catalogo (terra, entroterra o mare non coperto, fuori dominio) mostrati con il loro motivo; SST giornaliera e eventi di ondata di calore (con il lock breve); durata del download mostrata e scritta nel manifest | `AppTest` con il client Copernicus simulato di M1.2: le credenziali sono assenti dai file della cartella di sessione, da `st.session_state` dopo l'invio, dai messaggi anche quando l'errore le contiene, dalle chiavi delle cache, dall'ambiente del processo, dal manifest (ciascuna vista fallire su sabotaggio); `login` mai chiamato; ogni rifiuto mostra il suo messaggio; fuori dominio rifiutato prima di ogni chiamata. **A mano, con le credenziali del proprietario (mai nelle mie sessioni): tempo del download misurato su Streamlit Cloud**, riportato nel manifest e nella PR al posto della stima di §8 |
+| **MA.3 Passo 2: la risposta** | CSV caricato (limiti di M1.3) o *serie di prova con ritardo noto* generata da `known_truth` sulla SST appena scaricata (seme, ritardo e quota di segnale mostrati); `suggest_format` dice che cosa il file sembra e l'utente conferma separatore, decimale e formato della data (se la data è ambigua non si procede finché non sceglie); le domande della specifica (risoluzione, per prova o aggregato, colonne di data, valore ed estremi, unità, verso in cui peggiora, etichetta, natura, imputazione assente salvo dichiarata); gli errori di M1.3 con riga e colonna in chiaro; anteprima della serie mensile; `study.yaml` formato 2 prodotto e scaricabile | `AppTest`: una prova per ogni classe di errore di M1.3, con la riga; un CSV europeo (`;`, virgola decimale, `31/01/2020`) letto bene dopo la conferma e rifiutato con le convenzioni sbagliate; la data ambigua blocca; i dati per prova di Livorno esportati danno la stessa serie mensile del caso precalcolato; lo `study.yaml` prodotto passa `load_study` e non ha campi diretti al filesystem; la serie di prova è, byte per byte, quella di `known_truth.make_study` con lo stesso seme |
+| **MA.4 Passo 3: esecuzione e risultati** | `ccsu-run-study` in un processo separato con ambiente costruito da zero (nessuna variabile Copernicus, nessuna credenziale fra gli argomenti: riceve solo file); avanzamento da `progress.json` con aggiornamento periodico, fuori dal lock; al più 2 esecuzioni contemporanee; «Interrompi»; fallimento mostrato con passo e motivo. Risultati dalla cartella di sessione: CCF per ritardo (r, p, p BH, coppie), test dichiarati, eseguiti e non eseguiti, copertura, parametri (driver «SST anomaly» e baseline), **limiti dichiarati** (cerca solo l'associazione non stagionale; coppie di mesi consecutivi reali; autocorrelazione delle differenze, ADR-0000 voce 20) e **verdetto**: per una serie di prova `known_truth.verify` (ritrovato o no, massimo di \|r\|, altri ritardi sopra BH), per dati reali una frase dai valori (quali ritardi superano BH e con quale segno rispetto al verso dichiarato; «nessuno» se nessuno), mai una conclusione fissa | `AppTest` con processo vero su una fixture sintetica: serie a verità nota → l'interfaccia dice «ritrovato» al ritardo giusto (uguale a `known_truth.verify` sui file); serie indipendente → «non ritrovato»; una variabile sentinella nell'ambiente dell'app non compare nell'ambiente del processo figlio (vista fallire su sabotaggio); mentre il calcolo gira un'altra sessione risponde; il fallimento di un passo è mostrato con il motivo; la terza esecuzione contemporanea attende |
+| **MA.5 Chiusura della tappa: prova a mano e misura** | Il percorso intero sull'app di sviluppo pubblicata (dopo aver verificato che serva il codice nuovo), con le credenziali del proprietario su coordinate mai usate e la serie di prova: scarica, genera, esegue, ritrova il ritardo noto nell'interfaccia. Misure sul servizio (download, calcolo, memoria); ciò che non regge in issue; nessuna funzione nuova. È la tappa con demo | Criterio 2 di §4 come prova a mano registrata nella PR (tempi, verdetto, messaggi); evidenze e difetti riportati |
+
+**Stima dell'app minima:** 5 PR, **6–8 sessioni** (§8).
+
+### 6.1 Baseline climatologica per uno studio nuovo (da decidere prima di MA.2)
+
+Il costruttore (M1.4) vuole la baseline coperta per intero dalla SST, quindi il download parte dal suo inizio
+(non dall'inizio della serie di risposta). Se la risposta comincia prima della baseline, il download parte
+dal primo mese della risposta meno `max_lag_months` (i ritardi usano la temperatura di prima); se comincia dopo,
+la baseline resta e la SST precedente è solo il riferimento. Tre opzioni:
+
+| | Opzione | Per | Contro |
+|---|---|---|---|
+| **A** | **1991–2020** per tutti (la norma climatologica a 30 anni dell'OMM), modificabile entro gli anni coperti dal prodotto | Trenta anni: la letteratura sulle ondate di calore raccomanda 30 anni o più (Hobday et al. 2016; *da ricontrollare sul testo prima di citarlo in un ADR*). Non dipende dalla serie di risposta, quindi studi diversi hanno la stessa definizione di «normale» (serve al confronto fra casi, V3.2). Indipendente da quanto è corta la serie | Scarica più giorni (circa 14 000 dal 1991 invece di circa 8 700 dal 2003: stima del 1,6 sul tempo dei dati, da misurare in MA.2); le ondate recenti sono più frequenti perché la baseline è più fredda dei decenni successivi (è la definizione, ma va detto) |
+| **B** | **I primi 10 anni completi della serie di risposta** (come Livorno: 2003–2012) | Scarico minimo; la stessa regola dello studio di Livorno | Dieci anni sono pochi per una soglia al 90º percentile (rumorosa); la baseline coincide con l'inizio dello studio, quindi non confrontabile fra studi; una serie di risposta di 12–15 anni lascia poco da analizzare dopo la baseline |
+| **C** | **I primi 30 anni del prodotto** (dal 1987, da leggere dal catalogo come si fa per la fine) | Trent'anni, indipendente dalla serie, una sola data per tutti | Termina nel 2016: gli anni successivi, quelli della maggior parte delle serie, sono tutti sopra baseline; la data d'inizio del prodotto dipende dal catalogo e può cambiare |
+
+**Raccomandazione: A**, 1991–2020 come valore proposto, modificabile, con due avvisi (baseline più corta di
+15 anni: soglia rumorosa; baseline che non finisce prima dell'ultimo anno coperto: nessun mese «dopo»). Livorno
+resta con la baseline che dichiara (2003–2012, golden master): una scelta diversa, scritta nel suo studio. La
+scelta è del proprietario.
+
+### Allargamento (una variabile e un'analisi alla volta; ogni pezzo comando e app insieme)
+
+| Pezzo | Contenuto | Criterio di verifica |
+|---|---|---|
+| **M1.7 Requisiti dichiarati** | Ogni analisi dichiara cosa le serve (variabili, SST giornaliera, dati per prova, controlli, `split_date`, mesi minimi, contaminante, R); `analyses.json` con stato ed eventuale motivo. **Nell'app, nella stessa PR:** la schermata dei risultati di MA.4 legge `analyses.json` e mostra le analisi non applicabili spente, con il motivo | Uno studio senza pH: speciazione e forecast spenti con il motivo, nessun loro file scritto (criterio 3, motore); `AppTest` sullo stesso studio: le stesse analisi spente con lo stesso motivo (criterio 3, interfaccia) |
+| **M1.8 Variabili mensili**, una PR per variabile | Temperatura 0–10 m, salinità, O₂, pH, CO₂ con la conversione Pa→µatm nominata nel catalogo. **Nell'app, nella stessa PR:** la variabile si sceglie nel passo 1, si scarica nello stesso invio e compare nei risultati | Voce di catalogo uguale a quella usata oggi per Livorno; a mano, sulle coordinate di Livorno, serie uguale a `data/env_copernicus.csv` nei mesi comuni; `AppTest` con download simulato della variabile |
+| **M1.9 Analisi nel comando unico**, una PR per analisi o famiglia | Le analisi della pipeline, ciascuna con i propri requisiti, fino a Livorno completo; alla fine il job di Livorno usa `ccsu-run-study` (PR su `update_ec50.yml`). **Nell'app, nella stessa PR di ogni analisi:** il suo pannello, letto da `analyses.json` e dai file dell'analisi, con i testi dai valori (assorbe M1.12) | Deriva zero sul golden master a ogni PR; il pannello mostra gli stessi valori dei file e la guardia RSPTEST sulla vista generica non trova letterali del caso (criteri 1 e 3); alla fine il golden master intero eseguito dal comando unico (criterio 1, motore). **Eccezione dichiarata, decisa dal proprietario il 16/10:** quando Livorno passa da `ccsu-run-study`, la CCF sulle differenze prime usa le coppie di mesi consecutivi entrambi reali (ADR-0012), quindi `ccf_results_diff.csv` cambia. Il riferimento del golden master di quel file si aggiorna in modo dichiarato in quella PR, sui numeri, con l'approvazione del proprietario; il resto del golden master resta a deriva zero. L'app del lavoro (`paper/mpb-2026`) non cambia: dice che nessun ritardo è significativo, vero con entrambe le costruzioni (misura del 15/10, `drafts/dossier-tabella-S3-revisione/DOSSIER.md` §6) |
+| **M1.10 Pacchetto e caricamento non fidato** | Esportazione e caricamento (D4); YAML sicuro; `data_dir` e sorgenti remote ignorati con avviso. **Comando e app nella stessa PR:** scarico e caricamento del pacchetto in ogni passo | Andata e ritorno con risultati identici (criterio 4): il confronto byte per byte esclude i campi di provenienza che cambiano a ogni esecuzione (data e ora, durata, versione del codice), e l'impronta del pacchetto tratta i file che il golden master confronta solo nella struttura (`STRUCTURAL_ONLY_FILES`, #9) allo stesso modo, cioè sulla struttura, così un pacchetto ricaricato su un'altra macchina non risulta diverso senza esserlo; archivi ostili rifiutati (percorsi fuori cartella, file inattesi, dimensioni); nessuna credenziale nel pacchetto (visto fallire su sabotaggio); stesso percorso dall'interfaccia |
 
 ### Interfaccia
 
 | Pezzo | Contenuto | Criterio di verifica |
 |---|---|---|
-| **M1.11 Dashboard generica: ingresso e contesto** | Scelta iniziale; contesto di studio per sessione (§5.1); Livorno precalcolato senza credenziali, con l'etichetta e il rimando all'app del lavoro, e il percorso in sola lettura | Test dell'app senza credenziali né variabili d'ambiente (criterio 5); due sessioni con studi diversi nello stesso processo |
-| **M1.12 Pannelli per analisi**, una PR per gruppo | Un pannello per analisi, letto da `analyses.json` e dai file dell'analisi; analisi spente con il motivo; testi dai valori | Stessi valori dei file di risultato; guardia RSPTEST sulla vista generica (criterio 1, dashboard; criterio 3) |
+| **M1.11 Il caso dei ricci nell'app generica** | **Legato al passaggio di Livorno nel motore (fine di M1.9).** Livorno precalcolato senza credenziali, con l'etichetta e il rimando all'app del lavoro, e il percorso in sola lettura compilato con i suoi valori; sostituisce il ramo «ricci → dashboard esistente» di MA.1 | Test dell'app senza credenziali né variabili d'ambiente (criterio 5); due sessioni con studi diversi nello stesso processo; guardia RSPTEST (criterio 1, dashboard) |
+| **M1.12 Pannelli per analisi** | **Assorbito in M1.7–M1.9:** ogni pannello nasce nella PR della sua analisi | — |
 | **M1.13 Via la dashboard di Livorno da `main`** | Rimozione di `dashboard.py` e, se non serve più, del meccanismo di import di `app.py`; l'app del lavoro vive sul suo branch | Nessun riferimento rimasto; l'app di sviluppo apre la vista generica |
-| **M1.14 Propri dati, passo 1** | Sito su mappa, periodo, credenziali, download con avanzamento, visualizzazione con gli eventi MHW. **Il download parte dall'inizio della baseline della climatologia, non dall'inizio della serie di risposta**, perché il costruttore (M1.4) vuole la baseline coperta per intero dalla SST e rifiuta altrimenti. Quale baseline proporre a uno studio nuovo (gli anni, e che cosa fare se la serie di risposta comincia prima o dopo) è una **scelta di metodo da decidere in M1.14**, non un valore predefinito | Test dell'app con download simulato: credenziali assenti da file, messaggi, cache e pacchetto |
-| **M1.15 Propri dati, passo 2** | Domande, modello CSV, caricamento, validazione | Errori mostrati in chiaro per ogni classe; Livorno ricostruito dal CSV uguale al caso precalcolato |
-| **M1.16 Propri dati, passo 3** | Analisi applicabili, analisi lente su richiesta con avanzamento, pacchetto a ogni passo, ricarica | Criteri 3 e 4 dall'interfaccia |
+| **M1.14 Propri dati, passo 1: completamenti** | Quello che MA.2 lascia: sito scelto su mappa, eventi di ondata di calore in dettaglio. La baseline è decisa prima di MA.2 (§6.1) | Test dell'app con download simulato; la scelta sulla mappa riempie le coordinate |
+| **M1.15 Propri dati, passo 2: completamenti** | Quello che MA.3 lascia: modello di CSV scaricabile, intervalli di confidenza come estremi e controlli negativi nelle domande | Errori in chiaro per ogni classe; Livorno ricostruito dal CSV uguale al caso precalcolato |
+| **M1.16 Propri dati, passo 3: completamenti** | Analisi lente su richiesta (già in un processo separato da MA.4) con avanzamento per ognuna; ricarica del pacchetto riprende il lavoro | Criteri 3 e 4 dall'interfaccia |
 | **M1.17 Prova generale e copione** | Percorso del video eseguito per intero con credenziali vere su coordinate mai usate; copione in `docs/`; `docs/ADAPTING.md` riscritto | I cinque criteri spuntati, con le evidenze nella PR |
 
 ## 7. La dashboard: riscriverla o togliere il caso dall'attuale
@@ -187,7 +261,8 @@ ritrova il ritardo noto della serie a verità nota.
 **A. Riscritta, guidata da risultati e specifica.** Un pannello per analisi: legge lo stato da
 `analyses.json` e i valori dai file dell'analisi, con il contesto della sessione (§5.1); i testi
 nascono dai valori. Costo stimato **6–8 sessioni** (M1.11–M1.13): ingresso e contesto 1–2,
-pannelli 4–5 a gruppi, rimozione della dashboard attuale 1; circa 1200–1600 righe nuove.
+pannelli 4–5 a gruppi, rimozione della dashboard attuale 1; circa 1200–1600 righe nuove. *(Il 16/10 i
+pannelli passano nelle PR delle analisi e l'ingresso in MA.1: il costo si ripartisce, §8.)*
 
 **B. Togliere il caso dalle 2827 righe attuali.** Da sciogliere: 211 occorrenze del letterale
 EC50; le costanti di modulo dello studio lette all'import; la seconda implementazione del forecast;
@@ -211,10 +286,26 @@ spariscono da `main`; quelle da tenere diventano analisi della pipeline, ciascun
   giornaliera, ciascuna con il multiyear più la coda analysis-forecast: circa 12 richieste,
   **1–2 minuti** su GitHub Actions, meno di 5 MB. Su Streamlit Cloud non è misurato: si assume
   2–5 minuti finché M1.2 non lo misura.
-- **Fetta verticale** (M1.1–M1.6): 7–8 sessioni. **Allargamento** (M1.7–M1.10): 14–20 sessioni,
-  quasi tutte in M1.9 (16 moduli). **Dashboard** (M1.11–M1.13): 6–8. **Tre passi e prova
-  generale** (M1.14–M1.17): 5–6. In tutto **32–42 sessioni**, una PR ciascuna. La stima si
-  rivede alla chiusura di M1.6 con i tempi reali della fetta, prima di cominciare M1.7.
+- **Fetta verticale** (M1.1–M1.6), chiusa il 16/10: stimata 7–8 sessioni, fatta in **9 PR** (6 pezzi più
+  3 non pianificate: la CI rotta da `pyarrow`, i documenti di M1.9, il driver sull'anomalia). Il fattore
+  osservato è 1,1–1,3; per prudenza si applica **1,3** al resto.
+- **Stime rifatte il 16/10** (una sessione = una PR; base × 1,3):
+
+  | Parte | Base | Con 1,3 |
+  |---|---|---|
+  | App minima (MA.1–MA.5) | 5 | **6–8** |
+  | Allargamento M1.7–M1.10, con i pannelli (assorbe M1.12) e il lato app di ogni pezzo | 18–25 | 23–33 |
+  | Il caso dei ricci nell'app generica e via la dashboard di Livorno (M1.11, M1.13) | 2–3 | 3–4 |
+  | Completamenti dei tre passi e prova generale (M1.14–M1.17) | 3–4 | 4–5 |
+  | **Resto da fare** | **28–37** | **36–48** |
+
+  Fatte 9, **in tutto 45–57 PR** (la stima del 2/10 era 32–42). Una correzione: nel messaggio del 16/10 avevo
+  scritto «33–45 in tutto» applicando il fattore al solo resto di allora (25–34); quel numero era il resto,
+  non il totale. L'aumento di oggi viene per circa 3 dall'app minima (lavoro che prima era in parte nei passi
+  M1.14–M1.16) e per il resto dal fattore osservato. Il rischio più grande è M1.9 (16 moduli, un pannello
+  ciascuno): ogni modulo con l'app dentro vale più di 1 solo se l'analisi è lenta o con molti requisiti.
+- **Download.** Misurato su GitHub Actions: 14–18 s per la SST giornaliera 2003–2026 di un punto
+  (8674 giorni). Su Streamlit Cloud non è misurato: si misura in MA.2 con le credenziali del proprietario.
 - **Tappe con demo.** `METODO_E_FASI.md` chiede una tappa con la sua demo ogni tre-sei settimane,
   e la milestone ne stima 32–42 sessioni. La chiusura della fetta verticale (M1.6) è la prima
   tappa, con la sua demo da riga di comando: su coordinate mai usate, un comando scarica la SST,
