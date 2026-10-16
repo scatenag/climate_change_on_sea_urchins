@@ -199,9 +199,15 @@ def write_dataset(ds: Dataset, out_dir: str | Path, *, now: Callable[[], dt.date
 
 def environment_dataset(sst: pd.DataFrame, baseline: tuple[int, int]) -> Dataset:
     """The monthly temperature and the heatwave catalogue from the daily SST alone, with no response: the view of the
-    first step of the user's own data. The same builder as for a study (one implementation), with a response of one
-    placeholder value per month that nothing reads."""
+    first step of the user's own data. The same builder as for a study (one implementation); the response of its
+    monthly table is a placeholder and is marked as such (missing, and not real), so nothing can take it for data."""
     days = pd.to_datetime(sst["Datetime"].dropna())
     months = pd.date_range(days.min().replace(day=1), days.max(), freq="MS")
     placeholder = pd.DataFrame({"Datetime": months, "value": 1.0, "ci_upper": np.nan, "ci_lower": np.nan, "n": 1})
-    return build_dataset(sst=sst, response=placeholder, imputation=None, baseline=baseline)
+    ds = build_dataset(sst=sst, response=placeholder, imputation=None, baseline=baseline)
+    ds.monthly["response"] = np.nan
+    ds.monthly["response_imputed"] = True
+    for col in ("response_ci_upper", "response_ci_lower", "response_n"):
+        ds.monthly[col] = np.nan
+    ds.coverage["response"] = None
+    return ds

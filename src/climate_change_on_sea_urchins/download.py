@@ -108,10 +108,25 @@ def _check_credentials(c: Credentials) -> None:
             "environment or from any file.")
 
 
+MIN_MASKABLE_LENGTH = 4
+WITHHELD = "[message withheld: it may contain the credentials]"
+
+
 def _mask(text: str, c: Credentials) -> str:
-    for secret in (c.username, c.password):
-        if isinstance(secret, str) and secret:
-            text = text.replace(secret, "***")
+    """The message with the credentials replaced by ***: the longest first (one may contain the other), each also in
+    its quoted (`repr`, JSON) and URL-encoded forms. A credential too short to be replaced without mangling the text
+    (a one-character password would turn every word into asterisks) withholds the whole message."""
+    import json
+    from urllib.parse import quote, quote_plus
+    secrets = sorted({s for s in (c.username, c.password) if isinstance(s, str) and s}, key=len, reverse=True)
+    if any(len(s) < MIN_MASKABLE_LENGTH for s in secrets):
+        return WITHHELD
+    forms = set()
+    for s in secrets:
+        forms.update({s, repr(s)[1:-1], json.dumps(s)[1:-1], quote(s, safe=""), quote_plus(s)})
+    for form in sorted(forms, key=len, reverse=True):
+        if form:
+            text = text.replace(form, "***")
     return text
 
 

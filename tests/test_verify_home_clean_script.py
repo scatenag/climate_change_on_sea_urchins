@@ -116,3 +116,27 @@ def test_main_fails_when_the_toolbox_writes_in_the_home_directory(tmp_path, monk
     monkeypatch.chdir(tmp_path)
     assert vh.main([str(tmp_path / "out")]) == 1
     assert "catalogue-cache.json" in (tmp_path / "out" / "home-check.md").read_text()
+
+
+def test_a_change_of_a_dotfile_directly_in_the_real_home_is_reported(tmp_path):
+    fh, fc, rh = _dirs(tmp_path)
+    (rh / ".bashrc").write_text("old")
+    client = WritingClient(); client.target = rh / ".bashrc"
+    report = vh.run_check((USER, PASSWORD), lambda: client, fresh_home=fh, fresh_cwd=fc, real_home=rh)
+    assert any(r["path"] == ".bashrc" and r["what"] == "changed" for r in report["written"]["real_home"])
+
+
+def test_a_report_that_would_contain_the_credentials_is_not_written(tmp_path, monkeypatch):
+    from climate_change_on_sea_urchins import download
+    class Leaky(FakeClient):
+        def coverage_of(self, variable):
+            (Path(os.environ["HOME"]) / f"{USER}-cache.json").write_text("x")     # a path that carries the username
+            return super().coverage_of(variable)
+    monkeypatch.setattr(download, "CopernicusClient", Leaky)
+    monkeypatch.setenv("COPERNICUSMARINE_SERVICE_USERNAME", USER)
+    monkeypatch.setenv("COPERNICUSMARINE_SERVICE_PASSWORD", PASSWORD)
+    real_home = tmp_path / "real_home"; real_home.mkdir()
+    monkeypatch.setenv("HOME", str(real_home))
+    monkeypatch.chdir(tmp_path)
+    assert vh.main([str(tmp_path / "out")]) == 2
+    assert not (tmp_path / "out" / "home-check.md").exists() and not (tmp_path / "out" / "home-check.json").exists()

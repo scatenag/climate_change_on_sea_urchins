@@ -168,7 +168,7 @@ def test_a_failure_to_read_the_catalogue_is_shown_with_a_way_to_retry(monkeypatc
     ("", "10.4", "x", "latitude"),
     ("43.4", "", "x", "longitude"),
     ("43,4", "10.4", "x", "dot"),
-    ("abc", "10.4", "x", "not a number"),
+    ("abc", "10.4", "x", "plain decimal"),
     ("95", "10.4", "x", "between"),
     ("43.4", "10.4", "  ", "name"),
 ])
@@ -214,7 +214,7 @@ def test_the_series_and_the_manifest_are_written_in_the_session_folder_with_the_
     series = pd.read_csv(inputs / "sst_daily.csv", parse_dates=["Datetime"])
     manifest = json.loads((inputs / "sst_daily.manifest.json").read_text())
     assert series["Datetime"].min() == pd.Timestamp("2003-01-01") and len(series) == manifest["n_days"]
-    assert manifest["timing"]["download_seconds"] >= 0 and manifest["site"]["name"] == "Test site"
+    assert isinstance(manifest["timing"]["download_seconds"], float) and manifest["site"]["name"] == "Test site"
     assert "seconds" in _text(at) and "days" in _text(at)
 
 
@@ -225,6 +225,16 @@ def test_the_download_starts_at_the_baseline_or_earlier_for_the_first_measuremen
     client.calls.clear()
     _submit(_fill(_open(), start=1991, end=2020, first_year="1988"))
     assert min(c[5] for c in client.calls if c[0] == "subset") == dt.date(1987, 1, 1)
+
+
+def test_the_download_start_leaves_room_for_the_lags_the_specification_allows(client, monkeypatch):
+    client.coverage = Coverage(start=dt.date(1987, 1, 1), end=dt.date(2026, 8, 31), version="202511")
+    _submit(_fill(_open(), start=1991, end=2020, first_year="1992"))
+    assert min(c[5] for c in client.calls if c[0] == "subset") == dt.date(1991, 1, 1)          # 12 months before 1992
+    client.calls.clear()
+    monkeypatch.setattr(step_site, "max_lag_months", lambda: 24)
+    _submit(_fill(_open(), start=1991, end=2020, first_year="1992"))
+    assert min(c[5] for c in client.calls if c[0] == "subset") == dt.date(1990, 1, 1)          # 24 months before 1992
 
 
 def test_the_credentials_reach_the_download_as_the_users_own(fixture_client):
@@ -241,7 +251,7 @@ def test_the_view_shows_the_heatwaves_the_dataset_builder_finds(fixture_client):
     at = _submit(_fill(_open()))
     sst = pd.read_csv(FIXTURE_SST, parse_dates=["Datetime"])
     expected = len(dataset_builder.environment_dataset(sst, (2003, 2012)).mhw_events)
-    assert f"{expected} marine heatwave" in _text(at)
+    assert re.search(rf"(?<!\d){expected} marine heatwave", _text(at))
 
 
 def test_a_failure_of_the_view_is_shown_not_hidden(fixture_client):
@@ -267,10 +277,16 @@ def test_another_session_does_not_see_the_download(fixture_client):
 # --- the credentials: nowhere -----------------------------------------------------------------------------
 
 def _assert_nowhere(at, capsys, caplog, secret):
+    """The credentials are in no place the code controls straight after the submit (the state it can read and write, the
+    session state mapping); and in none at all one script run later: Streamlit keeps the request's widget values, which
+    the browser has already cleared, until the next run, and streamlit.testing does not emulate the browser's clearing."""
+    state = at.session_state
+    assert secret not in repr(state.filtered_state) + repr(state._state._old_state) + repr(state._state._new_session_state)
+    at.run()
     out, err = capsys.readouterr()
     where = {
         "files of the session folder": _files_text(_ctx(at).workdir),
-        "session state": repr(dict(at.session_state.filtered_state)),
+        "session state": repr(at.session_state._state),          # the raw state, widget values included
         "the context": repr(_ctx(at)),
         "rendered text": _text(at),
         "environment": "\n".join(os.environ.values()),
@@ -309,20 +325,129 @@ def _calls(path):
     return [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
 
 
-def test_the_credentials_form_is_a_password_field_inside_a_form_that_clears_on_submit():
-    src = (PKG / "step_site.py").read_text()
-    tree = ast.parse(src)
-    kwargs = lambda call: {k.arg: ast.literal_eval(k.value) for k in call.keywords if isinstance(k.value, ast.Constant)}
-    password_fields = [c for c in _calls(PKG / "step_site.py") if isinstance(c.func, ast.Attribute) and c.func.attr == "text_input"
-                       and kwargs(c).get("type") == "password"]
-    forms = [c for c in _calls(PKG / "step_site.py") if isinstance(c.func, ast.Attribute) and c.func.attr == "form"]
-    assert len(password_fields) == 1 and not [k for k in password_fields[0].keywords if k.arg == "key"]   # no state key
-    assert len(forms) == 1 and kwargs(forms[0]).get("clear_on_submit") is True
+def _kwargs(call):
+    return {k.arg: ast.literal_eval(k.value) for k in call.keywords if isinstance(k.value, ast.Constant)}
 
 
-@pytest.mark.parametrize("forbidden", [r"\blogin\b", r"\bos\.environ\b", r"\bgetenv\b", r"st\.cache", r"session_state\[[^\]]*(pass|user|cred)",
-                                       r"\bprint\(", r"logging", r"\.netrc"])
+def test_the_credentials_form_is_a_password_field_in_a_self_clearing_form_with_a_callback_that_empties_it():
+    calls = _calls(PKG / "step_site.py")
+    attr = lambda c, name: isinstance(c.func, ast.Attribute) and c.func.attr == name
+    password_fields = [c for c in calls if attr(c, "text_input") and _kwargs(c).get("type") == "password"]
+    forms = [c for c in calls if attr(c, "form")]
+    submits = [c for c in calls if attr(c, "form_submit_button")]
+    assert len(password_fields) == 1 and len(forms) == 1 and _kwargs(forms[0]).get("clear_on_submit") is True
+    assert len(submits) == 1 and any(k.arg == "on_click" for k in submits[0].keywords)
+
+
+@pytest.mark.parametrize("forbidden", [r"\blogin\b", r"\bos\.environ\b", r"\bgetenv\b", r"st\.cache", r"\bprint\(", r"logging", r"\.netrc"])
 def test_the_step_never_reads_the_environment_logs_caches_or_logs_in(forbidden):
-    code = re.sub(r"#.*", "", (PKG / "step_site.py").read_text())
-    code = re.sub(r'"""[\s\S]*?"""', "", code)
-    assert not re.search(forbidden, code, re.IGNORECASE), forbidden
+    tree = ast.parse((PKG / "step_site.py").read_text())
+    for node in ast.walk(tree):                      # no docstrings, no comments: only the code and its strings
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.ClassDef)) and node.body and isinstance(node.body[0], ast.Expr) \
+                and isinstance(node.body[0].value, ast.Constant) and isinstance(node.body[0].value.value, str):
+            node.body = node.body[1:] or [ast.Pass()]
+    assert not re.search(forbidden, ast.unparse(tree), re.IGNORECASE), forbidden
+
+
+# --- what the review of the piece found ------------------------------------------------------------------------
+
+def test_the_credential_fields_are_empty_in_the_state_after_the_submit(fixture_client):
+    at = _submit(_fill(_open()))
+    assert fixture_client.credentials_seen
+    assert _by_label(at, "Copernicus username").value == "" and _by_label(at, "Copernicus password").value == ""
+
+
+def test_credentials_are_stripped_of_the_spaces_pasted_around_them(fixture_client):
+    _submit(_fill(_open(), user=f"  {USER} ", password=f" {PASSWORD}  "))
+    assert set(fixture_client.credentials_seen) == {(USER, PASSWORD)}
+
+
+def test_a_credential_too_short_to_mask_withholds_the_whole_error_message(client):
+    client.fail_with = "the account ab is not known (reference ZZMARK77)"
+    at = _submit(_fill(_open(), user="ab", password="a-long-enough-pass"))
+    assert "withheld" in _text(at) and "ZZMARK77" not in _text(at)
+
+
+@pytest.mark.parametrize("year", ["20030", "1", "2_003", "abc", "２００３", "2003.5", "1850"])
+def test_a_first_measurement_year_that_is_not_a_four_digit_year_is_refused_by_the_validation(client, year):
+    at = _submit(_fill(_open(), first_year=year))
+    assert not at.exception and "first year" in _errors(at) and not [c for c in client.calls if c[0] == "subset"]
+
+
+def test_a_first_measurement_year_after_the_last_covered_year_is_refused(client):
+    at = _submit(_fill(_open(), first_year="2099"))
+    assert "first year" in _errors(at) and not [c for c in client.calls if c[0] == "subset"]
+
+
+@pytest.mark.parametrize("lat", ["1_0.4", "４３.4", "+43.4e1", "43.", "nan", "inf"])
+def test_a_coordinate_that_is_not_plain_decimal_is_refused(client, lat):
+    at = _submit(_fill(_open(), lat=lat))
+    assert not at.exception and "latitude" in _errors(at) and not [c for c in client.calls if c[0] == "subset"]
+
+
+def test_a_site_name_with_markup_is_refused(client):
+    at = _submit(_fill(_open(), name="[x](http://evil.example) **b**"))
+    assert "name" in _errors(at) and not [c for c in client.calls if c[0] == "subset"]
+
+
+def test_a_baseline_of_fewer_than_ten_years_is_refused_before_any_download_call(client):
+    at = _submit(_fill(_open(), start=2003, end=2003))
+    assert "too short" in _errors(at) and not [c for c in client.calls if c[0] == "subset"]
+
+
+def test_changing_the_choice_leaves_neither_the_result_nor_the_files(fixture_client):
+    at = _submit(_fill(_open()))
+    inputs = _ctx(at).workdir / "inputs"
+    assert inputs.exists()
+    next(b for b in at.button if "Change" in b.label).click().run()
+    next(b for b in at.button if "own data" in b.label).click().run()
+    assert not at.exception and "downloaded in" not in _text(at) and "no longer there" not in _text(at) and not inputs.exists()
+    assert "step1" not in _ctx(at).data and "step1_view" not in _ctx(at).data
+
+
+def test_a_stale_result_is_flagged_also_when_the_inputs_are_invalid_now(fixture_client):
+    at = _submit(_fill(_open()))
+    _by_label(at, "Latitude (degrees north)").set_value("").run()
+    assert "earlier inputs" in _text(at)
+
+
+def test_a_failed_new_download_leaves_no_old_series_behind(fixture_client):
+    at = _submit(_fill(_open()))
+    inputs = _ctx(at).workdir / "inputs"
+    assert (inputs / "sst_daily.csv").exists()
+    fixture_client.fail_with = "service unavailable"
+    at = _submit(_fill(at))
+    assert "unavailable" in _text(at) and not (inputs / "sst_daily.csv").exists() and "downloaded in" not in _text(at)
+
+
+def test_a_session_folder_that_was_swept_while_the_tab_stayed_open_is_said_not_crashed(fixture_client):
+    at = _submit(_fill(_open()))
+    (_ctx(at).workdir / "inputs" / "sst_daily.csv").unlink()
+    at.run()
+    assert not at.exception and "no longer" in _text(at)
+
+
+def test_the_choices_that_are_not_in_the_form_are_shown(fixture_client):
+    at = _open()
+    text = _text(at)
+    assert "0.1 degrees" in text and "0.0" in text and "5.0 m" in text and "12 months" in text
+
+
+def test_the_view_does_not_recompute_the_heatwaves_at_every_run(fixture_client, monkeypatch):
+    calls = []
+    real = dataset_builder.environment_dataset
+    monkeypatch.setattr(dataset_builder, "environment_dataset", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    at = _submit(_fill(_open()))
+    at.run(); _by_label(at, "Name of the site").set_value("Same site again").run()
+    assert len(calls) == 1
+
+
+def test_the_events_are_split_between_the_baseline_years_and_the_years_after(fixture_client):
+    at = _submit(_fill(_open()))
+    assert re.search(r"\d+ in the baseline years", _text(at)) and re.search(r"\d+ after", _text(at))
+
+
+def test_the_placeholder_response_of_the_view_is_marked_as_not_real():
+    sst = pd.read_csv(FIXTURE_SST, parse_dates=["Datetime"])
+    ds = dataset_builder.environment_dataset(sst, (2003, 2012))
+    assert ds.monthly["response"].isna().all() and ds.monthly["response_imputed"].all()

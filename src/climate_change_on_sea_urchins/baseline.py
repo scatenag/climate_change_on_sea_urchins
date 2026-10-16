@@ -14,7 +14,8 @@ from .download import Coverage
 
 DEFAULT_BASELINE = (1991, 2020)
 STANDARD_YEARS = 30           # a period of 30 years is recommended (Hobday et al. 2016, ADR-0014)
-SHORT_YEARS = 15              # below this the 90th percentile threshold is noisy: a warning
+MIN_YEARS = 10                # below this the 90th percentile of a day is the handful of values themselves: an error
+SHORT_YEARS = 15              # below this the threshold is noisy: a warning
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,10 @@ def check_baseline(start: int, end: int, coverage: Coverage) -> tuple[list[str],
         errors.append(f"The baseline starts in {start}, before the first year the product covers in full ({first}).")
     if end > last:
         errors.append(f"The baseline ends in {end}, after the last year the product covers in full ({last}).")
+    if not errors and end - start + 1 < MIN_YEARS:
+        errors.append(f"A baseline of {end - start + 1} years is too short: the heatwave threshold (90th percentile of each "
+                      f"day of the year) would be made of the few values themselves. Use at least {MIN_YEARS} years "
+                      f"({STANDARD_YEARS} are recommended).")
     if errors:
         return errors, warnings
     if end - start + 1 < SHORT_YEARS:

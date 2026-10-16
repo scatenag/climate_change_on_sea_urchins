@@ -2,6 +2,7 @@
 and where the download starts. The coverage of the product comes from the catalogue, never from a date in the code."""
 import ast
 import datetime as dt
+import re
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,14 @@ def test_a_baseline_outside_the_covered_years_is_an_error():
     assert any("start" in e and "end" in e for e in errors)
 
 
+def test_a_baseline_shorter_than_ten_years_is_an_error_because_the_threshold_would_be_the_data_themselves():
+    for start, end in ((2003, 2003), (2003, 2004), (2003, 2011)):
+        errors, _ = baseline.check_baseline(start, end, cov("1987-01-01", "2026-08-31"))
+        assert any("at least 10" in e for e in errors), (start, end)
+    errors, _ = baseline.check_baseline(2003, 2012, cov("1987-01-01", "2026-08-31"))
+    assert not errors                                 # Livorno's own baseline is ten years
+
+
 def test_a_short_baseline_and_one_that_reaches_the_last_year_are_warned_not_refused():
     errors, warnings = baseline.check_baseline(2003, 2012, cov("1987-01-01", "2026-08-31"))
     assert not errors and any("15" in w for w in warnings)
@@ -77,4 +86,6 @@ def test_no_coverage_date_is_written_in_the_code_except_the_default():
     for node in ast.walk(tree):
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and 1900 <= node.value <= 2100:
             years.append(node.value)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and re.search(r"\b(19|20)\d\d\b", node.value):
+            assert len(node.value) > 100, node.value        # a year in a string only inside a docstring, never as data
     assert sorted(years) == [1991, 2020]          # DEFAULT_BASELINE and nothing else

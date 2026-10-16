@@ -30,8 +30,11 @@ def snapshot(root: Path, names: list[str] | None = None) -> dict[str, tuple[int,
         return out
     targets = [root / n for n in names] if names is not None else [root]
     if names is not None:
-        for child in root.iterdir():
-            out.setdefault(f"<top-level> {child.name}", (0, 0))
+        for child in root.iterdir():          # every top-level name; a file directly in the home also by size and time
+            if child.is_file() and not child.is_symlink():
+                st = child.stat(); out[child.name] = (st.st_size, st.st_mtime_ns)
+            else:
+                out.setdefault(f"<top-level> {child.name}", (0, 0))
     for t in targets:
         if t.is_file():
             st = t.stat(); out[str(t.relative_to(root))] = (st.st_size, st.st_mtime_ns)
@@ -106,11 +109,11 @@ def main(argv=None) -> int:
 
     report = run_check((user, password), factory, fresh_home=fresh_home, fresh_cwd=fresh_cwd, real_home=real_home)
     text = summary(report)
+    if any(secret in text or secret in json.dumps(report) for secret in (user, password)):
+        print("FAIL: credentials found in the report: nothing is written", file=sys.stderr)    # before any file or summary
+        return 2
     (out / "home-check.json").write_text(json.dumps(report, indent=2))
     (out / "home-check.md").write_text(text)
-    if user in text or password in text:
-        print("FAIL: credentials found in the report", file=sys.stderr)
-        return 2
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write(text)

@@ -15,7 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   holding the global lock, written with its manifest (and the download duration) in the session folder, and shown with the
   marine heatwaves detected on it. Refusals come with their reason before any download call (outside the domain, baseline
   not covered, land cell, sea the product does not cover). The credentials are in no file, state, cache, log, environment
-  variable or message (tests, seen failing on sabotage). `requirements.txt` now installs the `acquisition` extra.
+  variable or message (tests, seen failing on sabotage). A baseline under 10 years is refused (provisional, ADR-0016). The
+  masking of messages (`download._mask`) now covers one secret inside the other, quoted and URL-encoded forms, and withholds a
+  message when a credential is too short to be masked. `requirements.txt` now installs the `acquisition` extra, pinned to
+  ranges in `pyproject.toml`.
   `scripts/verify_home_clean.py` (a step of `verify_slice.yml`) checks with the real toolbox that `describe` and `subset`
   write nothing in the home directory.
 - **App entry** (milestone MA.1, new `app_entry.py` and `own_data.py`, ADR-0015). `app.py` now draws an entry
