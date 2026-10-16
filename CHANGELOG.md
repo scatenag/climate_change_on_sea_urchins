@@ -8,6 +8,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **`ccsu-run-study`** (milestone M1.5, new `run_study.py`, ADR-0012). One study, one process: from a
+  format-2 study file and a folder with the response CSV and the downloaded daily SST to `ccf.csv`
+  (Spearman between the driver's and the response's first differences, lags 0..`analysis.max_lag_months`,
+  Benjamini-Hochberg over the lags performed, `r_toward_adverse` signed by the declared adverse direction),
+  the dataset of M1.4, `progress.json` (written atomically at every step, readable from another process)
+  and `run.json` (hashes of the study and the inputs, the download manifest, parameters, **tests declared,
+  performed and not performed with the reason**, coverage, versions, commit). The differences use **only
+  pairs of consecutive months that are both real**, whatever imputation the study declares: a difference with
+  an imputed end is not an observation (in Livorno's pipeline 29% of the first-difference pairs kept have the
+  previous month imputed; that pipeline is unchanged). One driver in this version: the monthly SST.
+  Refuses, with the reason, a format-1 study, a non-CSV response source, more than one site or response,
+  and a study without `sst_daily`.
+- **`analysis.max_lag_months`** in the study file (default 12, 1–60); Livorno declares 12, equal to
+  `common.TAU_MAX` (a test keeps them equal). `mhw_analysis.ccf_at_lags` is the lag-parametrised core of
+  `compute_ccf` (same result).
+- Known limit of M1, recorded in ADR-0000 item 19: the command runs where `common` has loaded Livorno's study
+  (editable install from a repository checkout). Two tests guard it: a static check that nothing on the
+  command's path reads that state, and a run of the same study in processes with different studies loaded.
+
 - **The dataset builder** (milestone M1.4, new `dataset_builder.py`). From the daily SST and a monthly
   response series to the monthly table (`monthly.csv`: temperature, response, `response_imputed`,
   interval, count), the heatwave catalogue (events, monthly, annual) and a manifest with the coverage,

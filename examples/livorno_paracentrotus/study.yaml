@@ -106,3 +106,7 @@ environment:
     unit: uatm
 
 windows: []
+
+# Lags 0..12 months are tested (common.TAU_MAX); a test keeps the two equal.
+analysis:
+  max_lag_months: 12

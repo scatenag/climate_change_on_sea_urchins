@@ -29,18 +29,19 @@ from .common import load_data, default_results_dir, ALL_COLS, MHW_COLS, TAU_MAX,
 
 # ── 1. CCF ────────────────────────────────────────────────────────────────────
 
-def compute_ccf(df: pd.DataFrame, driver: str, targets: list[str]) -> pd.DataFrame:
+def ccf_at_lags(df: pd.DataFrame, driver: str, targets: list[str], max_lag: int) -> pd.DataFrame:
     """
     For each target variable: Spearman r between driver(t-k) and target(t)
-    at each lag k in 0..TAU_MAX.
-    Uses only real EC50 measurements for EC50; full series for others.
+    at each lag k in 0..max_lag, on the pairs where both are present (at
+    least 10, else NaN). Knows nothing about any study: the lags come from
+    the caller (the one implementation behind compute_ccf and ccsu-run-study).
     """
     rows = []
     mhw = df[driver].values
 
     for target in targets:
         src = df[target].values
-        for lag in range(0, TAU_MAX + 1):
+        for lag in range(0, max_lag + 1):
             if lag == 0:
                 x, y = mhw, src
             else:
@@ -55,6 +56,15 @@ def compute_ccf(df: pd.DataFrame, driver: str, targets: list[str]) -> pd.DataFra
             rows.append(dict(variable=target, lag=lag, spearman_r=r, p_value=p, n=int(mask.sum())))
 
     return pd.DataFrame(rows)
+
+
+def compute_ccf(df: pd.DataFrame, driver: str, targets: list[str]) -> pd.DataFrame:
+    """
+    For each target variable: Spearman r between driver(t-k) and target(t)
+    at each lag k in 0..TAU_MAX (Livorno's lag range).
+    Uses only real EC50 measurements for EC50; full series for others.
+    """
+    return ccf_at_lags(df, driver, targets, TAU_MAX)
 
 
 def _mask_imputed(df: pd.DataFrame, target: str, values: np.ndarray) -> np.ndarray:

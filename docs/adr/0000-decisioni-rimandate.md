@@ -308,3 +308,20 @@ prodotto analysis-forecast, ma non lo si usa. È una scelta di metodo: reanalisi
 la stessa serie, e aggiungere la coda cambia la SST degli ultimi mesi e quindi le ondate di calore rilevate
 dove i ritardi più recenti pesano di più. Se si decide di sì, andranno dichiarati nella specifica quale
 coda e da quando, e il manifest dovrà distinguere i giorni dei due prodotti.
+
+---
+
+## 19. Studi diversi nello stesso processo: la separazione di `common` dallo studio di Livorno
+
+**Domanda:** quando `common` smette di caricare lo studio di Livorno all'importazione, così che i moduli
+dell'analisi non abbiano nessuno stato di un caso e `ccsu-run-study` giri anche da un'installazione non
+editabile.
+
+**Contesto:** `common` risolve all'importazione lo studio selezionato (`CCSU_STUDY`, predefinito Livorno) e ne
+espone `DATA`, `RESULTS`, `SPLIT_DATE`, la linea di base delle ondate e `TAU_MAX`; i moduli della pipeline li
+leggono. `ccsu-run-study` (M1.5) non li usa, ma gira in un processo dove esistono, e solo da una copia del
+repository con `data/` ed `examples/` (installazione editabile). Per M1 il rischio è coperto da un test
+statico che vieta quei riferimenti nel codice del comando e da un test che confronta i risultati di uno studio
+in processi con studi diversi caricati (ADR-0012). Separare davvero tocca ogni modulo della pipeline di
+Livorno e il golden master: è una decisione di struttura, non un dettaglio di M1.5. Da riprendere se il
+pacchetto deve essere installato da PyPI (D2) o se i due test diventano fragili.
