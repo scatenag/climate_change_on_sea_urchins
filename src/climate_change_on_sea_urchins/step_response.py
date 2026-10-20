@@ -221,7 +221,7 @@ def _render_upload(ctx, step1: dict) -> None:
         else:
             st.warning("The dates do not fit any of the formats this version reads.")
     a["decimal"] = _choose("Decimal separator of the numbers", list(DECIMALS), "s2_decimal", fp, "radio")
-    a["date_format"] = st.selectbox("Format of the dates", list(DATE_FORMATS.values()), index=0, key=f"s2_dfmt_{fp}")
+    a["date_format"] = _choose("Format of the dates", list(DATE_FORMATS.values()), "s2_dfmt", fp)
     a["rows"] = _choose("What does one row of the file hold?", list(ROWS), "s2_rows", fp, "radio")
     others = [NO_COLUMN] + [c for c in columns]
     lo = st.selectbox("Column with the lower end of the interval (optional)", others, index=0, key=f"s2_lo_{fp}")

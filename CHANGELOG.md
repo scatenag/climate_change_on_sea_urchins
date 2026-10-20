@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Step 2 of the user's own data** (milestone MA.3, new `step_response.py`, ADR-0017). The response series: a CSV the user
+  uploads, or a test series with a known lag (`known_truth`) made from the temperature just downloaded. For the CSV the app
+  says what the file looks like (`suggest_format`) and then asks for the separator, the date and value columns, the decimal
+  separator and the date format, and for what the specification asks (what a row holds, name, unit, kind of quantity, which way
+  the value moves when the organisms do worse, optional interval): every question starts with no answer, and a date a file
+  cannot settle is said to be the user's to settle. The problems of the reader are shown with their lines, as code, never as
+  Markdown. The outcome is a study folder (`study.yaml` format 2 written with a safe dump and loaded back, `response.csv`
+  under a fixed name, the SST and its manifest) that `ccsu-run-study` runs, and `study.yaml` can be downloaded.
+  `response_csv.decode_text` is the reader's decoding, now public (same behaviour).
 - **Step 1 of the user's own data** (milestone MA.2, new `step_site.py` and `baseline.py`, ADR-0016). Site (latitude,
   longitude, name, nothing pre-filled), baseline years (proposed 1991–2020 when the product covers them, else the first
   thirty covered years, from the coverage read in the Copernicus catalogue; ADR-0014), the optional first year of the

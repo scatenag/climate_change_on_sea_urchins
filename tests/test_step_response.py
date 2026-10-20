@@ -100,8 +100,10 @@ def _fill_answers(at, **kw):
     cfg.update(kw)
     _pick(at, "Field separator in the file", cfg["delimiter"]); at.run()
     _pick(at, "Column with the date", cfg["date_col"]); _pick(at, "Column with the measurement value", cfg["value_col"]); at.run()
-    _pick(at, "Decimal separator of the numbers", cfg["decimal"]); _pick(at, "Format of the dates", cfg["date_format"])
-    _pick(at, "What does one row of the file hold?", cfg["rows"])
+    for label, key in (("Decimal separator of the numbers", "decimal"), ("Format of the dates", "date_format"),
+                       ("What does one row of the file hold?", "rows")):
+        if cfg[key]:                                  # None leaves the question unanswered, as a user who skips it
+            _pick(at, label, cfg[key])
     _by_label(at, "Name of the response (for the results)").set_value(cfg["label"])
     _by_label(at, "Unit of the response (for example ug/L)").set_value(cfg["unit"])
     if cfg["nature"]:
@@ -298,6 +300,14 @@ def test_a_date_the_file_cannot_settle_blocks_until_the_user_chooses(after_step1
     assert not at.error and (_study_dir(at) / "study.yaml").exists()
 
 
+def test_the_answers_without_a_date_format_are_refused_by_the_validation():
+    answers = dict(delimiter="comma (,)", date_col="when", value_col="ec", decimal="point (12.5)", date_format=None,
+                   rows="One measurement (several in a month are averaged)", label="F", unit="ug/L", nature="An index",
+                   adverse="It goes down (decrease)")
+    assert "Choose the format of the dates." in step_response.validate_answers(answers)
+    assert step_response.validate_answers({**answers, "date_format": "31/01/2020 (day/month/year)"}) == []
+
+
 @pytest.mark.parametrize("body, expect", [
     ("", "empty"),
     ("when,ec\n", "no data"),
@@ -319,7 +329,7 @@ def test_each_kind_of_problem_of_the_file_is_shown_with_its_line(after_step1, mo
 
 def test_a_file_that_is_not_utf8_gets_the_excel_hint(after_step1, monkeypatch):
     at = _start_upload(after_step1, monkeypatch, "when,ec\n2010-01-05,caffè\n".encode("latin-1"))
-    assert "UTF-8" in _text(at) + _code(at) and "Excel" in _text(at) + _code(at)
+    assert "UTF-8" in _code(at) and "Excel" in _code(at)          # a message of the reader goes in the code block
 
 
 def test_a_file_over_the_limit_is_refused_before_it_is_read(after_step1, monkeypatch):
@@ -392,6 +402,13 @@ def test_the_study_of_an_uploaded_file_runs_in_the_command(after_step1, monkeypa
     assert run_study.run_study(folder / "study.yaml", folder, tmp_path / "out", now=CLOCK) == 0
 
 
+def test_a_study_file_that_does_not_load_back_is_refused_not_kept(after_step1, monkeypatch):
+    monkeypatch.setattr(step_response.yaml, "safe_dump", lambda *a, **k: "format_version: 2\nunknown_field: 1\n")
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
+    assert not at.exception and "do not make a valid study" in _errors(at) + _code(at).lower() + " ".join(e.value for e in at.error).lower()
+    assert "step2" not in _ctx(at).data
+
+
 def test_the_study_can_be_downloaded(after_step1, monkeypatch):
     at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
     assert any("study.yaml" in (b.proto.label if hasattr(b, "proto") else "") for b in at.get("download_button"))
@@ -401,8 +418,9 @@ def test_the_study_can_be_downloaded(after_step1, monkeypatch):
 
 def test_a_study_built_for_earlier_step_1_inputs_is_flagged_when_they_change(after_step1, monkeypatch):
     at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
-    _by_label(at, "Name of the site").set_value("Another place").run()
-    assert "earlier inputs" in _text(at) and "step 1" in _text(at).lower()
+    assert "built for earlier inputs of step 1" not in _text(at)
+    _submit(_fill(at, name="Another place"))                      # step 1 downloaded again for another site
+    assert "built for earlier inputs of step 1" in _text(at)
 
 
 def test_another_session_does_not_see_the_study(after_step1, monkeypatch):
