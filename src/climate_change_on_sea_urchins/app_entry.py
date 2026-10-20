@@ -21,7 +21,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from . import own_data
+from . import own_data, step_run
 
 CONTEXT_KEY = "ccsu_ctx"
 CHOICE_KEY = "ccsu_choice"
@@ -71,6 +71,7 @@ def sweep_stale_sessions(root: Path | None = None, *, keep: str | None = None, n
         alive = entry / ALIVE_FILE
         last_seen = alive.stat().st_mtime if alive.is_file() else entry.stat().st_mtime
         if now - last_seen > max_idle:
+            step_run.kill_recorded(entry)           # an analysis still running in the folder goes with it
             shutil.rmtree(entry, ignore_errors=True)
             removed.append(entry.name)
     return removed
@@ -99,6 +100,7 @@ def _change_choice() -> None:
         del st.session_state[key]
     ctx = st.session_state.get(CONTEXT_KEY)
     if ctx is not None:                      # what the steps produced goes too (the catalogue's coverage is public: it stays)
+        step_run.stop(ctx)                   # and an analysis that is still running
         for key in [k for k in ctx.data if k != "coverage"]:
             del ctx.data[key]
         for child in ctx.workdir.iterdir():
@@ -109,6 +111,7 @@ def _change_choice() -> None:
 
 def _delete_my_data() -> None:
     ctx = st.session_state[CONTEXT_KEY]
+    step_run.stop(ctx)
     shutil.rmtree(ctx.workdir, ignore_errors=True)
     st.session_state[CONTEXT_KEY] = SessionContext.new()
 

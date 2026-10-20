@@ -33,7 +33,7 @@ def _app():
 
 
 def _texts(at):
-    return " ".join(e.value for kind in (at.markdown, at.text, at.caption, at.header, at.subheader) for e in kind)
+    return " ".join(e.value for kind in (at.markdown, at.text, at.caption, at.header, at.subheader, at.info) for e in kind)
 
 
 def _button(at, label_part):
@@ -60,14 +60,14 @@ def test_the_sea_urchin_case_renders_todays_dashboard():
     assert not at.exception and [r for r in at.radio if r.label == "Section"]
 
 
-def test_the_own_data_way_shows_three_steps_that_are_not_available_yet():
+def test_the_own_data_way_shows_the_three_steps():
     at = _app().run()
     _button(at, "own data").click().run()
     assert not at.exception
     text = _texts(at)
     for step in ("Step 1", "Step 2", "Step 3"):
         assert step in text
-    assert "not available yet" in text.lower()
+    assert "Complete step 1 first" in text and "Build the study in step 2 first" in text
     assert not [r for r in at.radio if r.label == "Section"]
 
 
