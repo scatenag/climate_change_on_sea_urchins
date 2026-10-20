@@ -24,7 +24,7 @@ from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
 
-from . import RERUN_LOCK, baseline, catalog, dataset_builder, download
+from . import RERUN_LOCK, baseline, catalog, dataset_builder, download, step_run
 from .study_spec import AnalysisSpec, SiteSpec
 
 CATALOG_ID = "sst_daily"
@@ -174,6 +174,7 @@ def _on_submit(ctx) -> None:
     st.session_state[PW_KEY] = ""
     credentials = download.Credentials((user or "").strip(), (password or "").strip())
     del user, password
+    step_run.reset(ctx)                                                         # and the analysis of it
     for key in ("step1", "step1_view", "step1_error", "step1_errors", "step2"):      # a new series: the study built on the old one goes
         ctx.data.pop(key, None)
     shutil.rmtree(ctx.workdir / "study", ignore_errors=True)

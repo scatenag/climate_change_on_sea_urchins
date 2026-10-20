@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Step 3 of the user's own data** (milestone MA.4, new `step_run.py`, ADR-0018). The study built in step 2 is run by
+  `ccsu-run-study` in a separate process that receives files only: an environment built from an allowlist with a fresh empty
+  HOME, paths as arguments, never a credential. The page follows `progress.json` with a fragment that reruns itself every two
+  seconds, outside the global lock; at most two analyses run at once on a server; a run can be interrupted and is stopped when the
+  user changes choice, deletes the data, downloads again or builds another study. The result is shown from the values: the lags
+  tested and not tested, the ones that pass the Benjamini-Hochberg correction with their sign against the declared adverse
+  direction, the table and chart of Spearman r by lag, the parameters, the limits of the method stated every time, and for a test
+  series the verdict on the known lag. Streamlit's lower bound is now 1.37 (fragments that rerun on a timer).
 - **Step 2 of the user's own data** (milestone MA.3, new `step_response.py`, ADR-0017). The response series: a CSV the user
   uploads, or a test series with a known lag (`known_truth`) made from the temperature just downloaded. For the CSV the app
   says what the file looks like (`suggest_format`) and then asks for the separator, the date and value columns, the decimal

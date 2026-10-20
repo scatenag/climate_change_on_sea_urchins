@@ -27,7 +27,7 @@ import pandas as pd
 import streamlit as st
 import yaml
 
-from . import RERUN_LOCK, dataset_builder, known_truth, response_csv, step_site
+from . import RERUN_LOCK, dataset_builder, known_truth, response_csv, step_run, step_site
 from .study_spec import StudySpec, StudySpecError, load_study
 
 SOURCE_UPLOAD = "Upload a CSV file"
@@ -165,6 +165,7 @@ def _render_test(ctx, step1: dict):
     key = ("test", int(seed), int(lag), float(share))
     if st.button("Generate the test series"):
         ctx.data.pop("step2", None)
+        step_run.reset(ctx)
         if int(seed) < 0:
             st.error("The seed must be 0 or more.")
             return key
@@ -271,6 +272,7 @@ def _render_upload(ctx, step1: dict):
     if not st.button("Check the file and build the study"):
         return key
     ctx.data.pop("step2", None)
+    step_run.reset(ctx)
     shutil.rmtree(ctx.workdir / STUDY_DIR, ignore_errors=True)
     errors = validate_answers(a)
     if errors:

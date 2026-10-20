@@ -57,7 +57,7 @@ plotly>=5.18
 # very first interaction after load produces a blank page with zero
 # server-side trace) right around when it drifted onto a 1.57+ build.
 # Revisit once that migration has had time to mature upstream.
-streamlit>=1.35,<1.57
+streamlit>=1.37,<1.57
 Pillow>=10.0
 # pyarrow comes in through streamlit (which asks only pyarrow>=7.0) and the numpy bound above does not
 # reach it: pyarrow 26.0.0, published 2026-10-09, requires NumPy 2 and fails at import ("pyarrow

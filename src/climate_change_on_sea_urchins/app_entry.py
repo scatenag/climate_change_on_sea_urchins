@@ -21,7 +21,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from . import own_data
+from . import own_data, step_run
 
 CONTEXT_KEY = "ccsu_ctx"
 CHOICE_KEY = "ccsu_choice"
@@ -99,6 +99,7 @@ def _change_choice() -> None:
         del st.session_state[key]
     ctx = st.session_state.get(CONTEXT_KEY)
     if ctx is not None:                      # what the steps produced goes too (the catalogue's coverage is public: it stays)
+        step_run.stop(ctx)                   # and an analysis that is still running
         for key in [k for k in ctx.data if k != "coverage"]:
             del ctx.data[key]
         for child in ctx.workdir.iterdir():
@@ -109,6 +110,7 @@ def _change_choice() -> None:
 
 def _delete_my_data() -> None:
     ctx = st.session_state[CONTEXT_KEY]
+    step_run.stop(ctx)
     shutil.rmtree(ctx.workdir, ignore_errors=True)
     st.session_state[CONTEXT_KEY] = SessionContext.new()
 
