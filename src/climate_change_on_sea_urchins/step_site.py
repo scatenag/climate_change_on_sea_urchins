@@ -174,8 +174,9 @@ def _on_submit(ctx) -> None:
     st.session_state[PW_KEY] = ""
     credentials = download.Credentials((user or "").strip(), (password or "").strip())
     del user, password
-    for key in ("step1", "step1_view", "step1_error", "step1_errors"):
+    for key in ("step1", "step1_view", "step1_error", "step1_errors", "step2"):      # a new series: the study built on the old one goes
         ctx.data.pop(key, None)
+    shutil.rmtree(ctx.workdir / "study", ignore_errors=True)
     coverage = ctx.data["coverage"]
     inputs, errors, _ = parse_inputs(st.session_state.get("s1_lat"), st.session_state.get("s1_lon"), st.session_state.get("s1_name"),
                                      st.session_state.get("s1_bl_start"), st.session_state.get("s1_bl_end"),

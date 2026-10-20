@@ -323,7 +323,7 @@ def test_each_kind_of_problem_of_the_file_is_shown_with_its_line(after_step1, mo
         _build(at)
         assert not at.exception and expect in _code(at)
     else:
-        assert not at.exception and expect in _text(at) + _code(at)
+        assert not at.exception and expect in _code(at)          # a problem of the file, in the code block
     assert not (_study_dir(at) / "study.yaml").exists()
 
 
@@ -409,6 +409,161 @@ def test_a_study_file_that_does_not_load_back_is_refused_not_kept(after_step1, m
     assert "step2" not in _ctx(at).data
 
 
+# --- what the independent review found ----------------------------------------------------------------------
+
+def test_a_file_with_a_quote_that_never_closes_is_a_problem_of_the_file_not_a_crash(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, '"when,ec\n' + "\n".join("x" * 200 for _ in range(1000)) + "\n")
+    assert not at.exception                                         # at the upload, before any question
+    _pick(at, "Field separator in the file", "comma (,)"); at.run()
+    assert not at.exception and "cannot be parsed as CSV" in _code(at)
+
+
+def test_a_negative_seed_is_refused_not_a_crash(after_step1):
+    at = _generate(after_step1, seed=-1)                  # the widget has a minimum of 0; the step refuses a negative one too
+    assert not at.exception
+    made = _study_dir(at) / "response.manifest.json"
+    assert "seed" in _errors(at) or (made.exists() and json.loads(made.read_text())["seed"] >= 0)
+
+
+def test_a_gap_in_the_downloaded_series_stops_step_2_with_the_reason(monkeypatch):
+    sst = pd.read_csv(FIXTURE_SST, parse_dates=["Datetime"]).set_index("Datetime")["Temperature"]
+    sst[pd.Timestamp("2010-06-15")] = float("nan")
+    c = RecordingClient(coverage=COVERAGE_2003.__class__(start=dt.date(2003, 1, 1), end=sst.index.max().date(), version="202511"), series=sst)
+    monkeypatch.setattr(step_site, "make_client", lambda: c)
+    at = _submit(_fill(_open()))
+    assert not at.exception and "gap" in _shown(at) and "cannot go on" in _shown(at)
+    assert not [r for r in at.radio if r.label.startswith("Where does the response")]
+
+
+def test_the_message_counts_only_the_months_that_have_a_value(after_step1, monkeypatch):
+    text = "when,ec\n" + "\n".join(f"2010-{m:02d}-10,{'' if m in (3, 4) else 20 + m}" for m in range(1, 10)) + "\n"
+    at = _full_flow(after_step1, monkeypatch, text)
+    assert not at.error, _errors(at)
+    assert "7 months with a value" in _shown(at) and "2 months in between have none" in _shown(at)
+
+
+def test_a_series_that_does_not_overlap_the_temperature_is_not_called_ready(after_step1, monkeypatch):
+    rows = pd.DataFrame({"when": pd.date_range("1990-01-01", periods=38, freq="MS"), "ec": range(38)})
+    at = _full_flow(after_step1, monkeypatch, _csv(rows))
+    assert "The study is ready" not in _shown(at) and "no month" in _shown(at) and "no lag can be tested" in _shown(at)
+
+
+def test_a_series_with_too_few_consecutive_months_says_how_many_it_has(after_step1, monkeypatch):
+    rows = pd.DataFrame({"when": pd.date_range("2008-01-01", periods=4, freq="MS"), "ec": [1, 2, 3, 4]})
+    at = _full_flow(after_step1, monkeypatch, _csv(rows))
+    assert "3 pairs of consecutive months" in _shown(at) and "no lag can be tested" in _shown(at)
+
+
+def test_only_months_that_follow_each_other_make_a_pair(after_step1, monkeypatch):
+    months = pd.to_datetime(["2008-01-01", "2008-02-01", "2008-04-01", "2008-05-01", "2008-07-01", "2008-08-01"])
+    at = _full_flow(after_step1, monkeypatch, _csv(pd.DataFrame({"when": months, "ec": [1, 2, 3, 4, 5, 6]})))
+    assert "3 pairs of consecutive months" in _shown(at) and "6 months with a value" in _shown(at)
+
+
+def test_a_good_series_says_how_many_pairs_the_command_will_have(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials(n_months=120)))
+    assert re.search(r"\d+ pairs of consecutive months", _shown(at)) and "no lag can be tested" not in _shown(at)
+
+
+def test_changing_an_answer_after_the_build_flags_the_study_as_not_matching(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
+    assert "answers changed since" not in _shown(at)
+    _by_label(at, "Unit of the response (for example ug/L)").set_value("mg/L").run()
+    assert "answers changed since" in _shown(at)
+
+
+def test_a_second_file_does_not_leave_the_first_ones_study_standing(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
+    up = Upload(_csv(_trials(seed=9)).encode())
+    monkeypatch.setattr(step_response.st, "file_uploader", lambda *a, **k: up)
+    at.run()
+    assert "answers changed since" in _shown(at)
+    assert next(s for s in at.selectbox if s.label == "Field separator in the file").value is None      # the new file starts unanswered
+
+
+def test_a_test_series_whose_settings_were_moved_after_generating_is_flagged(after_step1):
+    at = _generate(after_step1, seed=2)
+    next(n for n in at.number_input if n.label == "Seed").set_value(3).run()
+    assert "answers changed since" in _shown(at)
+
+
+def test_the_test_series_is_made_under_the_global_lock(after_step1, monkeypatch):
+    import climate_change_on_sea_urchins as ccsu
+    held, real = [], known_truth.make_study
+    monkeypatch.setattr(known_truth, "make_study", lambda *a, **k: (held.append(ccsu.RERUN_LOCK.locked()), real(*a, **k))[1])
+    _generate(after_step1)
+    assert held == [True]
+
+
+def test_a_header_with_hundreds_of_columns_is_refused(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, ",".join(f"c{i}" for i in range(300)) + "\n" + ",".join("1" for _ in range(300)) + "\n")
+    _pick(at, "Field separator in the file", "comma (,)"); at.run()
+    assert not at.exception and "300 columns" in _errors(at)
+
+
+def test_the_upload_limit_is_set_in_the_server_configuration_too():
+    cfg = (ROOT / ".streamlit" / "config.toml").read_text()
+    assert re.search(r"(?m)^maxUploadSize\s*=\s*10\s*$", cfg)
+
+
+@pytest.mark.parametrize("missing", ["decimal", "rows", "date_format", "nature", "adverse"])
+def test_every_question_is_required_and_none_is_preset(after_step1, monkeypatch, missing):
+    at = _start_upload(after_step1, monkeypatch, _csv(_trials()))
+    _fill_answers(at, **{missing: None})
+    _build(at)
+    assert not at.exception and at.error and not (_study_dir(at) / "study.yaml").exists(), missing
+
+
+def test_the_what_does_a_row_hold_question_starts_unanswered(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, _csv(_trials()))
+    _pick(at, "Field separator in the file", "comma (,)"); at.run()
+    assert next(r for r in at.radio if r.label == "What does one row of the file hold?").value is None
+
+
+def test_the_validation_requires_each_of_these_answers():
+    base = dict(delimiter="comma (,)", date_col="when", value_col="ec", decimal="point (12.5)", date_format="31/01/2020 (day/month/year)",
+                rows="One measurement (several in a month are averaged)", label="F", unit="ug/L", nature="An index",
+                adverse="It goes down (decrease)")
+    assert step_response.validate_answers(base) == []
+    for key in ("delimiter", "date_col", "value_col", "decimal", "date_format", "rows", "nature", "adverse", "label", "unit"):
+        assert step_response.validate_answers({**base, key: None}), key
+    comma = {**base, "decimal": "comma (12,5)"}
+    assert any("same character" in e for e in step_response.validate_answers(comma))
+
+
+def test_the_options_written_in_the_study(after_step1, monkeypatch):
+    df = pd.DataFrame({"when": pd.date_range("2005-01-01", periods=40, freq="MS")})
+    df["ec"] = np.linspace(20, 30, 40)
+    df["lo"], df["hi"] = df["ec"] - 1, df["ec"] + 1
+    text = df.assign(when=df["when"].dt.strftime("%Y-%m-%d")).to_csv(index=False, sep="\t")
+    at = _start_upload(after_step1, monkeypatch, text)
+    _fill_answers(at, delimiter="tab", rows="One value per month, already combined", adverse="It goes up (increase)",
+                  nature="A toxicological endpoint (for example an EC50)")
+    _pick(at, "Column with the lower end of the interval (optional)", "lo"); _pick(at, "Column with the upper end of the interval (optional)", "hi")
+    _build(at)
+    assert not at.error, _errors(at) + _code(at)
+    r = load_study(_study_dir(at) / "study.yaml").responses[0]
+    assert (r.adverse_direction, r.nature, r.source.delimiter, r.source.granularity) == ("increase", "toxicological_endpoint", "\t", "aggregated")
+    assert (r.source.column_map.ci_low, r.source.column_map.ci_high) == ("lo", "hi") and r.aggregation is None
+
+
+def test_a_failing_rebuild_removes_the_previous_good_study(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
+    assert (_study_dir(at) / "study.yaml").exists()
+    _by_label(at, "Unit of the response (for example ug/L)").set_value("<b>")
+    _build(at)
+    assert not (_study_dir(at) / "study.yaml").exists() and "step2" not in _ctx(at).data
+
+
+def test_the_test_series_study_after_a_gap_in_the_sst_is_refused_with_the_reason(after_step1):
+    sst_file = _ctx(after_step1).workdir / "inputs" / "sst_daily.csv"
+    df = pd.read_csv(sst_file)
+    df.loc[400:410, "Temperature"] = float("nan")
+    df.to_csv(sst_file, index=False)
+    at = _generate(after_step1)
+    assert not at.exception and "gap" in _errors(at)
+
+
 def test_the_study_can_be_downloaded(after_step1, monkeypatch):
     at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
     assert any("study.yaml" in (b.proto.label if hasattr(b, "proto") else "") for b in at.get("download_button"))
@@ -416,11 +571,12 @@ def test_the_study_can_be_downloaded(after_step1, monkeypatch):
 
 # --- stale studies, sessions ----------------------------------------------------------------------------------
 
-def test_a_study_built_for_earlier_step_1_inputs_is_flagged_when_they_change(after_step1, monkeypatch):
+def test_a_new_download_in_step_1_drops_the_study_built_on_the_old_series(after_step1, monkeypatch):
     at = _full_flow(after_step1, monkeypatch, _csv(_trials()))
-    assert "built for earlier inputs of step 1" not in _text(at)
-    _submit(_fill(at, name="Another place"))                      # step 1 downloaded again for another site
-    assert "built for earlier inputs of step 1" in _text(at)
+    assert (_study_dir(at) / "study.yaml").exists()
+    _submit(_fill(at, name="Another place"))                      # step 1 downloaded again
+    assert "step2" not in _ctx(at).data and not (_study_dir(at) / "study.yaml").exists()
+    assert "The study is ready" not in _shown(at)
 
 
 def test_another_session_does_not_see_the_study(after_step1, monkeypatch):
@@ -445,3 +601,7 @@ def test_the_step_reads_no_environment_caches_nothing_and_loads_no_unsafe_yaml(f
 def test_the_neutral_modules_still_do_not_read_the_loaded_study():
     from test_app_entry import FORBIDDEN, _names
     assert not (_names(PKG / "step_response.py") & FORBIDDEN)
+
+
+def test_the_commands_minimum_of_pairs_is_the_one_the_step_warns_with():
+    assert step_response.MIN_PAIRS == run_study.MIN_PAIRS

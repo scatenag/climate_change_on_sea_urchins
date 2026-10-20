@@ -27,7 +27,7 @@ import pandas as pd
 import streamlit as st
 import yaml
 
-from . import known_truth, response_csv, step_site
+from . import RERUN_LOCK, dataset_builder, known_truth, response_csv, step_site
 from .study_spec import StudySpec, StudySpecError, load_study
 
 SOURCE_UPLOAD = "Upload a CSV file"
@@ -46,6 +46,8 @@ NATURES = {"A proxy of the state of a population": "population_proxy", "An index
            "A biomarker measured on individuals": "biomarker"}
 ADVERSE = {"It goes down (decrease)": "decrease", "It goes up (increase)": "increase"}
 NO_COLUMN = "(none)"
+MAX_COLUMNS = 200
+MIN_PAIRS = 10                       # the command's own minimum (run_study.MIN_PAIRS: a test keeps the two equal)
 STUDY_DIR = "study"
 RESPONSE_FILE = "response.csv"
 _LABEL = re.compile(r"[\w .,'()\-]{1,60}")
@@ -86,6 +88,8 @@ def validate_answers(a: dict) -> list[str]:
         e.append("Enter the unit of the response.")
     elif not _UNIT.fullmatch(unit):
         e.append("The unit may use letters, digits, spaces and / . ^ % ( ) * - µ only, up to 30 characters.")
+    if a.get("delimiter") and a.get("decimal") and DELIMITERS[a["delimiter"]] == DECIMALS[a["decimal"]]:
+        e.append("The field separator and the decimal separator cannot be the same character.")
     if a.get("date_col") and a.get("date_col") == a.get("value_col"):
         e.append("Choose different columns for the date and for the value.")
     lo, hi = a.get("ci_low"), a.get("ci_high")
@@ -136,6 +140,14 @@ def write_study(ctx, step1: dict, response: dict, csv_bytes: bytes) -> Path:
     return folder
 
 
+def usability(series: pd.DataFrame, start: str, end: str) -> tuple[int, int]:
+    """(months with a value inside the temperature period, pairs of consecutive such months): what the command can use."""
+    months = pd.PeriodIndex(series.loc[series["value"].notna(), "Datetime"], freq="M")
+    lo, hi = pd.Period(start, "M"), pd.Period(end, "M")
+    inside = sorted(p for p in set(months) if lo <= p <= hi)
+    return len(inside), sum(1 for a, b in zip(inside, inside[1:]) if (b - a).n == 1)
+
+
 def _problem(message: str, headline: str = "The file cannot be read as declared:") -> None:
     st.error(headline)
     st.code(message, language=None)         # cells of the file are quoted in it: shown as code, never as Markdown
@@ -143,32 +155,38 @@ def _problem(message: str, headline: str = "The file cannot be read as declared:
 
 # ── the interface ────────────────────────────────────────────────────────────────────────────────
 
-def _render_test(ctx, step1: dict) -> None:
+def _render_test(ctx, step1: dict):
     st.write("A response generated from the temperature anomaly you downloaded, with a lag you know, so that you can see the "
              "tool find it. It is a check of the tool, not a measurement.")
-    seed = st.number_input("Seed", value=1, step=1, key="s2_seed", help="The same seed gives the same series.")
+    seed = st.number_input("Seed", value=1, step=1, min_value=0, key="s2_seed", help="The same seed gives the same series.")
     lag = st.number_input("Lag (months)", value=3, step=1, key="s2_lag",
                           help="How many months the response follows the temperature anomaly: not 0, not a multiple of 12.")
     share = st.slider("Share of the variance that comes from the temperature", 0.0, 1.0, 0.5, 0.05, key="s2_share")
+    key = ("test", int(seed), int(lag), float(share))
     if st.button("Generate the test series"):
         ctx.data.pop("step2", None)
+        if int(seed) < 0:
+            st.error("The seed must be 0 or more.")
+            return key
         folder = ctx.workdir / STUDY_DIR
         shutil.rmtree(folder, ignore_errors=True)
         try:
-            truth = known_truth.make_study(ctx.workdir / "inputs" / "sst_daily.csv", folder, seed=int(seed),
-                                           lat=step1["site"]["lat"], lon=step1["site"]["lon"], baseline=tuple(step1["baseline"]),
-                                           lag=int(lag), signal_share=float(share), name=step1["site"]["name"])
+            with RERUN_LOCK:                     # the heatwave detection inside is numeric work: as in step 1
+                truth = known_truth.make_study(ctx.workdir / "inputs" / "sst_daily.csv", folder, seed=int(seed),
+                                               lat=step1["site"]["lat"], lon=step1["site"]["lon"], baseline=tuple(step1["baseline"]),
+                                               lag=int(lag), signal_share=float(share), name=step1["site"]["name"])
             load_study(folder / "study.yaml")
-        except (known_truth.KnownTruthError, StudySpecError) as e:
+        except (known_truth.KnownTruthError, StudySpecError, dataset_builder.DatasetError, ValueError) as e:
             shutil.rmtree(folder, ignore_errors=True)
-            st.error(str(e))
-            return
-        ctx.data["step2"] = {"kind": "test", "inputs_key": step1["inputs_key"], "label": "Test series", "truth": truth,
+            st.error(str(e).replace(str(ctx.workdir), "<session folder>"))
+            return key
+        ctx.data["step2"] = {"kind": "test", "answers_key": key, "label": "Test series", "truth": truth,
                              "text": f"A test series was generated (seed {truth['seed']}): the response goes down when the temperature "
                                      f"anomaly goes up, with a known lag of {truth['lag_months']} months and "
                                      f"{truth['signal_share_of_variance']:.0%} of its variance from the temperature. It is a check of "
                                      "the tool, not a measurement.", "series": None}
         ctx.label = "Test series"
+    return key
 
 
 def _choose(label, options, key, fp, kind="select"):
@@ -176,39 +194,56 @@ def _choose(label, options, key, fp, kind="select"):
     return widget(label, options, index=None, key=f"{key}_{fp}")
 
 
-def _render_upload(ctx, step1: dict) -> None:
+def _first_line(text: str) -> str:
+    return next((line for line in text.splitlines() if line.strip()), "")
+
+
+def _render_upload(ctx, step1: dict):
+    """The upload branch. Returns the key of the answers on the page (None while there is nothing to build from)."""
     uploaded = st.file_uploader("CSV file with your measurements", type=["csv"], key="s2_file")
     if uploaded is None:
         st.caption(f"One row per measurement or per month, a header line, up to {response_csv.MAX_BYTES // 1_000_000} MB. "
                    "From Excel: Save as \"CSV UTF-8\".")
-        return
+        return None
     if uploaded.size > response_csv.MAX_BYTES:
         st.error(f"The file is {uploaded.size} bytes, over the limit of {response_csv.MAX_BYTES}.")
-        return
+        return None
     data = uploaded.getvalue()
     try:
         text = response_csv.decode_text(data)
     except response_csv.ResponseCsvError as e:
         _problem(str(e), "The file cannot be used:")
-        return
+        return None
     fp = fingerprint(data)
-    guess = response_csv.suggest_format(text, date_column="", value_column="")["delimiter"]
+    guess = response_csv.suggest_format(_first_line(text), date_column="", value_column="")["delimiter"]
     if guess:
         st.write(f"The file looks like it is separated by {guess!r} (from its first line). That is only what it looks like: "
                  "choose the separator yourself.")
     delim_label = _choose("Field separator in the file", list(DELIMITERS), "s2_delim", fp)
     a = {"delimiter": delim_label}
     if not delim_label:
-        return
-    columns = header_columns(text, DELIMITERS[delim_label])
+        return (fp, ())
+    try:
+        columns = header_columns(text, DELIMITERS[delim_label])
+    except csv.Error as e:
+        _problem(f"the header cannot be parsed as CSV ({e}); look for a quote that is never closed")
+        return (fp, ())
+    if len(columns) > MAX_COLUMNS or any(len(c) > 100 for c in columns):
+        st.error(f"The header has {len(columns)} columns (the longest name has {max((len(c) for c in columns), default=0)} characters): "
+                 f"this is not a table of measurements, or the separator is wrong. Up to {MAX_COLUMNS} columns and 100 characters "
+                 "per name are accepted.")
+        return (fp, ())
     if len(columns) < 2:
         st.warning("With this separator the header has a single column: the separator is probably another one.")
     c1, c2 = st.columns(2)
     a["date_col"] = c1.selectbox("Column with the date", columns, index=None, key=f"s2_date_{fp}")
     a["value_col"] = c2.selectbox("Column with the measurement value", columns, index=None, key=f"s2_value_{fp}")
-    suggestion = None
     if a["date_col"] and a["value_col"] and a["date_col"] != a["value_col"]:
-        suggestion = response_csv.suggest_format(text, date_column=a["date_col"], value_column=a["value_col"])
+        try:
+            suggestion = response_csv.suggest_format(text, date_column=a["date_col"], value_column=a["value_col"])
+        except response_csv.ResponseCsvError as e:
+            _problem(str(e))
+            return (fp, ())
         if suggestion["decimal"]:
             st.write(f"The numbers of that column look like they use {suggestion['decimal']!r} as the decimal separator.")
         if suggestion["date_ambiguous"]:
@@ -223,7 +258,7 @@ def _render_upload(ctx, step1: dict) -> None:
     a["decimal"] = _choose("Decimal separator of the numbers", list(DECIMALS), "s2_decimal", fp, "radio")
     a["date_format"] = _choose("Format of the dates", list(DATE_FORMATS.values()), "s2_dfmt", fp)
     a["rows"] = _choose("What does one row of the file hold?", list(ROWS), "s2_rows", fp, "radio")
-    others = [NO_COLUMN] + [c for c in columns]
+    others = [NO_COLUMN] + list(columns)
     lo = st.selectbox("Column with the lower end of the interval (optional)", others, index=0, key=f"s2_lo_{fp}")
     hi = st.selectbox("Column with the upper end of the interval (optional)", others, index=0, key=f"s2_hi_{fp}")
     a["ci_low"], a["ci_high"] = (None if lo == NO_COLUMN else lo), (None if hi == NO_COLUMN else hi)
@@ -232,15 +267,16 @@ def _render_upload(ctx, step1: dict) -> None:
     a["nature"] = _choose("What kind of quantity is it?", list(NATURES), "s2_nature", fp)
     a["adverse"] = _choose("Which way does the value move when the organisms do worse?", list(ADVERSE), "s2_adverse", fp, "radio")
     st.caption("No imputation is applied: a month without a measurement stays without one. Dates are read as monthly periods.")
+    key = (fp, tuple(sorted((k, v) for k, v in a.items())))
     if not st.button("Check the file and build the study"):
-        return
+        return key
     ctx.data.pop("step2", None)
     shutil.rmtree(ctx.workdir / STUDY_DIR, ignore_errors=True)
     errors = validate_answers(a)
     if errors:
         for e in errors:
             st.error(e)
-        return
+        return key
     try:
         entry = response_entry(a)
         spec = StudySpec.model_validate(study_dict(step1, entry))
@@ -248,17 +284,17 @@ def _render_upload(ctx, step1: dict) -> None:
         write_study(ctx, step1, entry, data)
     except response_csv.ResponseCsvError as e:
         _problem(str(e))
-        return
+        return key
     except (StudySpecError, ValueError) as e:
         _problem(str(e), "The answers do not make a valid study:")
-        return
-    series = result.series
-    ctx.data["step2"] = {"kind": "csv", "inputs_key": step1["inputs_key"], "label": a["label"].strip(), "truth": None,
-                         "series": series, "text": None, "notes": result.notes}
+        return key
+    ctx.data["step2"] = {"kind": "csv", "answers_key": key, "label": a["label"].strip(), "truth": None,
+                         "series": result.series, "text": None, "notes": result.notes}
     ctx.label = a["label"].strip()
+    return key
 
 
-def _show_study(ctx, step1: dict) -> None:
+def _show_study(ctx, step1: dict, current_key) -> None:
     done = ctx.data.get("step2")
     if not done:
         return
@@ -267,17 +303,28 @@ def _show_study(ctx, step1: dict) -> None:
         ctx.data.pop("step2", None)
         st.warning("The study is no longer there (the session folder is deleted after 6 hours without use): build it again.")
         return
-    if done["inputs_key"] != step1["inputs_key"]:
-        st.warning("This study was built for earlier inputs of step 1: build it again from step 2 (the site and the baseline of "
-                   "the study are those of the earlier download).")
+    if done["answers_key"] != current_key:
+        st.warning("The answers changed since this study was built (or the file was removed): build it again; the study below, "
+                   "and what step 3 would run, is the one built before.")
     if done["kind"] == "test":
         st.success(done["text"])
     else:
         s = done["series"]
-        first, last = s["Datetime"].min(), s["Datetime"].max()
+        valid = s[s["value"].notna()]
+        first, last = valid["Datetime"].min(), valid["Datetime"].max()
         span = (last.year - first.year) * 12 + last.month - first.month + 1
-        st.success(f"The study is ready: {len(s)} months with a value, {first:%Y-%m} to {last:%Y-%m}; {span - len(s)} months in "
-                   f"between have none and stay without one. Next: step 3 (run the study).")
+        inside, pairs = usability(s, step1["start"], step1["end"])
+        head = (f"{len(valid)} months with a value, {first:%Y-%m} to {last:%Y-%m}; {span - len(valid)} months in between have none "
+                "and stay without one.")
+        if inside == 0:
+            st.warning(f"The study was built, but the series has no month inside the temperature period ({step1['start']} to "
+                       f"{step1['end']}): no lag can be tested. {head}")
+        elif pairs < MIN_PAIRS:
+            st.warning(f"The study was built, but the series has only {pairs} pairs of consecutive months inside the temperature "
+                       f"period and the command needs at least {MIN_PAIRS}: no lag can be tested. {head}")
+        else:
+            st.success(f"The study is ready: {head} {pairs} pairs of consecutive months inside the temperature period. "
+                       "Next: step 3 (run the study).")
         st.line_chart(s.set_index("Datetime")["value"], height=200)
     st.download_button("Download study.yaml", (folder / "study.yaml").read_bytes(), file_name="study.yaml", mime="text/yaml")
 
@@ -288,9 +335,14 @@ def render(ctx) -> None:
     if not step1 or not (ctx.workdir / "inputs" / "sst_daily.csv").is_file():
         st.info("Complete step 1 first: the response series is read against the site, the baseline and the temperature of step 1.")
         return
+    view = ctx.data.get("step1_view") or {}
+    if view.get("error"):
+        st.error("Step 2 cannot go on: the temperature downloaded in step 1 cannot be used as it is. " + view["error"])
+        return
     source = st.radio("Where does the response series come from?", [SOURCE_UPLOAD, SOURCE_TEST], index=None, key="s2_source")
+    key = None
     if source == SOURCE_UPLOAD:
-        _render_upload(ctx, step1)
+        key = _render_upload(ctx, step1)
     elif source == SOURCE_TEST:
-        _render_test(ctx, step1)
-    _show_study(ctx, step1)
+        key = _render_test(ctx, step1)
+    _show_study(ctx, step1, key)

@@ -21,7 +21,9 @@ dice che cosa il file sembra; l'app deve chiedere all'utente, non decidere per l
   caricatore dello studio (ogni validatore), `response.csv` (i byte caricati, con nome fisso: il nome del file caricato non
   decide niente), la SST e il suo manifest. `ccsu-run-study` la esegue (passo 3, MA.4). Il file `study.yaml` è scaricabile.
 - **Il testo che viene dal file** (le celle citate nei problemi del lettore) si mostra come codice, mai come Markdown.
-  Limiti di dimensione e righe sono quelli del lettore, controllati prima di leggere il file.
+  Il limite di dimensione è doppio: il widget di caricamento rifiuta oltre 10 MB (`server.maxUploadSize` in
+  `.streamlit/config.toml`; il valore predefinito di Streamlit è 200 MB) e l'app lo ricontrolla; le righe sono limitate dal lettore
+  alla costruzione. L'intestazione è limitata a 200 colonne di al più 100 caratteri.
 - **La serie di prova** usa `known_truth` (ADR-0013) sulla SST appena scaricata: seme, ritardo e quota di segnale sono
   mostrati e modificabili; è dichiarata «un controllo dello strumento, non una misura».
 - `response_csv.decode_text` è la decodifica e il controllo del lettore, estratti perché l'app legge il file prima di chiedere
@@ -33,6 +35,20 @@ Risoluzione solo **mensile** (le date di un file per misura possono avere il gio
 **nessuna imputazione** (assente salvo dichiarata, D8; la CCF non la usa), colonne dei controlli e risoluzione giornaliera
 assenti. **Alternative:** offrirle ora (rifiutata: ogni scelta è metodo e va nella specifica con il suo motivo, e il
 piano le assegna a M1.15). Reversibile, nessun effetto su Livorno.
+
+## Dopo la rilettura indipendente
+
+- Un file con una virgoletta mai chiusa non fa più cadere l'app (`csv.Error` è un problema del file con la riga); una data fuori
+  dagli anni 1678–2261 che pandas può tenere è un problema con la sua riga (prima era un errore non catturato o un messaggio
+  senza riga).
+- Lo studio non è detto «pronto» se la serie non ha mesi nel periodo della temperatura o ha meno coppie di mesi consecutivi
+  (10) di quelle che il comando richiede: si dice quante ne ha e che nessun ritardo si potrà provare. I conteggi sono dei soli
+  mesi con un valore.
+- Lo studio costruito resta legato alle risposte e al file che lo hanno prodotto: se cambiano, lo si dice («costruiscilo di
+  nuovo»); un nuovo download del passo 1 lo toglie. La serie di prova si fa sotto il lock globale (rilevamento delle ondate) e
+  rifiuta un seme negativo; una serie con un buco nel passo 1 ferma il passo 2 con il motivo.
+- Test aggiunti per ogni domanda obbligatoria (decimale, riga, formato della data, natura, verso), per le opzioni (intervallo,
+  «aumenta», «già mensile», tabulazione), per il secondo file e per la ricostruzione fallita.
 
 ## Conseguenze
 

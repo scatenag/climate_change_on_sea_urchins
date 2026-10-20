@@ -40,6 +40,7 @@ from . import common
 MAX_BYTES = 10_000_000
 MAX_ROWS = 200_000
 MAX_PROBLEMS = 20
+MIN_YEAR, MAX_YEAR = 1678, 2261      # the range of the nanosecond timestamps pandas holds
 _DELIMITERS = [",", ";", "\t", "|"]
 # Formats suggest_format may propose: every one is accepted by the validator of the study (a test holds
 # the two together). No two-digit year: the century would be decided by the parser.
@@ -72,6 +73,10 @@ class ResponseData:
 
 # ── what a file looks like ───────────────────────────────────────────────────────────────────────
 
+class DateOutOfRange(ValueError):
+    """A date that parses but lies outside the years pandas can hold."""
+
+
 def _parse_date(token: str, fmt: str) -> dt.datetime:
     """strptime, with %b / %B read as English month names whatever the system locale (strptime's own
     follow LC_TIME)."""
@@ -83,12 +88,23 @@ def _parse_date(token: str, fmt: str) -> dt.datetime:
             return f"{n:02d}"
         token = re.sub(r"[A-Za-z]{3,9}", month, token)
         fmt = fmt.replace("%b", "%m").replace("%B", "%m")
-    return dt.datetime.strptime(token, fmt)
+    date = dt.datetime.strptime(token, fmt)
+    if not MIN_YEAR <= date.year <= MAX_YEAR:
+        raise DateOutOfRange(f"is a date outside the years {MIN_YEAR}-{MAX_YEAR} that the analysis can hold: a typo in the year?")
+    return date
 
 
 def _rows(text: str, delimiter: str) -> list[tuple[int, list[str]]]:
     reader = csv.reader(io.StringIO(text), delimiter=delimiter)
-    return [(reader.line_num, [c.strip() for c in row]) for row in reader if any(c.strip() for c in row)]
+    rows = []
+    try:
+        for row in reader:
+            if any(c.strip() for c in row):
+                rows.append((reader.line_num, [c.strip() for c in row]))
+    except csv.Error as e:          # for example a quote that is never closed: the rest of the file is one field
+        raise ResponseCsvError([f"line {reader.line_num}: the file cannot be parsed as CSV ({e}); look for a quote that is "
+                                "never closed"]) from None
+    return rows
 
 
 def suggest_format(text: str, *, date_column: str, value_column: str) -> dict:
@@ -237,6 +253,9 @@ def read_response_text(text: str | bytes, response) -> ResponseData:
         try:
             d = _parse_date(tok, src.date_format)
             rec["date"] = d
+        except DateOutOfRange as e:
+            problem(f"line {line}, column {cm.date!r}: {tok!r} {e}")
+            continue
         except ValueError:
             s = suggest()
             look = (f"; the dates of this file look like {', '.join(s['date_formats'])}" +
