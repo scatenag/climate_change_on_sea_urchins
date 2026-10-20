@@ -388,3 +388,22 @@ def test_through_the_csv_with_intervals_the_series_equals_livornos_aggregation(t
     np.testing.assert_allclose(got["ci_upper"], ref["EC50_ci_upper"], rtol=0, atol=1e-12)
     np.testing.assert_allclose(got["ci_lower"], ref["EC50_ci_lower"], rtol=0, atol=1e-12)
     assert got["n"].tolist() == ref["EC50_n"].tolist()
+
+
+# --- found by the independent review of MA.3 -----------------------------------------------------------
+
+def test_an_unterminated_quote_beyond_the_csv_field_limit_is_a_problem_of_the_file_not_a_crash():
+    text = '"when,ec\n' + "\n".join("x" * 200 for _ in range(1000)) + "\n"
+    with pytest.raises(ResponseCsvError, match="cannot be parsed as CSV"):
+        read_response_text(text, _response())
+    with pytest.raises(ResponseCsvError, match="cannot be parsed as CSV"):
+        suggest_format(text, date_column="when", value_column="ec")
+
+
+@pytest.mark.parametrize("token", ["1600-01-05", "2300-01-05", "0001-01-01"])
+def test_a_date_pandas_cannot_hold_is_a_problem_with_its_line(token):
+    with pytest.raises(ResponseCsvError, match=r"line 2.*1678"):
+        read_response_text(f"date,value\n{token},10\n", _response())
+    aggregated = _response(granularity="aggregated", _aggregation=None)
+    with pytest.raises(ResponseCsvError, match=r"line 2.*1678"):
+        read_response_text(f"date,value\n{token},10\n", aggregated)

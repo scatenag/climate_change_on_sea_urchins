@@ -6,6 +6,8 @@ textColor = "#212529"
 font = "sans serif"
 
 [server]
+# Largest file the upload widget accepts, in MB (the response CSV: response_csv.MAX_BYTES is 10 MB). Streamlit's own default is 200.
+maxUploadSize = 10
 headless = true
 enableXsrfProtection = true
 # enableCORS is intentionally omitted: Streamlit silently forces it back to
