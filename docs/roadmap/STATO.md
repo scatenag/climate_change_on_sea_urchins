@@ -5,7 +5,7 @@
 > (milestone in corso), [`../COME_SI_LAVORA.md`](../COME_SI_LAVORA.md) (regole), negli ADR e
 > nelle issue.
 
-**Ultimo aggiornamento:** 8 ottobre 2026
+**Ultimo aggiornamento:** 20 ottobre 2026
 
 ## Dove siamo
 
@@ -92,4 +92,4 @@ di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel
 
 ## Prossimo passo
 
-**App minima (MA.1–MA.5), in corso (16–20/10).** Fuse: MA.1 (#60), MA.2 (#62, passo 1 con download; verificato in produzione), MA.3 (#63, passo 2: CSV guidato o serie di prova, dopo la rilettura indipendente). **In corso: MA.4** (passo 3: `ccsu-run-study` in un processo separato che riceve solo file, avanzamento, risultato e verdetto; branch `m1/ma4-step3`, ADR-0018). Poi MA.5, che resta del proprietario (prova a mano con le sue credenziali e misure sul servizio). Decisioni provvisorie da confermare: baseline minima di 10 anni e campo «primo anno delle misure» (ADR-0016), solo risoluzione mensile e nessuna imputazione nel passo 2 (ADR-0017), al più 2 analisi contemporanee e aggiornamento ogni 2 s (ADR-0018). Difetto aperto: #61 (`ccsu-dashboard`). Baseline: ADR-0014; fissa o mobile per le metriche delle ondate: ADR-0000 voce 21.
+**App minima (MA.1–MA.5), MA.1–MA.4 fuse (16–20/10).** MA.1 (#60), MA.2 (#62, passo 1 con download; verificato in produzione con il toolbox vero), MA.3 (#63, passo 2: CSV guidato o serie di prova), MA.4 (#64, passo 3: `ccsu-run-study` in un processo separato che riceve solo file, avanzamento, risultato, verdetto; ADR-0018), ciascuna dopo una rilettura indipendente. **Resta MA.5, del proprietario**: prova a mano sull'app di sviluppo pubblicata con le sue credenziali su coordinate mai usate, serie di prova, tempi sul servizio (download, analisi, memoria), e il widget vero di caricamento del CSV (`streamlit.testing` non lo esercita). Decisioni provvisorie da confermare: baseline minima di 10 anni e campo «primo anno delle misure» (ADR-0016), solo risoluzione mensile e nessuna imputazione nel passo 2 (ADR-0017), al più 2 analisi contemporanee, timeout di 10 minuti e aggiornamento ogni 2 s (ADR-0018). Dopo MA.5: quali analisi di Livorno entrano nel motore generico (`MILESTONE-M1.md`). Difetto aperto: #61 (`ccsu-dashboard`). Baseline: ADR-0014; fissa o mobile per le metriche delle ondate: ADR-0000 voce 21.
