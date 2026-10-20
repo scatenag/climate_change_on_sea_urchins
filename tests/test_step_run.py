@@ -103,7 +103,8 @@ def test_the_sentence_names_the_direction_against_the_declared_adverse_one():
                         "p_bh": [0.5, 0.01, 0.01], "r_toward_adverse": [-0.1, 0.4, -0.5]})
     run = {"tests": {"declared": 3, "performed": 3, "not_performed": []}}
     text = step_run.describe_result(ccf, run)
-    assert "lag 1 (r = -0.40, toward the adverse direction" in text and "lag 2 (r = +0.50, away from the adverse direction" in text
+    assert "lag 1 (r = -0.40, after a rise of the anomaly the response moves toward the adverse direction" in text
+    assert "lag 2 (r = +0.50, after a rise of the anomaly the response moves away from the adverse direction" in text
     assert "lag 0" not in text
     skipped = {"tests": {"declared": 13, "performed": 11, "not_performed": [{"lag": 12}, {"lag": 11}]}}
     assert "11 of 13 lags were tested (2 had too few pairs)" in step_run.describe_result(ccf, skipped)
@@ -115,7 +116,7 @@ def test_the_sentence_names_the_direction_against_the_declared_adverse_one():
 def test_a_verdict_that_did_not_find_the_lag_says_so_with_the_numbers():
     v = {"recovered": False, "known_lag": 3, "top_lag": 5, "p_bh_at_lag": 0.4, "lags_significant_after_bh": [5], "r_toward_adverse_at_lag": 0.1}
     text = step_run.describe_verdict(v)
-    assert "NOT found" in text and "lag 5" in text and "0.4" in text and "[5]" in text
+    assert "NOT found" in text and "lag 5, not at 3" in text and "Other lags also pass the correction: 5." in text
     found = {**v, "recovered": True, "top_lag": 3, "p_bh_at_lag": 0.001, "lags_significant_after_bh": [3], "r_toward_adverse_at_lag": 0.5}
     assert "was FOUND" in step_run.describe_verdict(found)
 
@@ -144,7 +145,7 @@ def test_a_variable_of_the_app_process_does_not_reach_the_analysis_and_nothing_s
     cmd, env, cwd = seen[0]
     assert SECRET not in " ".join(cmd) + repr(env) and "MY_APP_SECRET" not in env
     assert cmd[1:3] == ["-m", "climate_change_on_sea_urchins.run_study"] and all(Path(c).is_absolute() for c in (cmd[3], cmd[5], cmd[7]))
-    assert env["HOME"] != os.environ["HOME"] and Path(env["HOME"]).is_dir() and Path(cwd) == _ctx(at).workdir
+    assert env["HOME"] != os.environ["HOME"] and Path(env["HOME"]).is_dir() and Path(cwd) == Path(env["HOME"])      # a neutral, empty folder
 
 
 def test_the_environment_is_read_only_in_the_function_that_builds_the_allowlist():
@@ -166,8 +167,7 @@ def _slow(monkeypatch):
     monkeypatch.setattr(step_run, "build_command", lambda study, inputs, out: SLOW + ["--out", str(out)])
 
 
-def test_the_page_follows_the_progress_and_the_global_lock_is_free_meanwhile(after_step1, monkeypatch):
-    import climate_change_on_sea_urchins as ccsu
+def test_the_page_follows_the_progress_while_another_session_responds(after_step1, monkeypatch):
     _slow(monkeypatch)
     at = _generate(after_step1)
     _run_button(at).click().run()
@@ -177,10 +177,16 @@ def test_the_page_follows_the_progress_and_the_global_lock_is_free_meanwhile(aft
     at.run()
     try:
         assert not at.exception and "Running: correlating" in _shown(at)
-        assert not ccsu.RERUN_LOCK.locked()
         assert any("Interrupt" in b.label for b in at.button)
+        other = _open()                                  # another session, meanwhile: it answers at once
+        assert not other.exception and "Step 2" in _shown(other) and "Running" not in _shown(other)
+        assert _ctx(at).data["run"]["proc"].poll() is None
     finally:
         step_run.stop(_ctx(at))
+
+
+def test_step_3_never_takes_the_global_lock():
+    assert "RERUN_LOCK" not in (PKG / "step_run.py").read_text()
 
 
 def test_an_analysis_can_be_interrupted(after_step1, monkeypatch):
@@ -261,7 +267,7 @@ def _fake_running_sessions(root: Path, n: int):
         d = root / (f"{i:032x}")
         d.mkdir(parents=True)
         p = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-        (d / "run.pid").write_text(str(p.pid))
+        step_run.write_pid_file(d / "run.pid", p.pid)
         procs.append(p)
     return procs
 
@@ -271,7 +277,7 @@ def test_the_third_analysis_on_a_server_waits(after_step1, monkeypatch):
     others = _fake_running_sessions(_ctx(at).workdir.parent, step_run.MAX_CONCURRENT)
     try:
         _run_button(at).click().run()
-        assert "already" in _shown(at) and "wait a minute" in _shown(at) and "run" not in _ctx(at).data
+        assert "already" in _shown(at) and "wait a moment" in _shown(at) and "run" not in _ctx(at).data
     finally:
         for p in others:
             p.kill(); p.wait()
@@ -291,8 +297,9 @@ def test_finished_processes_do_not_count_against_the_limit(tmp_path):
 
 def test_two_sessions_have_their_own_analysis_and_results(after_step1, monkeypatch):
     a = _run_to_the_end(_generate(after_step1))
+    assert "The analysis finished" in _shown(a)
     b = _open()
-    assert "The analysis finished" not in _shown(b) and not (_ctx(b).workdir / "run").exists()
+    assert "The analysis finished" not in _shown(b) and not (_ctx(b).workdir / "run").exists() and _ctx(b).workdir != _ctx(a).workdir
 
 
 def test_the_streamlit_lower_bound_has_the_fragments_the_page_uses():
@@ -310,3 +317,152 @@ def test_the_step_has_no_shell_cache_log_or_credential_in_its_code(forbidden):
                 and isinstance(node.body[0].value, ast.Constant) and isinstance(node.body[0].value.value, str):
             node.body = node.body[1:] or [ast.Pass()]
     assert not re.search(forbidden, ast.unparse(tree), re.IGNORECASE), forbidden
+
+
+# --- what the independent review found ---------------------------------------------------------------------------
+
+def test_a_series_with_no_consecutive_months_is_not_reported_as_a_negative_result(after_step1, monkeypatch):
+    rows = pd.DataFrame({"when": pd.date_range("2004-01-01", periods=60, freq="2MS"), "ec": range(60)})
+    at = _full_flow(after_step1, monkeypatch, _csv(rows))
+    at = _run_to_the_end(at)
+    shown = _shown(at)
+    assert not at.exception and "No lag could be tested" in shown and "No lag passes" not in shown
+    assert "The analysis finished" not in shown and any("could not test" in w.value for w in at.warning)
+
+
+def test_describe_result_when_some_lags_were_not_tested_says_the_correction_is_over_those_tested():
+    ccf = pd.DataFrame({"lag": [0, 1], "n": [40, 41], "spearman_r": [0.1, 0.2], "p_value": [0.5, 0.2], "p_bh": [0.5, 0.4],
+                        "r_toward_adverse": [-0.1, -0.2]})
+    text = step_run.describe_result(ccf, {"tests": {"declared": 13, "performed": 2, "not_performed": [{"lag": i} for i in range(2, 13)]}})
+    assert "2 of 13 lags were tested" in text and "over the 2 tested" in text
+    assert step_run.describe_result(ccf, {"tests": {"declared": 13, "performed": 0, "not_performed": [{"lag": 0}]}}).startswith("0 of 13")
+    assert "No lag could be tested" in step_run.describe_result(ccf.iloc[0:0], {"tests": {"declared": 13, "performed": 0, "not_performed": []}})
+
+
+@pytest.mark.parametrize("verdict, phrase", [
+    (dict(recovered=False, known_lag=3, top_lag=3, p_bh_at_lag=0.3846153846, r_toward_adverse_at_lag=0.2, lags_significant_after_bh=[]),
+     "corrected p is 0.38, not below 0.05"),
+    (dict(recovered=False, known_lag=3, top_lag=3, p_bh_at_lag=0.001, r_toward_adverse_at_lag=-0.4, lags_significant_after_bh=[3]),
+     "the sign is the opposite of the expected one"),
+    (dict(recovered=False, known_lag=3, top_lag=5, p_bh_at_lag=0.2, r_toward_adverse_at_lag=0.1, lags_significant_after_bh=[5]),
+     "the largest |r| is at lag 5, not at 3"),
+    (dict(recovered=False, known_lag=3, top_lag=None, p_bh_at_lag=None, r_toward_adverse_at_lag=None, lags_significant_after_bh=[]),
+     "the known lag was not tested"),
+])
+def test_a_verdict_that_did_not_find_the_lag_names_the_criterion_that_failed(verdict, phrase):
+    text = step_run.describe_verdict(verdict)
+    assert "NOT found" in text and phrase in text and "None" not in text and "0.3846" not in text
+
+
+def test_the_limits_say_where_the_null_rate_was_measured_and_what_the_correction_runs_over():
+    joined = " ".join(step_run.LIMITS)
+    assert "simulation" in joined and "tested" in joined and "grid cell" in joined
+
+
+def test_the_direction_wording_says_what_moves(after_step1):
+    text = step_run.describe_result(pd.DataFrame({"lag": [1], "n": [50], "spearman_r": [-0.4], "p_value": [0.001], "p_bh": [0.01],
+                                                  "r_toward_adverse": [0.4]}), {"tests": {"declared": 1, "performed": 1, "not_performed": []}})
+    assert "after a rise of the anomaly the response moves toward the adverse direction" in text
+
+
+def test_the_label_the_user_typed_cannot_make_markup_in_the_result(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials(n_months=120)), label="a_b (x)")
+    at = _run_to_the_end(at)
+    caption = " ".join(c.value for c in at.caption)
+    assert "`a_b (x)`" in caption          # a code span: underscores and the like are not emphasis
+
+
+def test_an_error_does_not_show_the_server_path_of_the_session_folder(after_step1, monkeypatch):
+    fail = [sys.executable, "-c", "import sys; print('error in ' + sys.argv[sys.argv.index('--out') + 1]); sys.exit(1)"]
+    monkeypatch.setattr(step_run, "build_command", lambda study, inputs, out: fail + ["--out", str(out)])
+    at = _run_to_the_end(_generate(after_step1))
+    code = "\n".join(c.value for c in at.code)
+    assert str(_ctx(at).workdir) not in code and "<session folder>" in code
+
+
+def test_the_head_of_a_long_error_of_the_command_is_kept(after_step1, monkeypatch):
+    long_error = "START-OF-THE-REASON " + "x" * 3000 + " END"
+    fail = [sys.executable, "-c", "import sys, json, pathlib\nout = pathlib.Path(sys.argv[sys.argv.index('--out') + 1]); out.mkdir(parents=True)\n"
+            f"(out / 'progress.json').write_text(json.dumps({{'status': 'failed', 'step': 'correlate', 'error': {long_error!r}}}))\nsys.exit(1)"]
+    monkeypatch.setattr(step_run, "build_command", lambda study, inputs, out: fail + ["--out", str(out)])
+    at = _run_to_the_end(_generate(after_step1))
+    assert "START-OF-THE-REASON" in "\n".join(c.value for c in at.code)
+
+
+def test_a_stale_pid_file_of_an_unrelated_live_process_does_not_count(tmp_path):
+    d = tmp_path / ("c" * 32); d.mkdir()
+    other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])      # alive, but not an analysis
+    try:
+        (d / "run.pid").write_text(str(other.pid))
+        assert step_run.running_elsewhere(tmp_path) == 0
+    finally:
+        other.kill(); other.wait()
+
+
+def test_the_limit_holds_when_sessions_press_the_button_at_the_same_moment(after_step1, monkeypatch):
+    import threading
+    from test_step_site import _fill
+    _slow(monkeypatch)
+    root = _ctx(after_step1).workdir.parent
+    ctxs = []
+    for i in range(5):
+        c = app_entry.SessionContext.new()
+        (c.workdir / "study").mkdir()
+        (c.workdir / "study" / "study.yaml").write_text("x")
+        ctxs.append(c)
+    results = []
+    barrier = threading.Barrier(5)
+    def go(c):
+        barrier.wait()
+        results.append(step_run.start(c, root))
+    threads = [threading.Thread(target=go, args=(c,)) for c in ctxs]
+    [t.start() for t in threads]; [t.join() for t in threads]
+    try:
+        assert sum(1 for r in results if r is None) == step_run.MAX_CONCURRENT
+    finally:
+        for c in ctxs:
+            step_run.stop(c)
+
+
+def test_an_analysis_that_takes_too_long_is_stopped_and_said(after_step1, monkeypatch):
+    _slow(monkeypatch)
+    monkeypatch.setattr(step_run, "MAX_SECONDS", 1)
+    at = _generate(after_step1)
+    _run_button(at).click().run()
+    time.sleep(1.5)
+    at.run()
+    assert _ctx(at).data["run"]["proc"].poll() is not None
+    assert "took longer than" in _shown(at) + "\n".join(c.value for c in at.code) + " ".join(e.value for e in at.error)
+
+
+def test_sweeping_a_session_folder_stops_the_analysis_that_still_runs_in_it(after_step1, monkeypatch):
+    _slow(monkeypatch)
+    at = _generate(after_step1)
+    _run_button(at).click().run()
+    ctx = _ctx(at)
+    proc = ctx.data["run"]["proc"]
+    old = time.time() - 7 * 3600
+    os.utime(ctx.workdir / app_entry.ALIVE_FILE, (old, old))
+    app_entry.sweep_stale_sessions(ctx.workdir.parent)
+    assert proc.poll() is not None and not ctx.workdir.exists()
+
+
+def test_a_failure_to_start_the_process_is_said_and_leaves_nothing_behind(after_step1, monkeypatch):
+    def broken(*a, **k):
+        raise OSError("cannot fork")
+    monkeypatch.setattr(step_run.subprocess, "Popen", broken)
+    at = _generate(after_step1)
+    _run_button(at).click().run()
+    assert not at.exception and "could not be started" in _shown(at) and not (_ctx(at).workdir / "run.pid").exists()
+
+
+def test_the_increase_direction_gives_the_matching_sign_end_to_end(after_step1, monkeypatch):
+    at = _full_flow(after_step1, monkeypatch, _csv(_trials(n_months=120, seed=2)), adverse="It goes up (increase)")
+    at = _run_to_the_end(at)
+    ccf = pd.read_csv(_ctx(at).workdir / "run" / "ccf.csv")
+    assert (ccf["r_toward_adverse"].dropna() == ccf["spearman_r"].dropna()).all()
+
+
+def test_an_independent_test_series_is_reported_as_not_found(after_step1):
+    at = _run_to_the_end(_generate(after_step1, seed=1, lag=3, share=0.0))
+    assert "NOT found" in _shown(at) and "FOUND" not in _shown(at).replace("NOT found", "")

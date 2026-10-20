@@ -71,6 +71,7 @@ def sweep_stale_sessions(root: Path | None = None, *, keep: str | None = None, n
         alive = entry / ALIVE_FILE
         last_seen = alive.stat().st_mtime if alive.is_file() else entry.stat().st_mtime
         if now - last_seen > max_idle:
+            step_run.kill_recorded(entry)           # an analysis still running in the folder goes with it
             shutil.rmtree(entry, ignore_errors=True)
             removed.append(entry.name)
     return removed

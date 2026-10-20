@@ -30,6 +30,24 @@ all'importazione (ADR-0000 voce 19): un processo per studio è anche ciò che lo
   causa e un ritardo che non passa non prova l'assenza di effetto.
 - `streamlit>=1.37` (i frammenti che si riesegono da soli).
 
+## Dopo la rilettura indipendente
+
+- Una analisi con zero lag provati non è un «risultato negativo»: la pagina dice che nessun ritardo si è potuto provare (avviso,
+  non successo) e non scrive mai «nessun lag supera la correzione» in quel caso; con meno lag provati di quelli dichiarati dice
+  che la correzione è sui provati.
+- **Il limite di 2 analisi regge alla concorrenza**: conteggio e avvio sono un passo solo sotto un lock del modulo; i file
+  `run.pid` valgono solo con il tempo di avvio del processo (un pid riusato da un altro processo non conta); un'analisi che dura
+  più di 10 minuti si ferma e lo si dice; lo spazzamento di una cartella ferma l'analisi che vi gira; un avvio che fallisce lo
+  dice e non lascia tracce.
+- Il processo parte da una cartella neutra e vuota (non dalla cartella della sessione, che finirebbe per prima in `sys.path`);
+  gli errori non mostrano il percorso della sessione; della frase del comando si tiene l'inizio, del suo registro la coda.
+- Il verdetto di un ritardo non trovato dice quale criterio è fallito (ritardo del massimo, segno, p corretto); la frase sul
+  verso dice che cosa si muove («dopo un aumento dell'anomalia la risposta si muove verso/lontano dal verso peggiorativo»); i
+  limiti dicono dove è stata misurata la quota nulla del 6–8% (simulazione su una serie come quella di Livorno) e che la cella di
+  griglia può non rappresentare l'acqua degli organismi.
+- Note non corrette: un visitatore con due schede può occupare i due posti (equità); `killpg` è solo per Linux; il vincolo
+  `streamlit>=1.37` non è provato da un test su quella versione (il servizio usa la 1.56).
+
 ## PROVVISORIA: il numero massimo di analisi e l'intervallo di aggiornamento
 
 Due analisi contemporanee e un aggiornamento ogni due secondi sono valori scelti senza averli misurati su Streamlit Cloud.
