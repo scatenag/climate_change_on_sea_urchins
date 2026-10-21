@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Hobday climatology and events in the generic engine** (ADR-0019, new `mhw_hobday.py`). The dataset builder, and so the app and
+  `ccsu-run-study`, now take the 90th-percentile threshold and the seasonal climatology over the values within 5 days of each day
+  in every baseline year, smooth them over 31 days, count an event from 5 days above the threshold and join events separated by
+  up to 2 days — checked against `legacy/marineHeatWaves.py` on 366 thresholds and event by event. On Livorno's data the
+  repository's own detection finds 109 events against Hobday's 78 (measurement in `drafts/`, not published). The Livorno pipeline
+  (`mhw_detection.py`) and its golden master are unchanged. The baseline messages no longer say "the few values themselves".
+
 - **Step 3 of the user's own data** (milestone MA.4, new `step_run.py`, ADR-0018). The study built in step 2 is run by
   `ccsu-run-study` in a separate process that receives files only: an environment built from an allowlist with a fresh empty
   HOME, paths as arguments, never a credential. The page follows `progress.json` with a fragment that reruns itself every two

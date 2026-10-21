@@ -36,7 +36,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from . import common, mhw_detection
+from . import common, mhw_detection, mhw_hobday
 
 TEMPERATURE_RULE = "a month with any missing SST day is missing (decision of 2026-10-03)"
 MONTHLY_COLUMNS = ["Datetime", "Temperature", "response", "response_imputed",
@@ -119,8 +119,8 @@ def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, base
 
     temperature, temp_report = monthly_temperature(daily)
 
-    clim = mhw_detection.compute_climatology(daily, y0, y1)
-    events, flagged = mhw_detection.detect_events(daily, clim)
+    clim = mhw_hobday.compute_climatology(daily, y0, y1)
+    events, flagged = mhw_hobday.detect_events(daily, clim)
     mhw_events = pd.DataFrame(events)
     excluded = {m["month"] for m in temp_report["incomplete_months"]}
     mhw_monthly = mhw_detection.to_monthly(flagged)
@@ -162,7 +162,7 @@ def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, base
                      "months_imputed": int((imputed_flag & monthly["response"].notna()).sum()),
                      "first": grid.loc[with_value, "Datetime"].min().strftime("%Y-%m") if with_value.any() else None,
                      "last": grid.loc[with_value, "Datetime"].max().strftime("%Y-%m") if with_value.any() else None},
-        "mhw": {"baseline": [y0, y1], "events": int(len(mhw_events)),
+        "mhw": {"baseline": [y0, y1], "method": mhw_hobday.METHOD, "events": int(len(mhw_events)),
                 "months_excluded_incomplete_sst": excluded_info},
     }
     return Dataset(monthly=monthly, mhw_events=mhw_events, mhw_monthly=mhw_monthly, mhw_annual=mhw_annual,

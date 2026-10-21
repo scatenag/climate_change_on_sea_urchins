@@ -264,7 +264,10 @@ più corta di 15 anni: soglia rumorosa; baseline che non finisce prima dell'ulti
 legge dal catalogo come la fine, senza date scritte nel codice:** se non copre il 1991 l'app lo dice e propone il
 primo trentennio coperto. Livorno resta con la baseline che dichiara (2003–2012, golden master): una scelta
 diversa, scritta nel suo studio. Se la baseline debba essere fissa o mobile per le metriche delle ondate è
-aperto (ADR-0000, voce 21), da decidere prima di M1.9.
+aperto (ADR-0000, voce 21), da decidere prima di M1.9. La climatologia che usa la baseline, nel motore generico, segue
+Hobday (±5 giorni, lisciatura a 31 giorni, regola degli eventi: ADR-0019); quella di Livorno resta quella della pipeline, e se
+lasciarla così o allinearla è una decisione del proprietario (misura del 21/10 in `drafts/`). M1.9 ne deve tenere conto: un
+pannello che confronta il catalogo generico con quello di Livorno non è a parità di metodo.
 
 ### Allargamento (una variabile e un'analisi alla volta; ogni pezzo comando e app insieme)
 

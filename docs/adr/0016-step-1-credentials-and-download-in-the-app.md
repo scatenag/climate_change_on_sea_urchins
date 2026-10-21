@@ -47,8 +47,9 @@ La rilettura ha mostrato che con una baseline di uno o due anni la «soglia» de
 pochi valori stessi (con un solo anno 220 eventi sul 74% dei giorni, su una serie senza tendenza). **Scelta:** meno di 10 anni
 è un errore (quanti ne ha la baseline di Livorno), meno di 15 un avviso, 30 raccomandati. **Alternative:** nessun minimo
 (rifiutata: risultati insensati senza avviso sufficiente), minimo 30 (rifiutata: Livorno stesso ha 10). Reversibile, nessun
-effetto su Livorno. Noto e non toccato: `mhw_detection` raggruppa per giorno dell'anno esatto, senza la finestra di ±5 giorni
-di Hobday, e con 10–15 anni questo si sente di più (codice esistente, golden master).
+effetto su Livorno. Noto: `mhw_detection` raggruppa per giorno dell'anno esatto, senza la finestra di ±5 giorni
+di Hobday, e con 10–15 anni questo si sente di più (codice esistente, golden master). **Risolto per il motore generico con
+l'ADR-0019**; resta com'è nella pipeline di Livorno.
 
 ## Altre scelte della rilettura
 
