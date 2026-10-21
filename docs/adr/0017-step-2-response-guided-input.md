@@ -29,12 +29,27 @@ dice che cosa il file sembra; l'app deve chiedere all'utente, non decidere per l
 - `response_csv.decode_text` è la decodifica e il controllo del lettore, estratti perché l'app legge il file prima di chiedere
   (stesso comportamento, stessi messaggi).
 
-## PROVVISORIA: che cosa il passo 2 non offre ancora
+## Che cosa il passo 2 non offre ancora (confermato dal proprietario il 21/10)
 
 Risoluzione solo **mensile** (le date di un file per misura possono avere il giorno, ma la serie di studio è mensile),
 **nessuna imputazione** (assente salvo dichiarata, D8; la CCF non la usa), colonne dei controlli e risoluzione giornaliera
 assenti. **Alternative:** offrirle ora (rifiutata: ogni scelta è metodo e va nella specifica con il suo motivo, e il
 piano le assegna a M1.15). Reversibile, nessun effetto su Livorno.
+
+## Valori che sembrano codici di «mancante» (21/10)
+
+Un mancante scritto come numero (-999, -9999, 99, 0, o un riempitivo ripetuto) sarebbe letto come misura vera, e il lettore non può
+saperlo. Nel passo 2, **dopo** che l'utente ha scelto il separatore decimale (non si presume niente) e la colonna del valore,
+`response_csv.missing_code_suspects` cerca tre cose e l'app le mostra come **avviso, mai come rifiuto**, con i conteggi e le prime
+righe: un valore fra i codici abituali (±99999, ±9999, -999, -99, 99, 999) fuori dall'intervallo degli altri valori e più lontano
+di tre scarti (l'intervallo interquartile, almeno il 5% della mediana), oppure un codice negativo in una colonna dove gli altri
+valori sono tutti non negativi, oppure un codice negativo che compare almeno due volte (un 99 ripetuto, in percentuali e conteggi,
+è un dato normale); zeri esatti in almeno il 5% dei valori (e almeno 3); un valore che riempie almeno il 20% di una colonna
+continua (almeno 5 righe, più di 5 valori distinti, non tutti interi: i conteggi e le percentuali si ripetono legittimamente).
+Servono almeno 4 numeri. Un codice positivo dentro una grande dispersione di valori grandi non si trova: è un indizio, non una
+prova. Il testo dell'avviso contiene solo numeri e numeri di riga, mai testo del
+file. Le soglie sono scelte non misurate su dati veri e si possono correggere. (Dopo la rilettura indipendente: tolti i falsi allarmi
+su 99 ripetuto e su colonne quasi costanti, aggiunto il codice negativo certo, soglie coperte da test su entrambi i lati.)
 
 ## Dopo la rilettura indipendente
 
