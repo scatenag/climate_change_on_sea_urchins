@@ -1,8 +1,8 @@
 """The dataset builder (M1.4): from the daily SST and a monthly response series to the monthly table and
 the marine-heatwave catalogue a study is analysed on.
 
-Every number comes from the functions the Livorno pipeline already uses (heatwave detection in
-mhw_detection.py, the fill in common.impute_series), driven by what the study declares:
+The numbers come from the functions the pipeline uses for the metrics (mhw_detection.to_monthly/to_annual, the fill in
+common.impute_series) and from mhw_hobday.py for the climatology and the events (ADR-0019), driven by what the study declares:
 
 - Monthly temperature: the mean of the daily SST. **A month with any missing day is missing** (decision of
   2026-10-03): a partial mean is distorted by the seasonal cycle, and it would fall on the months the lags

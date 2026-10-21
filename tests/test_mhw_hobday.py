@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import os
 from datetime import date
 from pathlib import Path
 
@@ -29,6 +30,8 @@ FIXTURE = ROOT / "tests" / "fixtures" / "paper_mpb_2026" / "data"
 @pytest.fixture(scope="module")
 def legacy():
     if int(np.__version__.split(".")[0]) >= 2:
+        if os.environ.get("CI"):
+            pytest.fail("the vendored reference needs NumPy 1: the comparison would be skipped in silence")
         pytest.skip("the vendored reference uses np.NaN, removed in NumPy 2")
     spec = importlib.util.spec_from_file_location("mhw_legacy", ROOT / "legacy" / "marineHeatWaves.py")
     module = importlib.util.module_from_spec(spec)
@@ -182,6 +185,44 @@ def test_a_baseline_outside_the_series_is_refused():
         mhw_hobday.compute_climatology(df, 2010, 2015)
 
 
+def test_the_metrics_are_computed_from_the_references_threshold_and_climatology(legacy):
+    df = pd.read_csv(FIXTURE / "sst_daily.csv", parse_dates=["Datetime"])[["Datetime", "Temperature"]]
+    mhw, rc = _reference(legacy, df, 2003, 2012)
+    clim = mhw_hobday.compute_climatology(df, 2003, 2012)
+    events, daily = mhw_hobday.detect_events(df, clim)
+    temp = df["Temperature"].to_numpy()
+    above = np.maximum(temp - rc["thresh"], 0)
+    np.testing.assert_allclose(daily["intensity"], above, rtol=0, atol=1e-9)
+    np.testing.assert_allclose(daily["anomaly"], temp - rc["seas"], rtol=0, atol=1e-9)
+    np.testing.assert_allclose(daily["intensity_norm"], np.maximum((temp - rc["seas"]) / (rc["thresh"] - rc["seas"]), 0), rtol=0, atol=1e-9)
+    for e, a, b in zip(events, mhw["index_start"], mhw["index_end"]):
+        assert e["duration_days"] == b - a + 1
+        assert e["intensity_max"] == pytest.approx(above[a:b + 1].max(), abs=1e-9)
+        assert e["intensity_cumulative"] == pytest.approx(above[a:b + 1].sum(), abs=1e-8)
+    assert [e["event_id"] for e in events] == list(range(1, len(events) + 1))
+    assert (daily.loc[daily["in_event"], "event_id"].astype(int).between(1, len(events))).all() and daily.loc[~daily["in_event"], "event_id"].isna().all()
+
+
+def test_the_scale_of_the_category_is_never_below_a_hundredth_of_a_degree():
+    days = pd.date_range("2000-01-01", "2012-12-31", freq="D")
+    df = pd.DataFrame({"Datetime": days, "Temperature": 15.0})              # threshold = climatology
+    clim = mhw_hobday.compute_climatology(df, 2001, 2010)
+    assert (clim["baseline_diff"] == 0.01).all()
+
+
+def test_a_baseline_that_does_not_cover_every_day_of_the_year_is_refused():
+    df = _synthetic("2001-01-01", "2001-06-30", seed=3)
+    with pytest.raises(ValueError, match="every day"):
+        mhw_hobday.compute_climatology(df, 2001, 2001)
+
+
+def test_a_baseline_outside_the_years_of_the_series_is_refused_not_cut_short(legacy):
+    df = _synthetic("2003-01-01", "2012-12-31", seed=3)
+    for y0, y1 in [(2005, 2015), (2000, 2008), (2008, 2005)]:
+        with pytest.raises(ValueError, match="not inside"):
+            mhw_hobday.compute_climatology(df, y0, y1)
+
+
 # --- the daily table is the one the builder aggregates ---------------------------------------------------------
 
 def test_the_daily_table_has_the_columns_the_monthly_aggregation_needs():
@@ -206,7 +247,7 @@ def test_the_builder_builds_its_heatwave_catalogue_with_the_hobday_climatology()
     assert ds.mhw_events["start_date"].tolist() == [e["start_date"] for e in events]
     fixture = pd.read_csv(FIXTURE / "mhw_events.csv")
     assert len(fixture) == 109 and len(ds.mhw_events) != len(fixture)       # NOT the pipeline's catalogue: Livorno's numbers stay on the old detection
-    assert ds.coverage["mhw"]["method"].startswith("Hobday et al. 2016")
+    assert ds.coverage["mhw"]["method"].startswith("Hobday et al. 2016") and ds.coverage["mhw"]["baseline"] == [2003, 2012]
 
 
 # --- guards -------------------------------------------------------------------------------------------------------

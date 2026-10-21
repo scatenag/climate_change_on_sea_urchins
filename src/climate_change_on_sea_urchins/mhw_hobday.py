@@ -66,6 +66,8 @@ def compute_climatology(df: pd.DataFrame, clim_start: int, clim_end: int, pctile
     df = df.reset_index(drop=True)
     _check_daily(df)
     years = df["Datetime"].dt.year.to_numpy()
+    if clim_start < years.min() or clim_end > years.max() or clim_start > clim_end:
+        raise ValueError(f"the baseline {clim_start}-{clim_end} is not inside the years of the series {years.min()}-{years.max()}")
     in_baseline = np.where((years >= clim_start) & (years <= clim_end))[0]
     if len(in_baseline) == 0:
         raise ValueError(f"the series has no day in the baseline {clim_start}-{clim_end}")
