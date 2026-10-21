@@ -440,13 +440,76 @@ def test_a_value_equal_to_a_code_but_inside_the_range_of_the_others_is_not_repor
     assert not [f for f in _find([60, 75, 99, 110, 130, 140, 85, 92]) if f["kind"] == "code"]
 
 
-def test_the_same_code_twice_inside_the_range_is_reported():
-    assert any(f["kind"] == "code" and f["value"] == 99 for f in _find([60, 99, 75, 110, 99, 140, 85, 92]))
+def test_a_negative_code_twice_inside_the_range_is_reported_and_a_positive_one_is_not():
+    assert any(f["kind"] == "code" and f["value"] == -99 for f in _find([-150, -99, -75, 10, -99, 90, -85, 40]))
+    # 99 twice among percentages or counts is ordinary data, not a code
+    assert _find([95, 99, 100, 98, 99, 97, 100, 96, 94, 99, 100, 93]) == []
+    assert _find([12, 45, 99, 130, 99, 170, 23, 88, 150, 60, 7, 77]) == []
+
+
+def test_a_negative_code_in_a_column_of_non_negative_values_is_certain_even_once_and_with_a_wide_spread():
+    assert any(f["value"] == -999 for f in _find([1200, 45000, -999, 67000, 23000, 31000]))
+
+
+def test_a_constant_column_is_not_a_false_alarm_for_a_value_next_to_it_but_a_code_is_found():
+    assert _find([98, 100, 100, 100, 100, 99]) == []
+    assert _find([100, 100, 100, 100, 100, 99]) == []
+    assert any(f["value"] == -999 for f in _find([5, 5, 5, 5, 5, -999]))
+
+
+def test_four_numbers_are_enough_and_three_are_not():
+    assert any(f["value"] == -999 for f in _find([20.5, 22.1, -999, 21.3]))
+    assert _find([20.5, -999, 21.3]) == []
 
 
 def test_many_zeros_are_reported_and_a_single_one_is_not():
     assert any(f["kind"] == "zeros" and f["count"] == 4 for f in _find([0, 12, 0, 15, 14, 0, 13, 16, 0, 17]))
     assert not [f for f in _find([0, 12, 14, 15, 14, 11, 13, 16, 18, 17, 12, 13, 15, 16, 14, 13, 12, 15, 17, 18, 14]) if f["kind"] == "zeros"]
+
+
+def test_two_zeros_are_not_enough_and_three_of_a_long_column_are():
+    base = [12.1, 14.2, 15.3, 14.4, 11.5, 13.6, 16.7, 18.8, 17.9, 12.2, 13.3, 15.4, 16.5, 14.6, 13.7, 12.8, 15.9, 17.1, 18.2, 14.3]
+    assert not [f for f in _find([0, 0] + base) if f["kind"] == "zeros"]
+    assert [f for f in _find([0, 0, 0] + base) if f["kind"] == "zeros"]
+    assert not [f for f in _find([0, 0, 0] + base * 3) if f["kind"] == "zeros"]       # 3 of 63 is under 5%
+
+
+def test_whole_numbers_repeat_legitimately_and_are_not_a_filler():
+    assert _find([100, 100, 100, 98, 97, 100, 99, 95, 100, 100, 96, 100]) == []
+    assert _find([10, 12, 11, 10, 10, 13, 10, 14, 10, 15, 10, 16]) == []
+
+
+def test_a_repeat_needs_five_rows_and_a_fifth_of_the_column():
+    few = [12.3] * 4 + [10.1, 11.7, 13.2, 14.8, 9.9, 15.5]            # 4 of 10 is a share but under 5 rows
+    assert not [f for f in _find(few) if f["kind"] == "repeated"]
+    spread = [12.3] * 5 + [10.1 + 0.1 * i for i in range(30)]          # 5 of 35 is under a fifth
+    assert not [f for f in _find(spread) if f["kind"] == "repeated"]
+
+
+def test_a_code_that_is_also_the_repeat_is_reported_once():
+    found = _find([-999] * 6 + [10.1, 11.7, 13.2, 14.8, 9.9, 15.5, 16.1, 10.8])
+    assert [f["kind"] for f in found] == ["code"]
+
+
+def test_a_short_row_and_a_huge_number_do_not_crash():
+    text = "date,value\n2010-01-01\n2010-01-02,1e308\n2010-01-03,-1e308\n2010-01-04,5\n2010-01-05,6\n2010-01-06,7\n"
+    missing_code_suspects(text, ",", ".", "value")
+
+
+def test_only_the_first_lines_are_listed():
+    found = _find([20.5, 22.1, 21.3, 19.8, 23.0, 22.2, 20.1, 21.0, 20.9] + [-999] * 8)
+    code = next(f for f in found if f["kind"] == "code")
+    assert code["count"] == 8 and len(code["lines"]) == 5 and code["lines"] == [11, 12, 13, 14, 15]
+
+
+def test_how_far_outside_the_others_a_code_must_lie():
+    assert any(f["value"] == 99 for f in _find([10, 12, 14, 16, 18, 20, 99]))           # 79 away from a spread of 5
+    assert not [f for f in _find([10, 30, 50, 70, 90, 99])]                              # 9 beyond the largest, spread 40
+    assert not [f for f in _find([10, 11, 12, 13, 14, 15, 200, 99])]                     # beyond the quartiles, inside the range
+
+
+def test_a_column_with_few_distinct_non_integer_values_is_not_a_repeat_warning():
+    assert not [f for f in _find([1.5, 2.5, 3.5] * 6) if f["kind"] == "repeated"]
 
 
 def test_a_value_repeated_in_a_large_share_of_a_continuous_column_is_reported():
@@ -466,7 +529,7 @@ def test_ordinary_measurements_give_no_finding():
 
 
 def test_the_decimal_comma_is_read_as_declared():
-    assert missing_code_suspects(_col([20.5, 22.1, -999, 21.3], decimal=","), ",", ",", "value") is not None    # a comma that is also the delimiter: no crash
+    assert isinstance(missing_code_suspects(_col([20.5, 22.1, -999, 21.3], decimal=","), ",", ",", "value"), list)    # a comma that is also the delimiter: no crash
     text = "date;value\n" + "\n".join(f"2010-01-{i + 1:02d};{v}" for i, v in enumerate(["20,5", "22,1", "-999", "21,3", "19,8", "23,0", "22,2"])) + "\n"
     assert any(f["kind"] == "code" and f["value"] == -999 for f in missing_code_suspects(text, ";", ",", "value"))
 

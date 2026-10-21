@@ -200,14 +200,17 @@ def suspect_messages(findings: list[dict]) -> list[str]:
     file, so nothing that could be markup."""
     out = []
     for f in findings:
-        where = ", ".join(str(n) for n in f["lines"]) + (", ..." if f["count"] > len(f["lines"]) else "")
+        one = f["count"] == 1
+        where = ("line " if len(f["lines"]) == 1 else "lines ") + ", ".join(str(n) for n in f["lines"]) + (", ..." if f["count"] > len(f["lines"]) else "")
+        verb = "is" if one else "are"
+        value = f"{f['value']:.10g}"
         if f["kind"] == "code":
-            what = f"{f['count']} of {f['of']} values are exactly {f['value']:g}, a number often used as a code for \"missing\""
+            what = f"{f['count']} of {f['of']} values {verb} exactly {value}, a number often used as a code for \"missing\""
         elif f["kind"] == "zeros":
-            what = f"{f['count']} of {f['of']} values are exactly 0, which is sometimes written for \"missing\""
+            what = f"{f['count']} of {f['of']} values {verb} exactly 0, which is sometimes written for \"missing\""
         else:
-            what = f"{f['count']} of {f['of']} values are exactly {f['value']:g}, a repeat that a measurement rarely makes"
-        out.append(f"{what} (lines {where}). If they stand for no measurement they would be read as real measurements: leave "
+            what = f"{f['count']} of {f['of']} values {verb} exactly {value}, a repeat that a measurement rarely makes"
+        out.append(f"{what} ({where}). If they stand for no measurement they would be read as real measurements: leave "
                    "those cells empty or remove the rows, and upload the file again. If they are real, ignore this.")
     return out
 

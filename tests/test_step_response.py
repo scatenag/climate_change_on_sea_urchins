@@ -654,3 +654,12 @@ def test_the_neutral_modules_still_do_not_read_the_loaded_study():
 
 def test_the_commands_minimum_of_pairs_is_the_one_the_step_warns_with():
     assert step_response.MIN_PAIRS == run_study.MIN_PAIRS
+
+
+# --- the wording of the warnings -------------------------------------------------------------------------------------
+
+def test_the_warning_gives_the_value_as_it_is_in_the_file_and_agrees_in_number():
+    one = step_response.suspect_messages([{"kind": "repeated", "value": 12.3456789, "count": 1, "of": 22, "lines": [2]}])[0]
+    assert "1 of 22 values is exactly 12.3456789" in one and "(line 2)" in one
+    many = step_response.suspect_messages([{"kind": "code", "value": -999.0, "count": 8, "of": 30, "lines": [2, 3, 4, 5, 6]}])[0]
+    assert "8 of 30 values are exactly -999" in many and "(lines 2, 3, 4, 5, 6, ...)" in many
