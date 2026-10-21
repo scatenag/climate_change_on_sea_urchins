@@ -195,6 +195,23 @@ def _choose(label, options, key, fp, kind="select"):
     return widget(label, options, index=None, key=f"{key}_{fp}")
 
 
+def suspect_messages(findings: list[dict]) -> list[str]:
+    """The warnings for the findings of `response_csv.missing_code_suspects`: numbers and line numbers only, nothing typed in the
+    file, so nothing that could be markup."""
+    out = []
+    for f in findings:
+        where = ", ".join(str(n) for n in f["lines"]) + (", ..." if f["count"] > len(f["lines"]) else "")
+        if f["kind"] == "code":
+            what = f"{f['count']} of {f['of']} values are exactly {f['value']:g}, a number often used as a code for \"missing\""
+        elif f["kind"] == "zeros":
+            what = f"{f['count']} of {f['of']} values are exactly 0, which is sometimes written for \"missing\""
+        else:
+            what = f"{f['count']} of {f['of']} values are exactly {f['value']:g}, a repeat that a measurement rarely makes"
+        out.append(f"{what} (lines {where}). If they stand for no measurement they would be read as real measurements: leave "
+                   "those cells empty or remove the rows, and upload the file again. If they are real, ignore this.")
+    return out
+
+
 def _first_line(text: str) -> str:
     return next((line for line in text.splitlines() if line.strip()), "")
 
@@ -259,6 +276,14 @@ def _render_upload(ctx, step1: dict):
     a["decimal"] = _choose("Decimal separator of the numbers", list(DECIMALS), "s2_decimal", fp, "radio")
     a["date_format"] = _choose("Format of the dates", list(DATE_FORMATS.values()), "s2_dfmt", fp)
     a["rows"] = _choose("What does one row of the file hold?", list(ROWS), "s2_rows", fp, "radio")
+    if a["decimal"] and a["value_col"]:                       # only with the decimal separator the user chose: nothing is assumed
+        memo = ctx.data.setdefault("s2_suspects", {})                  # computed once per file and choices, not at every run
+        ck = (fp, DELIMITERS[delim_label], DECIMALS[a["decimal"]], a["value_col"])
+        if ck not in memo:
+            memo.clear()
+            memo[ck] = response_csv.missing_code_suspects(text, ck[1], ck[2], ck[3])
+        for message in suspect_messages(memo[ck]):
+            st.warning(message)
     others = [NO_COLUMN] + list(columns)
     lo = st.selectbox("Column with the lower end of the interval (optional)", others, index=0, key=f"s2_lo_{fp}")
     hi = st.selectbox("Column with the upper end of the interval (optional)", others, index=0, key=f"s2_hi_{fp}")

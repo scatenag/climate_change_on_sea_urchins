@@ -409,6 +409,55 @@ def test_a_study_file_that_does_not_load_back_is_refused_not_kept(after_step1, m
     assert "step2" not in _ctx(at).data
 
 
+# --- values that look like codes for "missing": a warning, not a refusal -----------------------------------------
+
+CODED = "when,ec\n" + "\n".join(f"{2005 + i // 12}-{1 + i % 12:02d}-10,{-999 if i % 7 == 3 else round(20 + (i * 7) % 13 + 0.5, 1)}" for i in range(60)) + "\n"
+
+
+def test_a_missing_code_in_the_value_column_is_warned_before_the_build_and_the_study_still_builds(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, CODED)
+    _fill_answers(at)
+    at.run()
+    warnings_before = " ".join(w.value for w in at.warning)
+    assert "-999" in warnings_before and "read as real measurements" in warnings_before and "line" in warnings_before
+    _build(at)
+    assert not at.error, _errors(at)                      # a warning, never a refusal
+    assert (_study_dir(at) / "study.yaml").exists()
+    assert "-999" in " ".join(w.value for w in at.warning)  # and it stays on the page next to the result
+
+
+def test_ordinary_data_give_no_missing_code_warning(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, _csv(_trials(n_months=120)))
+    _fill_answers(at)
+    at.run()
+    assert not [w for w in at.warning if "read as real measurements" in w.value]
+
+
+def test_the_warning_waits_for_the_decimal_separator_the_user_chose(after_step1, monkeypatch):
+    at = _start_upload(after_step1, monkeypatch, CODED)
+    _pick(at, "Field separator in the file", "comma (,)"); at.run()
+    _pick(at, "Column with the date", "when"); _pick(at, "Column with the measurement value", "ec"); at.run()
+    assert not [w for w in at.warning if "read as real measurements" in w.value]       # no decimal chosen yet: nothing is assumed
+
+
+def test_the_suspect_values_are_looked_for_once_per_file_and_choices_not_at_every_run(after_step1, monkeypatch):
+    calls, real = [], response_csv.missing_code_suspects
+    monkeypatch.setattr(response_csv, "missing_code_suspects", lambda *a, **k: (calls.append(1), real(*a, **k))[1])
+    at = _start_upload(after_step1, monkeypatch, CODED)
+    _fill_answers(at)
+    at.run(); at.run(); _by_label(at, "Name of the response (for the results)").set_value("Other").run()
+    assert len(calls) == 1
+
+
+def test_the_warning_cannot_be_used_to_inject_markup(after_step1, monkeypatch):
+    text = "when,ec\n" + "\n".join(f"2008-{1 + i % 12:02d}-10,{-999 if i % 3 == 0 else 20 + i}" for i in range(24)) + "\n"
+    at = _start_upload(after_step1, monkeypatch, text)
+    _fill_answers(at)
+    at.run()
+    shown = " ".join(w.value for w in at.warning)
+    assert "-999" in shown and "[" not in shown and "<" not in shown
+
+
 # --- what the independent review found ----------------------------------------------------------------------
 
 def test_a_file_with_a_quote_that_never_closes_is_a_problem_of_the_file_not_a_crash(after_step1, monkeypatch):

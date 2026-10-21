@@ -33,7 +33,7 @@ dell'app); questo ADR dice come le rispetta il codice e che cosa resta aperto.
   rifiutata con il motivo; fuori dal dominio, o con una baseline che il prodotto non copre, il rifiuto avviene prima di
   ogni chiamata di download. I campi della baseline sono precompilati con la proposta (visibile e modificabile).
 
-## PROVVISORIA: il campo «primo anno delle misure»
+## Il campo «primo anno delle misure» (confermato dal proprietario il 21/10)
 
 Il passo 1 precede il caricamento della risposta (passo 2), quindi l'app non sa da quando partono le misure. Si chiede un
 campo facoltativo «primo anno delle misure»; se è vuoto il download parte dalla baseline, e se poi la risposta comincia
@@ -41,7 +41,7 @@ prima dei dati scaricati meno i ritardi, i primi mesi non si appaiano (lo dirà 
 risposta prima del sito, cambiando l'ordine dei passi; (b) scaricare sempre dall'inizio del prodotto (circa 1,6 volte i
 giorni, tempo da misurare). **Scelta:** il campo facoltativo, reversibile, nessun effetto su Livorno.
 
-## PROVVISORIA: baseline minima di dieci anni
+## Baseline minima di dieci anni (confermata dal proprietario il 21/10)
 
 La rilettura ha mostrato che con una baseline di uno o due anni la «soglia» del 90° percentile di ogni giorno è fatta dei
 pochi valori stessi (con un solo anno 220 eventi sul 74% dei giorni, su una serie senza tendenza). **Scelta:** meno di 10 anni

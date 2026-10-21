@@ -407,3 +407,75 @@ def test_a_date_pandas_cannot_hold_is_a_problem_with_its_line(token):
     aggregated = _response(granularity="aggregated", _aggregation=None)
     with pytest.raises(ResponseCsvError, match=r"line 2.*1678"):
         read_response_text(f"date,value\n{token},10\n", aggregated)
+
+
+# --- values that look like codes for "missing" (a warning, never a refusal) ---------------------------------------
+
+from climate_change_on_sea_urchins.response_csv import missing_code_suspects
+
+
+def _col(values, delimiter=",", decimal="."):
+    rows = "\n".join(f"2010-{1 + i % 12:02d}-{1 + i // 12:02d},{str(v).replace('.', decimal)}" for i, v in enumerate(values))
+    return f"date,value\n{rows}\n"
+
+
+def _find(values, **kw):
+    return missing_code_suspects(_col(values, **kw), ",", kw.get("decimal", "."), "value")
+
+
+def test_a_typical_missing_code_among_ordinary_values_is_reported_with_its_lines():
+    values = [20.5, 22.1, -999, 21.3, 19.8, 23.0, -999, 22.2, 20.1, 21.0]
+    found = _find(values)
+    code = next(f for f in found if f["kind"] == "code")
+    assert code["value"] == -999 and code["count"] == 2 and code["lines"] == [4, 8] and code["of"] == 10
+
+
+@pytest.mark.parametrize("code", [-99999, -9999, -999, -99, 99999, 9999])
+def test_each_typical_code_is_recognised_when_it_stands_out(code):
+    assert any(f["kind"] == "code" and f["value"] == code for f in _find([20.5, 22.1, code, 21.3, 19.8, 23.0, 22.2, 20.1]))
+
+
+def test_a_value_equal_to_a_code_but_inside_the_range_of_the_others_is_not_reported_once():
+    # 99 is a plausible measurement here (the others run from 60 to 140): one occurrence is not a warning
+    assert not [f for f in _find([60, 75, 99, 110, 130, 140, 85, 92]) if f["kind"] == "code"]
+
+
+def test_the_same_code_twice_inside_the_range_is_reported():
+    assert any(f["kind"] == "code" and f["value"] == 99 for f in _find([60, 99, 75, 110, 99, 140, 85, 92]))
+
+
+def test_many_zeros_are_reported_and_a_single_one_is_not():
+    assert any(f["kind"] == "zeros" and f["count"] == 4 for f in _find([0, 12, 0, 15, 14, 0, 13, 16, 0, 17]))
+    assert not [f for f in _find([0, 12, 14, 15, 14, 11, 13, 16, 18, 17, 12, 13, 15, 16, 14, 13, 12, 15, 17, 18, 14]) if f["kind"] == "zeros"]
+
+
+def test_a_value_repeated_in_a_large_share_of_a_continuous_column_is_reported():
+    vals = [12.3] * 6 + [10.1, 11.7, 13.2, 14.8, 9.9, 15.5, 16.1, 10.8, 12.9, 13.7, 11.2, 14.1]
+    found = _find(vals)
+    rep = next(f for f in found if f["kind"] == "repeated")
+    assert rep["value"] == 12.3 and rep["count"] == 6 and rep["of"] == 18
+
+
+def test_a_categorical_column_with_few_distinct_values_is_not_a_repeat_warning():
+    assert not [f for f in _find([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]) if f["kind"] == "repeated"]
+
+
+def test_ordinary_measurements_give_no_finding():
+    rng = __import__("numpy").random.default_rng(0)
+    assert _find([round(float(x), 2) for x in rng.normal(30, 5, 200)]) == []
+
+
+def test_the_decimal_comma_is_read_as_declared():
+    assert missing_code_suspects(_col([20.5, 22.1, -999, 21.3], decimal=","), ",", ",", "value") is not None    # a comma that is also the delimiter: no crash
+    text = "date;value\n" + "\n".join(f"2010-01-{i + 1:02d};{v}" for i, v in enumerate(["20,5", "22,1", "-999", "21,3", "19,8", "23,0", "22,2"])) + "\n"
+    assert any(f["kind"] == "code" and f["value"] == -999 for f in missing_code_suspects(text, ";", ",", "value"))
+
+
+def test_empty_cells_and_words_are_ignored_not_errors():
+    text = "date,value\n2010-01-01,\n2010-01-02,abc\n2010-01-03,12\n2010-01-04,13\n"
+    assert missing_code_suspects(text, ",", ".", "value") == []
+
+
+def test_an_unknown_column_or_an_unparsable_file_gives_nothing_to_say_not_a_crash():
+    assert missing_code_suspects("date,value\n2010-01-01,1\n", ",", ".", "nope") == []
+    assert missing_code_suspects('"unterminated,x\n' + "y" * 200000, ",", ".", "value") == []
