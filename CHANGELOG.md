@@ -14,7 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   up to 2 days — checked against `legacy/marineHeatWaves.py` on 366 thresholds and event by event. On Livorno's data the
   repository's own detection finds 109 events against Hobday's 78 (measurement in `drafts/`, not published). The Livorno pipeline
   (`mhw_detection.py`) and its golden master are unchanged. The baseline messages no longer say "the few values themselves".
-
+- **Missing-value codes in the response** (step 2, ADR-0017). Once the user has chosen the decimal separator and the value column,
+  the app warns, never refuses, when the column holds a typical code for "missing" (-999, -9999, 99, ...), a share of exact zeros or
+  a value repeated in a large share of a continuous column, with the counts and the first lines: they would be read as real
+  measurements. `response_csv.missing_code_suspects`. ADR-0016 and ADR-0017 are confirmed (no longer provisional).
 - **Step 3 of the user's own data** (milestone MA.4, new `step_run.py`, ADR-0018). The study built in step 2 is run by
   `ccsu-run-study` in a separate process that receives files only: an environment built from an allowlist with a fresh empty
   HOME, paths as arguments, never a credential. The page follows `progress.json` with a fragment that reruns itself every two

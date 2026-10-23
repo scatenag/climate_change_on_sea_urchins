@@ -314,3 +314,75 @@ def read_response_text(text: str | bytes, response) -> ResponseData:
         series = series.sort_values("Datetime").reset_index(drop=True)
     notes["months"] = int(len(series))
     return ResponseData(observations=obs, series=series, notes=notes)
+
+
+# ── values that may be codes for "missing" ────────────────────────────────────────────────────────
+
+CODE_VALUES = (-99999.0, -9999.0, -999.0, -99.0, 99.0, 999.0, 9999.0, 99999.0)   # the codes databases and spreadsheets use
+ZERO_SHARE = 0.05             # zeros are suspect from this share of the values (and at least 3)
+REPEAT_SHARE = 0.20           # one value is suspect from this share of a continuous column (and at least 5 rows)
+MAX_LINES_LISTED = 5
+MIN_VALUES = 4                # fewer numbers than this and nothing can be said about what stands out
+
+
+def missing_code_suspects(text: str, delimiter: str, decimal: str, value_column: str) -> list[dict]:
+    """Values of `value_column` that may be codes for 'missing' written as numbers: they would be read as real measurements.
+    This is a warning for the user to look at, never a refusal (the reader cannot know), so it also never raises: a file it
+    cannot read gives no findings and the reader says what is wrong when the study is built.
+
+    Three findings, each with its count, the size of the column and the first lines:
+      code      a value from CODE_VALUES (-999, -9999, 99, ...) that lies outside the range of the other values and farther
+                from it than 3 times their spread (the interquartile range, at least 5% of the median's size), or a negative
+                code in a column whose other values are all zero or above, or a negative code that appears at least twice
+                (a positive one twice is, in percentages and counts, ordinary data). A positive code inside a wide spread of large
+                values is not found: this is a hint, not a proof;
+      zeros     exact zeros in at least ZERO_SHARE of the values (and 3 or more);
+      repeated  one value that fills at least REPEAT_SHARE of the column (and 5 or more rows) in a column with more than 5
+                distinct values that are not all whole numbers (counts and percentages repeat legitimately): a filler."""
+    try:
+        rows = _rows(text, delimiter)
+    except ResponseCsvError:
+        return []
+    if not rows or value_column not in rows[0][1]:
+        return []
+    vi = rows[0][1].index(value_column)
+    parsed: list[tuple[int, float]] = []
+    for line, row in rows[1:]:
+        if len(row) > vi and row[vi]:
+            try:
+                parsed.append((line, _number(row[vi], decimal)))
+            except ValueError:
+                continue
+    n = len(parsed)
+    if n < MIN_VALUES:
+        return []
+    values = np.array([v for _, v in parsed])
+    findings: list[dict] = []
+    lines_of = lambda mask: [parsed[i][0] for i in np.flatnonzero(mask)][:MAX_LINES_LISTED]
+    with np.errstate(all="ignore"):
+        for code in CODE_VALUES:
+            is_code = values == code
+            count = int(is_code.sum())
+            if not count:
+                continue
+            others = values[~is_code]
+            if len(others) < MIN_VALUES - 1:
+                continue
+            q1, q3 = np.percentile(others, [25, 75])
+            reach = 3 * max(q3 - q1, 0.05 * abs(float(np.median(others))))
+            lo, hi = float(others.min()), float(others.max())
+            standout = (code < lo and lo - code > reach) or (code > hi and code - hi > reach)
+            if standout or (code < 0 and (lo >= 0 or count >= 2)):
+                findings.append({"kind": "code", "value": code, "count": count, "of": n, "lines": lines_of(is_code)})
+        zeros = values == 0
+        nz = int(zeros.sum())
+        if nz >= 3 and nz / n >= ZERO_SHARE:
+            findings.append({"kind": "zeros", "value": 0.0, "count": nz, "of": n, "lines": lines_of(zeros)})
+        distinct, counts = np.unique(values, return_counts=True)
+        if len(distinct) > 5 and not np.all(values == np.round(values)):
+            top = int(np.argmax(counts))
+            value, count = float(distinct[top]), int(counts[top])
+            already = any(f["kind"] in ("code", "zeros") and f["value"] == value for f in findings)
+            if count >= 5 and count / n >= REPEAT_SHARE and not already:
+                findings.append({"kind": "repeated", "value": value, "count": count, "of": n, "lines": lines_of(values == value)})
+    return findings
