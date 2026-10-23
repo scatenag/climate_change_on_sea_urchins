@@ -47,9 +47,17 @@ anni bisestili, inizio a metà anno e baseline di 30 anni.
 **La pipeline di Livorno non cambia**: `mhw_detection` e il golden master restano come sono, perché passare a Hobday cambierebbe
 109 → 78 eventi e i numeri pubblicati (Tabella S3 compresa: con il catalogo di riferimento i test sono 79–85 a seconda dell'ordine ARIMA entro 2 punti di AIC e nessuno supera BH o
 Bonferroni in nessuna delle 360 combinazioni di ordini ARIMA; la riga delle ondate severe non è valutabile perché ha un solo
-evento severo). La decisione di allineare Livorno, e di come correggere la frase del manoscritto, resta del proprietario, dopo la
-misura. Conseguenza: lo stesso dato dà cataloghi diversi nel motore generico e nella pipeline di Livorno; un confronto fra i due
+evento severo). L'allineamento di Livorno è deciso il 23/10 (sezione sotto). Conseguenza: lo stesso dato dà cataloghi diversi nel motore generico e nella pipeline di Livorno; un confronto fra i due
 non è un confronto a parità di metodo.
+
+## Decisioni del proprietario (23/10/2026), dopo la misura
+
+1. **Livorno passa al metodo di Hobday in M1.9**, insieme alle coppie reali di mesi consecutivi della CCF (ADR-0012), con **un solo
+   aggiornamento del golden master**, che il proprietario approva sui numeri. Il branch del lavoro (`paper/mpb-2026`) e il
+   manoscritto cambiano insieme, con la revisione. Fino ad allora la pipeline di Livorno, il golden master, l'app del lavoro e il
+   manoscritto sottomesso restano come sono. Il passaggio non si anticipa e non si fa a pezzi: né un file di Livorno, né il branch
+   del lavoro si toccano prima di M1.9 senza una richiesta esplicita.
+2. **Nessun avviso a runtime per il residuo stagionale**: resta il limite scritto qui sotto.
 
 ## Limiti noti
 
