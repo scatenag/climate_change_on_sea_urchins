@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Manual workflow `download_sst_product.yml`** that downloads the case study's daily SST from the first day of the Copernicus product (read from the catalogue at every run) to the last, with the repository's Copernicus secrets given to one step only, and publishes the series and its manifest as an artifact: it commits and pushes nothing, so the series does not enter the repository. Guarded by `tests/test_workflow_download_sst_product.py`.
 - **Hobday climatology and events in the generic engine** (ADR-0019, new `mhw_hobday.py`). The dataset builder, and so the app and
   `ccsu-run-study`, now take the 90th-percentile threshold and the seasonal climatology over the values within 5 days of each day
   in every baseline year, smooth them over 31 days, count an event from 5 days above the threshold and join events separated by
