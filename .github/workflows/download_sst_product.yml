@@ -1,0 +1,54 @@
+name: Download the SST of the case study from the first day of the product
+
+# Manual (workflow_dispatch only). Downloads the daily SST of the case study's site from the first day the
+# Copernicus multiyear product covers, read from the catalogue at every run, up to its last day, with the
+# repository's Copernicus secrets, and publishes the series and its manifest as an artifact. It commits and
+# pushes nothing: the series does not enter the repository. The secrets are given only to the step that
+# downloads, which passes them to the toolbox as arguments (ccsu-download-sst); the read-only token and the
+# absence of stored credentials mean nothing else in the job can write to the repository.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install the package with the acquisition extra
+        run: pip install -e ".[acquisition]"
+
+      - name: Download the series
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+        run: |
+          START=$(python -c "from climate_change_on_sea_urchins import catalog; from climate_change_on_sea_urchins.download import CopernicusClient; print(CopernicusClient().coverage_of(catalog.get('sst_daily')).start.isoformat())")
+          echo "First day of the product: $START"
+          python - "$START" <<'PY'
+          import subprocess, sys
+          import config
+          subprocess.run(["ccsu-download-sst", "--lat", str(config.SITE_LAT), "--lon", str(config.SITE_LON),
+                          "--bbox-delta", str(config.BBOX_DELTA), "--name", config.SITE_NAME,
+                          "--start", sys.argv[1], "--out", "sst-full-product"], check=True)
+          PY
+
+      - name: Publish the series and its manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sst-full-product
+          path: sst-full-product
+          if-no-files-found: warn
+          retention-days: 14
