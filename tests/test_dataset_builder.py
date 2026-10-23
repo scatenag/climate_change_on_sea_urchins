@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from climate_change_on_sea_urchins import common
+from climate_change_on_sea_urchins import common, mhw_detection, mhw_hobday
 from climate_change_on_sea_urchins.dataset_builder import (
     DatasetError, build_dataset, monthly_temperature, write_dataset,
 )
@@ -228,17 +228,20 @@ def livorno():
     return sst, sheet
 
 
-def test_livornos_heatwave_catalogue_is_the_fixtures(livorno):
+def test_the_heatwave_tables_are_the_hobday_detections_aggregated(livorno):
     sst, sheet = livorno
     ds = _build(sst, sheet, imputation=None, baseline=(2003, 2012))
-    for ours, theirs, kw in [(ds.mhw_events, "mhw_events.csv", dict(parse_dates=["start_date", "end_date", "peak_date"])),
-                             (ds.mhw_monthly, "mhw_monthly.csv", dict(parse_dates=["Datetime"])),
-                             (ds.mhw_annual, "mhw_annual.csv", {})]:
-        ref = pd.read_csv(FIXTURE / theirs, **kw)
-        if theirs == "mhw_annual.csv":      # the builder adds the days the SST covers in each year; mhw_detection's table has not
-            assert {"sst_days", "days_in_year"} <= set(ours.columns)
-            ours = ours.drop(columns=["sst_days", "days_in_year"])
-        pd.testing.assert_frame_equal(ours.reset_index(drop=True), ref, check_exact=False, rtol=1e-12, atol=1e-12)
+    daily = sst[["Datetime", "Temperature"]]
+    events, flagged = mhw_hobday.detect_events(daily, mhw_hobday.compute_climatology(daily, 2003, 2012))
+    pd.testing.assert_frame_equal(ds.mhw_events, pd.DataFrame(events))
+    monthly = mhw_detection.to_monthly(flagged)
+    got = ds.mhw_monthly.set_index("Datetime")
+    pd.testing.assert_frame_equal(got, monthly.set_index("Datetime").loc[got.index], check_exact=False, rtol=1e-12, atol=1e-12)
+    annual = mhw_detection.to_annual(events).reset_index(drop=True)
+    pd.testing.assert_frame_equal(ds.mhw_annual.drop(columns=["sst_days", "days_in_year"]).reset_index(drop=True), annual)
+    assert {"sst_days", "days_in_year"} <= set(ds.mhw_annual.columns)
+    ref = pd.read_csv(FIXTURE / "mhw_events.csv")         # not the pipeline's catalogue: the generic engine follows Hobday (ADR-0019)
+    assert len(ds.mhw_events) == 78 and len(ref) == 109
 
 
 def test_livornos_response_with_one_declared_pass_is_data_ec50_ci(livorno):

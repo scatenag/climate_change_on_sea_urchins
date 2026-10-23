@@ -243,7 +243,8 @@ def _show_result(ctx, current_key) -> None:
     b0, b1 = done["baseline"]
     n = view["n_events"]
     st.write(f"{n} marine heatwave{'s' if n != 1 else ''} detected against the climatology of {b0}–{b1} "
-             f"(daily mean and 90th percentile of those years): {view['in_baseline']} in the baseline years and "
+             f"(the method of Hobday et al. 2016: the 90th percentile of the values within 5 days of each day of those years, "
+             f"smoothed over 31 days; ADR-0019): {view['in_baseline']} in the baseline years and "
              f"{view['after']} after. The baseline years are, by construction, about one day in ten above the threshold; "
              "with a fixed baseline and a warming sea the later years show more heatwave days partly because of the trend "
              "(ADR-0014).")

@@ -8,6 +8,9 @@ baseline coperta per intero dalla SST. Il download di uno studio nuovo parte qui
 non dall'inizio della serie di risposta. Quale baseline suggerire è una scelta di metodo (decisione del
 proprietario, 16/10/2026).
 
+> **Nota del 21/10:** la climatologia calcolata su questa baseline nel motore generico segue Hobday et al. (2016) con la raccolta
+> dei valori entro ±5 giorni (ADR-0019); i minimi e gli avvisi sugli anni sotto non sono cambiati.
+
 ## Alternative valutate
 
 - **A. 1991–2020 per tutti** (la norma climatologica a 30 anni), modificabile. Scelta adottata.

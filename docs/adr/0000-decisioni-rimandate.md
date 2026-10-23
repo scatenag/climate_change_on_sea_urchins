@@ -363,4 +363,5 @@ confrontabili. È una scelta di metodo che tocca le metriche (giorni, intensità
 
 **Da decidere prima di M1.9**, con Livorno come termine di confronto: le metriche delle ondate di Livorno con la
 sua baseline fissa e con una mobile, sullo stesso dato, e che cosa cambia nei risultati mostrati. Nessuna
-anticipazione: finché non si decide, le metriche generiche usano la baseline dichiarata dallo studio, ferma.
+anticipazione: finché non si decide, le metriche generiche usano la baseline dichiarata dallo studio, ferma. (Il 21/10 la
+climatologia del motore generico è diventata quella di Hobday, ADR-0019; la questione fissa/mobile resta aperta.)

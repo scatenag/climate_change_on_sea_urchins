@@ -194,7 +194,12 @@ def test_a_purely_seasonal_response_gives_no_significant_lag(tmp_path):
     """The seasonal cycle of the temperature is not the driver: a response that only has its own seasonal cycle,
     independent of the anomaly, must not come out associated at several lags (it does with the raw temperature)."""
     spec = _write_study(tmp_path / "study", imputation=False)
-    _write_inputs(tmp_path / "inputs")
+    sst = _sst()
+    # a real SST has interannual variability; without it the 31-day smoothing of the climatology (ADR-0019) leaves a small
+    # seasonal remainder in the anomaly (0.09 degrees here), which is then all the anomaly there is
+    slow = pd.Series(np.random.default_rng(9).normal(0, 0.8, 80)).repeat(31).to_numpy()[:len(sst)]
+    sst["Temperature"] = sst["Temperature"] + slow
+    _write_inputs(tmp_path / "inputs", sst=sst)
     months = pd.date_range("2003-06-01", "2008-06-01", freq="MS")
     rng = np.random.default_rng(5)
     value = 30 + 8 * np.sin(2 * np.pi * months.month / 12 + 0.7) + rng.normal(0, 1.0, len(months))
@@ -370,7 +375,7 @@ def _reachable(entry=("run_study", "run_study")):
 def test_the_chain_is_found():
     seen, _ = _reachable()
     for needed in [("run_study", "run_study"), ("dataset_builder", "build_dataset"), ("response_csv", "read_response"),
-                   ("mhw_detection", "detect_events"), ("mhw_analysis", "ccf_at_lags"), ("common", "aggregate_period"),
+                   ("mhw_hobday", "detect_events"), ("mhw_detection", "to_monthly"), ("mhw_analysis", "ccf_at_lags"), ("common", "aggregate_period"),
                    ("common", "impute_series")]:
         assert needed in seen, f"{needed} is not reached from run_study.run_study: the guard would look at nothing"
 
