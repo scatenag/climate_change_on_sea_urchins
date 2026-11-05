@@ -5,7 +5,7 @@
 > (milestone in corso), [`../COME_SI_LAVORA.md`](../COME_SI_LAVORA.md) (regole), negli ADR e
 > nelle issue.
 
-**Ultimo aggiornamento:** 23 ottobre 2026
+**Ultimo aggiornamento:** 5 novembre 2026
 
 ## Dove siamo
 
@@ -43,6 +43,12 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 - **Job.** `update_ec50.yml` (EC50 ogni giorno, Copernicus il 5 del mese) spinge su `main`;
   `update_paper_branch.yml` spinge su `paper/mpb-2026` e ha l'input `force_rebuild`; `tests.yml`
   gira anche dopo ogni aggiornamento e apre una issue se fallisce; `validate_data.yml` ogni giorno.
+  **5/11:** il job `update` di `update_paper_branch.yml` è fallito (#72, chiusa) perché `ubuntu-latest` è
+  passato a Ubuntu 26.04 (gcc 15) e i pacchetti R congelati non compilavano; ora è fissato a
+  `ubuntu-24.04` (#73, richiesta esplicita del proprietario, ADR-0009). Rilancio manuale con
+  `force_rebuild` (run 42112070763) verde, `paper/mpb-2026` ricalcolato (`f8dc91e`, codice del branch
+  invariato a `96823f7`), app del lavoro controllata dal proprietario. `update_ec50.yml` è ancora su
+  `ubuntu-latest` (#74).
 - **Protezione.** `main`: due ruleset attivi. Il primo (24362986, anche per
   `sartori-2023-supplement`): niente cancellazione né force push. Il secondo (24719143, attivato l'8/10):
   PR obbligatoria con 0 approvazioni e controllo `test` obbligatorio (non «aggiornato a main»); unica
@@ -84,7 +90,7 @@ fetta verticale (riga di comando prima, interfaccia dopo), approvato con la fusi
 
 #9 prewhitening (V3.1) · #38 riempimento a 0 nel DLNM · #39 copia del forecast nel dashboard · #40
 unità del CO₂ in `fetch_copernicus.py` · #41 interpolazione dei buchi della SST · #42 rimandi a
-documenti non versionati · #43 percorsi risolti all'import negli script (tutte, tranne la #9, difetti
+documenti non versionati · #43 percorsi risolti all'import negli script · #74 `update_ec50.yml` su `ubuntu-latest` (tutte, tranne la #9, difetti
 noti che non bloccano M1). Chiuse l'8/10: #23 (esercitazione) e #45 (data di fine della SST, corretta
 su `main` con la #44 e sul branch del lavoro). Difetto noto non ancora in una issue (aggiunto il 16/10): `ccsu-dashboard` (`_launch_dashboard.py`) lancia `dashboard.py` come script e fallisce con un import relativo, già prima di MA.1; funziona solo `streamlit run app.py`. Difetto noto non ancora in una issue: l'id del dataset
 di ripiego in `fetch_copernicus_daily.py` (`…phy-temp_anfc…`) non esiste nel catalogo (quello giusto è
