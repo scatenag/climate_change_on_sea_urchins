@@ -547,6 +547,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **The paper-branch data update failed on 2026-11-05 (issue #72).** `ubuntu-latest` had become Ubuntu 26.04 (gcc 15) and the
+  frozen R packages of `renv.lock` (`cli` 3.6.5) no longer compile there; the R step runs only when a rebuild is needed, so the
+  runs of the previous days were green. The `update` job of `update_paper_branch.yml` is now pinned to `ubuntu-24.04` (PR #73,
+  explicit request of the owner, ADR-0009). A manual run with `force_rebuild` (run 42112070763) went green and rebuilt
+  `paper/mpb-2026` (`f8dc91e`); no science number, code or data of the branch was changed by hand. `update_ec50.yml` still uses
+  `ubuntu-latest`: issue #74.
 - **The test job was red on `main` from 2026-10-09 (pyarrow 26 against NumPy 1.26).** `pyarrow` is not a
   direct dependency: Streamlit asks `pyarrow>=7.0`, and pyarrow 26.0.0 (published that day) requires NumPy
   2, which the requirements exclude; scikit-learn imports pyarrow when it is installed, so two test
