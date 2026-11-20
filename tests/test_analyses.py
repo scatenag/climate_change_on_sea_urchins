@@ -128,7 +128,7 @@ def test_the_reason_says_when_the_variable_is_not_in_the_catalogue_yet_and_says_
         assert "does not list" in why and "not in the variable catalogue yet" not in why
     only_sst = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"])
     assert "salinity" in only_sst and "pH" in only_sst and "temperature" not in only_sst      # the SST provides the temperature and nothing else
-    # a variable that is not in the catalogue yet says so, and stops saying it when it is (the oxygen and the CO2 are still planned)
+    # a variable that is not in the catalogue yet says so, and stops saying it when it is (none is missing now: the clause is shown below)
     model = catalog.CATALOG["ph_monthly"]
     for variable in _not_yet_in_the_catalogue():
         planned_id = analyses.VARIABLE_SOURCES[variable][0]

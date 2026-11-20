@@ -88,3 +88,26 @@ def test_the_series_comes_from_the_catalogue_dataset_and_the_toolbox_coverage(mo
 
 def test_the_standin_has_no_login():
     assert not hasattr(StandInToolbox(), "login")
+
+
+class NoDepthToolbox(StandInToolbox):
+    """A surface product (the CO2 partial pressure): the file has time, latitude and longitude and no depth."""
+    def subset(self, **kw):
+        self.subset_calls.append(kw)
+        months = np.arange(np.datetime64(kw["start_datetime"][:7]), np.datetime64(kw["end_datetime"][:7]) + 1, dtype="datetime64[M]").astype("datetime64[D]")
+        lats = np.arange(kw["minimum_latitude"], kw["maximum_latitude"] + 1e-9, 0.0625)
+        lons = np.arange(kw["minimum_longitude"], kw["maximum_longitude"] + 1e-9, 0.0625)
+        data = np.full((len(months), len(lats), len(lons)), 40.0)
+        ds = xr.Dataset({"spco2": (("time", "latitude", "longitude"), data)},
+                        coords={"time": months.astype("datetime64[ns]"), "latitude": lats, "longitude": lons})
+        ds.to_netcdf(os.path.join(kw["output_directory"], kw["output_filename"]), engine="h5netcdf")
+
+
+def test_a_product_without_a_depth_coordinate_gives_a_cube_with_one_level_and_the_depth_is_still_asked_for(tmp_path):
+    toolbox = NoDepthToolbox()
+    cube = CopernicusClient(toolbox=toolbox, xarray_module=xr).subset(
+        catalog.get("co2_monthly"), lat_min=43.3, lat_max=43.5, lon_min=10.3, lon_max=10.5, start=dt.date(2024, 1, 1), end=dt.date(2024, 3, 1),
+        credentials=Credentials(USER, PASSWORD), dataset_version="202511")
+    assert cube.values.shape[:2] == (3, 1) and list(cube.depths) == [0] and np.all(cube.values == 40.0)
+    call = toolbox.subset_calls[0]
+    assert (call["minimum_depth"], call["maximum_depth"]) == (0.0, 10.0) and call["variables"] == ["spco2"]       # what Livorno's script asks as well

@@ -15,8 +15,8 @@ M1.9 moves it into the command. Nothing here imports an analysis, reads a study 
 is names and rules, so the app can import it.
 
 The monthly temperature is the monthly mean of the daily SST that the dataset builder makes: `sst_daily` provides it. The other
-variables of Livorno's environment (salinity, oxygen, pH, CO2) are monthly variables that M1.8 adds one at a time (the pH is in,
-ADR-0021): their ids are the planned ones, and a reason says so while one is not yet in the catalogue.
+variables of Livorno's environment (salinity, oxygen, pH, CO2) are the monthly variables of the catalogue (M1.8, ADR-0021, all in
+now): a reason still says that a variable is not in the catalogue yet if one is ever missing from it.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ LABELS = {"temperature": "temperature", "salinity": "salinity", "o2": "dissolved
 # the catalogue ids that provide each variable (several would be alternatives)
 VARIABLE_SOURCES = {"temperature": ("sst_daily",), "salinity": ("salinity_monthly",), "o2": ("o2_monthly",),
                     "ph": ("ph_monthly",), "co2": ("co2_monthly",)}
-PLANNED_CATALOG_IDS = frozenset({"salinity_monthly", "o2_monthly", "ph_monthly", "co2_monthly"})     # M1.8 adds them one at a time (ph_monthly and salinity_monthly are in)
+PLANNED_CATALOG_IDS = frozenset({"salinity_monthly", "o2_monthly", "ph_monthly", "co2_monthly"})     # M1.8 added them one at a time (all four are in the catalogue; the set is what the tests check the sources against)
 PENDING_REASON = "this version of the tool does not run it yet"
 SST_REASON_DAILY = "it needs the daily sea-surface temperature (sst_daily), and the study does not list it"
 SST_REASON_HEAT = ("it needs the heatwave catalogue, which is built from the daily sea-surface temperature (sst_daily), "
