@@ -306,7 +306,7 @@ def _show_result(ctx) -> None:
     states = json.loads((out / "analyses.json").read_text())["analyses"]
     st.markdown("**Other analyses of this tool**")
     st.caption("The tool has more analyses than this version runs. For this study, which ones its data allow (\"possible, not run\": the data "
-               "are there, the command does not run it yet) and which are off, with the reason. An analysis that is off wrote no file.")
+               "are there, this version does not run it yet) and which are off, with the reason. An analysis that is off wrote no file.")
     st.dataframe(analyses_table(states), hide_index=True)
     st.markdown("**What this result is, and is not**")
     for line in LIMITS:

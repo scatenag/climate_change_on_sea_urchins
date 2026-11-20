@@ -87,7 +87,8 @@ def test_the_variables_are_the_five_of_livornos_environment_and_come_from_the_ca
     for var, ids in analyses.VARIABLE_SOURCES.items():
         for i in ids:
             assert i in catalog.CATALOG or i in analyses.PLANNED_CATALOG_IDS, (var, i)
-    assert analyses.VARIABLE_SOURCES["temperature"] == ("sst_daily",)         # the monthly temperature is the monthly mean of the daily SST
+    assert analyses.VARIABLE_SOURCES == {"temperature": ("sst_daily",), "salinity": ("salinity_monthly",), "o2": ("o2_monthly",),
+                                         "ph": ("ph_monthly",), "co2": ("co2_monthly",)}     # the monthly temperature is the monthly mean of the daily SST
 
 
 # --- what a study is told -----------------------------------------------------------------------------------
@@ -115,6 +116,8 @@ def test_the_reason_says_when_the_variable_is_not_in_the_catalogue_yet_and_says_
         return next(r for r in reasons if "pH" in r)
     why = ph_reason()
     assert "does not list" in why and "not in the variable catalogue yet" in why
+    only_sst = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"])
+    assert "salinity" in only_sst and "pH" in only_sst and "temperature" not in only_sst      # the SST provides the temperature and nothing else
     monkeypatch.setitem(catalog.CATALOG, "ph_monthly", catalog.CATALOG["sst_daily"])        # as if M1.8 had added it
     why = ph_reason()
     assert "does not list" in why and "not in the variable catalogue yet" not in why
@@ -160,8 +163,8 @@ def test_a_note_about_a_fixed_choice_travels_with_the_state():
 
 
 def test_the_document_is_plain_data_with_the_outputs_and_no_path():
-    doc = analyses.document(evaluate(**EVERYTHING))
-    assert doc["format"] == 1 and len(doc["analyses"]) == len(ANALYSES)
+    doc = analyses.document(evaluate(**EVERYTHING), r_available=True)
+    assert doc["format"] == 1 and doc["machine"] == {"r_available": True} and len(doc["analyses"]) == len(ANALYSES)
     assert all("/" not in f and ".." not in f for a in doc["analyses"] for f in a["outputs"])      # names, never paths
     row = next(a for a in doc["analyses"] if a["id"] == "cu_speciation")
     assert row["outputs"] == ["cu_speciation_decomposition.csv", "cu_speciation_summary.json"] and row["status"] == "pending"
@@ -221,3 +224,109 @@ def test_each_declaration_of_a_loaded_study_matters():
     assert "period_split" in _off(analyses.evaluate_study(_spec(), r_available=True))                                     # no split date
     assert "cu_speciation" in _off(analyses.evaluate_study(_spec(contaminant="cadmium"), r_available=True))
     assert "dlnm" in _off(analyses.evaluate_study(_spec(), r_available=False)) and "dlnm" not in _off(analyses.evaluate_study(_spec(), r_available=True))
+
+
+# --- the declarations against the evidence: the runs that took one input away, and the sources -------------------------
+
+# What each module cannot do without, found on 2026-11-20 by taking one input at a time from the frozen paper fixture (a column of the
+# monthly table, the individual determinations, the control columns, the daily SST) and running the module; the temperature is the
+# module's own use of the column (code reading), because every module that goes through load_data fails without it, used or not.
+# (variables, per_trial, controls, daily_sst); every other analysis needs none of the four.
+EVIDENCE = {
+    "timeseries": (ALL_VARS, False, False, False),
+    "period_split": (ALL_VARS, True, False, False),
+    "correlations": (ALL_VARS, False, False, False),
+    "cu_speciation": (("temperature", "salinity", "ph"), False, False, False),
+    "thermal_legacy": ((), False, False, True),
+    "regime_shift": (ALL_VARS, False, False, False),
+    "changepoint": ((), True, False, False),
+    "negative_control": ((), True, True, False),
+    "forecast": (("temperature", "ph"), False, False, False),
+    "mhw_robustness": (("temperature",), False, False, False),
+}
+
+
+@pytest.mark.parametrize("analysis", [a for a in ANALYSES if a.module], ids=lambda a: a.id)
+def test_the_registry_says_what_the_runs_found_the_module_cannot_do_without(analysis):
+    variables, per_trial, controls, daily = EVIDENCE.get(analysis.id, ((), False, False, False))
+    n = analysis.needs
+    assert (set(n.variables), n.per_trial, n.controls, n.daily_sst) == (set(variables), per_trial, controls, daily), analysis.id
+
+
+def _split_uses(source):
+    tree = ast.parse(source)
+    return [n for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in {"SPLIT_DATE", "SPLIT_YEAR"} and isinstance(n.ctx, ast.Load)]
+
+
+@pytest.mark.parametrize("analysis", [a for a in ANALYSES if a.module], ids=lambda a: a.id)
+def test_a_module_that_uses_the_split_date_declares_it_or_says_in_a_note_that_part_of_it_does(analysis):
+    uses = bool(_split_uses(_source(analysis)))
+    declared = analysis.needs.split_date or "split date" in (analysis.note or "")
+    assert uses == declared, f"{analysis.id}: uses the split date {uses}, declares it {declared}"
+
+
+def _fixed_splits(source):
+    out = []
+    for n in ast.walk(ast.parse(source)):
+        if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "TimeSeriesSplit":
+            kw = {k.arg: k.value.value for k in n.keywords if isinstance(k.value, ast.Constant)}
+            if isinstance(kw.get("n_splits"), int) and isinstance(kw.get("test_size"), int):
+                out.append(kw["n_splits"] * kw["test_size"] + 1)
+    return out
+
+
+@pytest.mark.parametrize("analysis", [a for a in ANALYSES if a.module], ids=lambda a: a.id)
+def test_the_months_below_which_a_module_stops_are_declared(analysis):
+    fixed = _fixed_splits(_source(analysis))                  # a cross-validation with a fixed number of splits of a fixed size needs this many
+    assert analysis.needs.min_months == (max(fixed) if fixed else None), analysis.id
+
+
+def test_a_study_with_too_few_months_has_the_analysis_off_with_the_numbers_and_one_with_enough_does_not():
+    short = _state(evaluate(**{**EVERYTHING, "months": 220}), "timeseries")
+    assert short["status"] == "not_applicable" and any("221 months" in r and "study has 220" in r for r in short["reasons"])
+    assert _state(evaluate(**{**EVERYTHING, "months": 221}), "timeseries")["status"] == "pending"
+    assert _state(evaluate(**EVERYTHING), "timeseries")["status"] == "pending"            # unknown: not checked
+    assert _state(evaluate(**{**EVERYTHING, "months": 10}), "correlations")["status"] == "pending"
+
+
+def test_the_r_script_is_declared_as_it_reads_the_heatwaves_and_nothing_else():
+    src = (ROOT / "scripts" / "mhw_lag_analysis.R").read_text()
+    n = BY_ID["dlnm"].needs
+    assert n.heatwaves == ("mhw_" in src) and n.per_trial == ("ec50_raw" in src) and n.daily_sst == ("sst_daily" in src)
+    assert n.controls == ("ctrl" in src) and not n.variables and n.r
+
+
+def test_every_variable_the_catalogue_has_is_named_in_the_registry():
+    assert set(catalog.CATALOG) <= {i for ids in analyses.VARIABLE_SOURCES.values() for i in ids}, "a catalogue entry the registry does not know"
+
+
+def test_the_notes_say_the_fixed_choices_the_review_found():
+    notes = {a.id: a.note or "" for a in ANALYSES}
+    for analysis_id in ("mhw_analysis", "mhw_robustness", "forecast"):
+        assert "lags go to 12" in notes[analysis_id], analysis_id
+    assert "June to August" in notes["mhw_robustness"] and "fixed alkalinity" in notes["cu_speciation"]
+    assert "ctrl_neg_rep1" in notes["negative_control"] and "ID column" in notes["changepoint"] and "ID column" in notes["period_split"]
+
+
+def test_a_study_of_another_format_is_refused_not_guessed():
+    from climate_change_on_sea_urchins.study_spec import load_study
+    with pytest.raises(ValueError):
+        analyses.evaluate_study(load_study(ROOT / "examples" / "livorno_paracentrotus" / "study.yaml"), r_available=True)
+
+
+def test_every_listed_variable_counts_and_the_cas_of_copper_is_enough(monkeypatch):
+    monkeypatch.setitem(catalog.CATALOG, "ph_monthly", catalog.CATALOG["sst_daily"])        # as if M1.8 had added it
+    assert "cu_speciation" in _off(analyses.evaluate_study(_spec(environment=("sst_daily",)), r_available=True))
+    assert "thermal_legacy" not in _off(analyses.evaluate_study(_spec(environment=("sst_daily",)), r_available=True))
+    two = analyses.evaluate_study(_spec(environment=("ph_monthly", "sst_daily")), r_available=True)        # the SST is not the first entry
+    assert "thermal_legacy" not in _off(two) and not any("pH" in r for r in _state(two, "forecast")["reasons"])
+    cas = analyses.evaluate_study(_spec(contaminant="cobre"), r_available=True)
+    from climate_change_on_sea_urchins.study_spec import StudySpec
+    spec = _spec()
+    data = spec.model_dump(); data["responses"][0]["contaminant"] = {"name": "cobre", "cas": "7440-50-8"}
+    with_cas = analyses.evaluate_study(StudySpec.model_validate(data), r_available=True)
+    assert "cu_speciation" in _off(cas) and not any("copper" in r for r in _state(with_cas, "cu_speciation")["reasons"])
+
+
+def test_the_analyses_that_need_a_split_date_are_these_three():
+    assert {a.id for a in ANALYSES if a.needs.split_date} == {"period_split", "cu_speciation", "negative_control"}

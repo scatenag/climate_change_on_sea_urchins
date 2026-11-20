@@ -375,7 +375,7 @@ def _reachable(entry=("run_study", "run_study")):
 def test_the_chain_is_found():
     seen, _ = _reachable()
     for needed in [("run_study", "run_study"), ("dataset_builder", "build_dataset"), ("response_csv", "read_response"),
-                   ("mhw_hobday", "detect_events"), ("mhw_detection", "to_monthly"), ("mhw_analysis", "ccf_at_lags"), ("common", "aggregate_period"),
+                   ("mhw_hobday", "detect_events"), ("mhw_detection", "to_monthly"), ("analyses", "evaluate_study"), ("analyses", "evaluate"), ("mhw_analysis", "ccf_at_lags"), ("common", "aggregate_period"),
                    ("common", "impute_series")]:
         assert needed in seen, f"{needed} is not reached from run_study.run_study: the guard would look at nothing"
 
@@ -426,7 +426,7 @@ def test_the_same_results_whichever_study_the_process_has_loaded(tmp_path):
     loaded_a = _in_subprocess(spec, tmp_path / "inputs", tmp_path / "out_a", None)
     loaded_b = _in_subprocess(spec, tmp_path / "inputs", tmp_path / "out_b", _other_format_1_study(tmp_path))
     assert (loaded_a, loaded_b) == ("livorno-paracentrotus", "another-format-1")      # the premise: two different loaded studies
-    for name in ["ccf.csv", "dataset/monthly.csv", "dataset/mhw_events.csv", "dataset/mhw_monthly.csv", "dataset/mhw_annual.csv"]:
+    for name in ["ccf.csv", "analyses.json", "dataset/monthly.csv", "dataset/mhw_events.csv", "dataset/mhw_monthly.csv", "dataset/mhw_annual.csv"]:
         assert (tmp_path / "out_a" / name).read_bytes() == (tmp_path / "out_b" / name).read_bytes(), name
     a, b = (json.loads((tmp_path / f"out_{x}" / "run.json").read_text()) for x in "ab")
     for r in (a, b):
@@ -493,3 +493,14 @@ def test_r_is_available_when_rscript_is_found_and_not_otherwise(monkeypatch):
     assert run_study._r_available() is False
     monkeypatch.setattr(run_study.shutil, "which", lambda name: "/usr/bin/Rscript" if name == "Rscript" else None)
     assert run_study._r_available() is True
+
+
+def test_the_months_of_the_study_are_counted_for_the_analyses_that_need_a_minimum(tmp_path):
+    spec = _write_study(tmp_path / "study")
+    _write_inputs(tmp_path / "inputs")
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 0
+    why = " ".join(_analyses(tmp_path / "out")["timeseries"]["reasons"])
+    assert "at least 221 months" in why and "study has " in why
+    months = int(why.split("study has ")[1].split()[0])
+    ds = pd.read_csv(tmp_path / "out" / "dataset" / "monthly.csv")
+    assert months == int((ds["response"].notna() & ds["Temperature"].notna()).sum()) and 0 < months < 221

@@ -486,6 +486,7 @@ def test_the_result_page_lists_the_analyses_that_are_off_with_the_same_reasons_a
         row = by_label[a["label"]]
         assert row["state"] == step_run.STATE_WORDS[a["status"]]
         assert row["why"] == "; ".join(a["reasons"])
+    assert table["analysis"].tolist() == [a["label"] for a in doc]                  # the order of the registry
     off = [a for a in doc if a["status"] == "not_applicable"]
     assert off and any("pH" in " ".join(a["reasons"]) for a in off)            # a study with the SST only has no pH
     assert "Other analyses" in _shown(at)
@@ -494,11 +495,12 @@ def test_the_result_page_lists_the_analyses_that_are_off_with_the_same_reasons_a
 def test_the_page_says_that_an_analysis_that_is_off_wrote_nothing_and_one_that_is_possible_is_not_yet_run(after_step1):
     at = _run_to_the_end(_generate(after_step1))
     shown = _shown(at)
-    assert "not in this command yet" in " ".join(_analyses_table(at)["why"]) and "wrote no file" in shown
+    assert "does not run it yet" in " ".join(_analyses_table(at)["why"]) and "wrote no file" in shown
+    assert 'possible, not run": the data are there' in shown.replace("\\", "")        # the word is defined where it is shown
 
 
 def test_the_states_are_the_same_words_in_the_table_and_in_the_function():
-    assert set(step_run.STATE_WORDS) == {"runs", "pending", "not_applicable"} and len(set(step_run.STATE_WORDS.values())) == 3
+    assert step_run.STATE_WORDS == {"runs": "ran", "pending": "possible, not run", "not_applicable": "off"}
     table = step_run.analyses_table([{"id": "x", "label": "L", "status": "not_applicable", "reasons": ["a", "b"], "note": "n", "outputs": []}])
     assert table.iloc[0].to_dict() == {"analysis": "L", "state": step_run.STATE_WORDS["not_applicable"], "why": "a; b", "note": "n"}
     assert step_run.analyses_table([{"id": "x", "label": "L", "status": "runs", "reasons": [], "note": None, "outputs": []}]).iloc[0]["note"] == ""

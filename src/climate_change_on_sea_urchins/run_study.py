@@ -197,7 +197,9 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
         begin("write_results")
         ccf.to_csv(out / "ccf.csv", index=False)
         # which analyses this study allows and why the others are off (M1.7): names and rules only, never a word the study wrote
-        _write_json_atomic(out / "analyses.json", analyses.document(analyses.evaluate_study(spec, r_available=_r_available())))
+        r_ok = _r_available()
+        months = int((ds.monthly["response"].notna() & ds.monthly["Temperature"].notna()).sum())
+        _write_json_atomic(out / "analyses.json", analyses.document(analyses.evaluate_study(spec, r_available=r_ok, months=months), r_available=r_ok))
         dataset_builder.write_dataset(ds, out / "dataset", now=now)
         manifest_path = inputs / SST_MANIFEST
         # a declaration next to the response file (the known-truth generator writes one), copied as it is
