@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import types
 from pathlib import Path
 
 import numpy as np
@@ -663,3 +664,37 @@ def test_the_warning_gives_the_value_as_it_is_in_the_file_and_agrees_in_number()
     assert "1 of 22 values is exactly 12.3456789" in one and "(line 2)" in one
     many = step_response.suspect_messages([{"kind": "code", "value": -999.0, "count": 8, "of": 30, "lines": [2, 3, 4, 5, 6]}])[0]
     assert "8 of 30 values are exactly -999" in many and "(lines 2, 3, 4, 5, 6, ...)" in many
+
+
+# --- the variables chosen in step 1 are in the study (M1.8) -----------------------------------------------------------
+
+def _step1(variables=None):
+    return {"baseline": (2003, 2012), "site": {"id": "site", "name": "S", "lat": 43.4, "lon": 10.4, "bbox_delta": 0.1}, "variables": variables or {}}
+
+
+def test_the_study_lists_the_temperature_and_the_variables_chosen_in_step_1():
+    assert step_response.study_dict(_step1(), {"id": "r"})["environment"] == [{"catalog_id": "sst_daily"}]
+    both = step_response.study_dict(_step1({"ph_monthly": {}}), {"id": "r"})["environment"]
+    assert both == [{"catalog_id": "sst_daily"}, {"catalog_id": "ph_monthly"}]
+
+
+def test_the_files_of_the_variables_go_into_the_study_folder_with_the_temperature(tmp_path):
+    inputs = tmp_path / "inputs"; inputs.mkdir()
+    for name in ("sst_daily.csv", "sst_daily.manifest.json", "ph_monthly.csv", "ph_monthly.manifest.json"):
+        (inputs / name).write_text(name)
+    ctx = types.SimpleNamespace(workdir=tmp_path)
+    response = {"id": "response", "label": "R", "nature": "index", "adverse_direction": "decrease", "unit": "1",
+                "source": {"type": "csv", "file": "response.csv", "temporal_resolution": "month", "granularity": "aggregated",
+                           "column_map": {"date": "d", "value": "v"}}}
+    folder = step_response.write_study(ctx, _step1({"ph_monthly": {}}), response, b"d,v\n2003-01-01,1\n")
+    assert sorted(p.name for p in folder.iterdir()) == ["ph_monthly.csv", "ph_monthly.manifest.json", "response.csv", "sst_daily.csv",
+                                                        "sst_daily.manifest.json", "study.yaml"]
+    assert [e.catalog_id for e in load_study(folder / "study.yaml").environment] == ["sst_daily", "ph_monthly"]
+
+
+def test_a_chosen_variable_whose_file_is_missing_stops_the_study_from_being_written(tmp_path):
+    inputs = tmp_path / "inputs"; inputs.mkdir()
+    (inputs / "sst_daily.csv").write_text("x"); (inputs / "sst_daily.manifest.json").write_text("{}")
+    ctx = types.SimpleNamespace(workdir=tmp_path)
+    with pytest.raises(FileNotFoundError):
+        step_response.write_study(ctx, _step1({"ph_monthly": {}}), {"id": "response"}, b"d,v\n")

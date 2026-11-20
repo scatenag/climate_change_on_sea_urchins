@@ -14,6 +14,7 @@ lasts tens of seconds); the short numeric work of the view (heatwave detection) 
 once per download."""
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import math
 import re
@@ -31,6 +32,8 @@ CATALOG_ID = "sst_daily"
 EXTRA_MODULES = ("copernicusmarine", "xarray", "h5netcdf", "h5py")
 BBOX_DELTA = 0.1                    # degrees around the site: the temperature is the mean over the sea cells of this box
 USER_KEY, PW_KEY = "s1_user", "s1_pw"
+VARIABLES_KEY = "s1_variables"
+VARIABLES_LABEL = "Monthly variables to download with the temperature (optional)"
 _DECIMAL = re.compile(r"[+-]?(?:\d+(?:\.\d+)?|\.\d+)", re.ASCII)
 _YEAR = re.compile(r"\d{4}", re.ASCII)
 _NAME = re.compile(r"[\w .,'()\-]{1,60}")
@@ -45,10 +48,36 @@ class SiteInputs:
     site: SiteSpec
     baseline: tuple[int, int]
     first_year: int | None
+    variables: tuple[str, ...] = ()                 # catalogue ids of the monthly variables chosen to download with the SST
 
     @property
     def key(self) -> tuple:
-        return (self.site.lat, self.site.lon, self.site.name, self.baseline, self.first_year)
+        return (self.site.lat, self.site.lon, self.site.name, self.baseline, self.first_year, self.variables)
+
+
+def variable_labels() -> dict[str, str]:
+    """The monthly variables the user can choose, by the label shown: the catalogue's, in its order."""
+    return {catalog.get(i).label: i for i in catalog.monthly_ids()}
+
+
+def chosen_variables(labels) -> tuple[str, ...]:
+    """The ids of the variables chosen by label, in the catalogue's order (not the order of the choice)."""
+    by_label = variable_labels()
+    chosen = {by_label[l] for l in (labels or ()) if l in by_label}
+    return tuple(i for i in catalog.monthly_ids() if i in chosen)
+
+
+def with_variables(inputs: SiteInputs, ids: tuple[str, ...]) -> tuple[SiteInputs, list[str]]:
+    """The inputs with the chosen variables, and the errors: a site outside the domain of a chosen variable's product is refused
+    before any download."""
+    errors = []
+    for i in ids:
+        v = catalog.get(i)
+        if not catalog.covers(v, inputs.site.lat, inputs.site.lon):
+            d = v.domain
+            errors.append(f"The site is outside the domain of the {v.label} product ({i}): latitude {d.lat_min:.2f} to {d.lat_max:.2f}, "
+                          f"longitude {d.lon_min:.2f} to {d.lon_max:.2f}.")
+    return dataclasses.replace(inputs, variables=tuple(ids)), errors
 
 
 def acquisition_available() -> bool:
@@ -132,16 +161,40 @@ def download_sst(ctx, inputs: SiteInputs, credentials: download.Credentials, cli
     download left in the folder is removed first: a failed download leaves nothing that could be mistaken for the new one."""
     shutil.rmtree(ctx.workdir / "inputs", ignore_errors=True)
     start, note = baseline.download_start(inputs.baseline[0], coverage, inputs.first_year, max_lag_months())
+    # The coverage of each chosen variable's product is read first (the catalogue is public): a variable that ends before the period
+    # is refused before the temperature is downloaded, and one that starts later starts at its product's first month.
+    var_starts, var_notes = {}, {}
+    for catalog_id in inputs.variables:
+        variable = catalog.get(catalog_id)
+        cov = download._call(lambda v=variable: client.coverage_of(v), credentials, f"reading the coverage of {variable.label}")
+        if cov.end < start:
+            raise download.DownloadError(f"The {variable.label} product ends in {cov.end:%Y-%m}, before the period starts ({start:%Y-%m}).")
+        var_starts[catalog_id] = max(start, cov.start)
+        if cov.start > start:
+            var_notes[catalog_id] = (f"The {variable.label} product starts in {cov.start:%Y-%m}, after the temperature ({start:%Y-%m}): "
+                                     "the months before have no value, and none is invented.")
     t0 = time.perf_counter()
     result = download.fetch_daily_sst(inputs.site, start=start, credentials=credentials, client=client, catalog_id=CATALOG_ID)
     seconds = time.perf_counter() - t0
     result.manifest["timing"] = {"download_seconds": round(seconds, 1)}
     paths = download.write_result(result, ctx.workdir / "inputs")
     m = result.manifest
+    variables = {}
+    for catalog_id in inputs.variables:                  # the same credentials, the same submit: one request after the other
+        t1 = time.perf_counter()
+        got = download.fetch_series(inputs.site, catalog_id=catalog_id, start=var_starts[catalog_id], credentials=credentials, client=client)
+        took = time.perf_counter() - t1
+        got.manifest["timing"] = {"download_seconds": round(took, 1)}
+        written = download.write_result(got, ctx.workdir / "inputs")
+        gm = got.manifest
+        variables[catalog_id] = {"label": catalog.get(catalog_id).label, "column": catalog.get(catalog_id).column,
+                                 "n_months": gm["n_months"], "missing_months": gm["missing_months"]["count"],
+                                 "start": gm["period"]["obtained"]["start"], "end": gm["period"]["obtained"]["end"],
+                                 "seconds": round(took, 1), "csv": str(written["csv"]), "note": var_notes.get(catalog_id)}
     return {"inputs_key": inputs.key, "site": m["site"], "baseline": inputs.baseline, "start_note": note,
             "n_days": m["n_days"], "missing_days": m["missing_days"]["count"],
             "start": m["period"]["obtained"]["start"], "end": m["period"]["obtained"]["end"],
-            "seconds": round(seconds, 1), "csv": str(paths["csv"])}
+            "seconds": round(seconds, 1), "csv": str(paths["csv"]), "variables": variables}
 
 
 def build_view(csv_path, baseline_years: tuple[int, int]) -> dict:
@@ -182,6 +235,10 @@ def _on_submit(ctx) -> None:
     inputs, errors, _ = parse_inputs(st.session_state.get("s1_lat"), st.session_state.get("s1_lon"), st.session_state.get("s1_name"),
                                      st.session_state.get("s1_bl_start"), st.session_state.get("s1_bl_end"),
                                      st.session_state.get("s1_first_year"), coverage)
+    if inputs is not None:
+        inputs, errors = with_variables(inputs, chosen_variables(st.session_state.get(VARIABLES_KEY)))
+        if errors:
+            inputs = None
     if inputs is None:
         ctx.data["step1_errors"] = errors
         return
@@ -225,7 +282,7 @@ def _show_result(ctx, current_key) -> None:
     done, view = ctx.data.get("step1"), ctx.data.get("step1_view")
     if not done or not view:
         return
-    if not (ctx.workdir / "inputs" / "sst_daily.csv").is_file():
+    if not all((ctx.workdir / "inputs" / f"{i}.csv").is_file() for i in ["sst_daily", *done.get("variables", {})]):
         ctx.data.pop("step1", None); ctx.data.pop("step1_view", None)
         st.warning("The downloaded series is no longer there (the session folder is deleted after 6 hours without use): "
                    "download it again.")
@@ -237,6 +294,13 @@ def _show_result(ctx, current_key) -> None:
     if done["start_note"]:
         st.info(done["start_note"])
     st.line_chart(view["sst"].set_index("Datetime")["Temperature"], height=220)
+    for v in done.get("variables", {}).values():
+        series = pd.read_csv(v["csv"], parse_dates=["Datetime"])
+        st.success(f"{v['n_months']} months of {v['label']}, {v['start']} to {v['end']}, downloaded in {v['seconds']} seconds "
+                   f"({v['missing_months']} months without a value).")
+        if v.get("note"):
+            st.info(v["note"])
+        st.line_chart(series.set_index("Datetime")[v["column"]], height=180)
     if view["error"]:
         st.error(f"The heatwaves cannot be detected on this series: {view['error']}")
         return
@@ -289,7 +353,13 @@ def render(ctx) -> None:
     st.caption(f"The temperature of the site is the mean over the sea cells within {BBOX_DELTA} degrees of it and over depth "
                f"{variable.depth_min_m} to {variable.depth_max_m} m (from the catalogue). The download starts early enough "
                f"for lags up to {max_lag_months()} months.")
+    labels = variable_labels()
+    chosen = st.multiselect(VARIABLES_LABEL, list(labels), key=VARIABLES_KEY,
+                            help="Each one is the mean over the sea cells within the same box and over depth 0 to 10 m, one value per "
+                                 "month. It is downloaded with the temperature, in the same step, with the same credentials.")
     inputs, errors, warnings = parse_inputs(lat, lon, name, base_start, base_end, first_year, coverage)
+    if inputs is not None:
+        inputs = dataclasses.replace(inputs, variables=chosen_variables(chosen))
     for w in warnings:
         st.warning(w)
     if inputs is not None:

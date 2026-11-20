@@ -75,14 +75,19 @@ def _missing_months(rng: np.random.Generator, n: int) -> np.ndarray:
 
 
 def make_study(sst_path, out_dir, *, seed: int, lat: float, lon: float, baseline: tuple[int, int], lag: int = 3,
-               signal_share: float = 0.5, name: str = "Known-truth site", study_id: str = "known-truth") -> dict:
-    """Write the study folder and return the declaration (also written as response.manifest.json)."""
+               signal_share: float = 0.5, name: str = "Known-truth site", study_id: str = "known-truth",
+               variables: tuple[str, ...] = ()) -> dict:
+    """Write the study folder and return the declaration (also written as response.manifest.json). `variables`: catalogue ids
+    of monthly variables downloaded next to the SST: the study lists them and their files go into the folder."""
     if not 1 <= lag <= MAX_LAG or lag % 12 == 0:
         raise KnownTruthError(f"lag {lag}: it must be between 1 and {MAX_LAG} months and not a multiple of 12, "
                               "or the seasonal cycle could be mistaken for the signal")
     if not 0.0 <= signal_share <= 1.0:
         raise KnownTruthError(f"signal share {signal_share}: it is a share of the variance, between 0 and 1")
     sst_path, out = Path(sst_path), Path(out_dir)
+    for catalog_id in variables:                      # before anything is written: a variable that is not there is said first
+        if not (sst_path.parent / f"{catalog_id}.csv").is_file():
+            raise KnownTruthError(f"the file {catalog_id}.csv of the variable {catalog_id!r} is not next to the temperature")
     sst = pd.read_csv(sst_path, parse_dates=["Datetime"])
     anomaly = _monthly_anomaly(sst, tuple(baseline))
     months = anomaly.index
@@ -117,6 +122,10 @@ def make_study(sst_path, out_dir, *, seed: int, lat: float, lon: float, baseline
     out.mkdir(parents=True, exist_ok=True)
     response.to_csv(out / "response.csv", index=False)
     shutil.copyfile(sst_path, out / "sst_daily.csv")
+    for catalog_id in variables:
+        for name_ in (f"{catalog_id}.csv", f"{catalog_id}.manifest.json"):
+            if (sst_path.parent / name_).is_file():
+                shutil.copyfile(sst_path.parent / name_, out / name_)
     sst_manifest = sst_path.with_name(sst_path.stem + ".manifest.json")
     if sst_manifest.is_file():
         shutil.copyfile(sst_manifest, out / "sst_daily.manifest.json")
@@ -142,7 +151,7 @@ def make_study(sst_path, out_dir, *, seed: int, lat: float, lon: float, baseline
                        "it checks the tool, it is not a measurement.",
         "mhw_climatology": {"baseline_start_year": baseline[0], "baseline_end_year": baseline[1]},
         "sites": [{"id": "site", "lat": lat, "lon": lon, "name": name, "bbox_delta": 0.1}],
-        "environment": [{"catalog_id": "sst_daily"}],
+        "environment": [{"catalog_id": "sst_daily"}, *({"catalog_id": i} for i in variables)],
         "responses": [{
             "id": "synthetic-response", "label": "Synthetic response", "nature": "index", "adverse_direction": "decrease",
             "unit": "1",

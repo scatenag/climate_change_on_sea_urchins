@@ -123,7 +123,8 @@ def study_dict(step1: dict, response: dict) -> dict:
     return {"format_version": 2, "id": "own-study", "description": "A study built in the app from the user's own data.",
             "mhw_climatology": {"baseline_start_year": b0, "baseline_end_year": b1},
             "sites": [{k: site[k] for k in ("id", "name", "lat", "lon", "bbox_delta")}],
-            "environment": [{"catalog_id": step_site.CATALOG_ID}], "responses": [response]}
+            "environment": [{"catalog_id": step_site.CATALOG_ID}, *({"catalog_id": i} for i in step1.get("variables", {}))],
+            "responses": [response]}
 
 
 def write_study(ctx, step1: dict, response: dict, csv_bytes: bytes) -> Path:
@@ -134,6 +135,10 @@ def write_study(ctx, step1: dict, response: dict, csv_bytes: bytes) -> Path:
     inputs = ctx.workdir / "inputs"
     shutil.copyfile(inputs / "sst_daily.csv", folder / "sst_daily.csv")
     shutil.copyfile(inputs / "sst_daily.manifest.json", folder / "sst_daily.manifest.json")
+    for catalog_id in step1.get("variables", {}):                 # the monthly variables chosen in step 1: the series is required
+        shutil.copyfile(inputs / f"{catalog_id}.csv", folder / f"{catalog_id}.csv")
+        if (inputs / f"{catalog_id}.manifest.json").is_file():
+            shutil.copyfile(inputs / f"{catalog_id}.manifest.json", folder / f"{catalog_id}.manifest.json")
     (folder / RESPONSE_FILE).write_bytes(csv_bytes)
     (folder / "study.yaml").write_text(yaml.safe_dump(study_dict(step1, response), sort_keys=False, allow_unicode=True))
     load_study(folder / "study.yaml")
@@ -175,7 +180,8 @@ def _render_test(ctx, step1: dict):
             with RERUN_LOCK:                     # the heatwave detection inside is numeric work: as in step 1
                 truth = known_truth.make_study(ctx.workdir / "inputs" / "sst_daily.csv", folder, seed=int(seed),
                                                lat=step1["site"]["lat"], lon=step1["site"]["lon"], baseline=tuple(step1["baseline"]),
-                                               lag=int(lag), signal_share=float(share), name=step1["site"]["name"])
+                                               lag=int(lag), signal_share=float(share), name=step1["site"]["name"],
+                                               variables=tuple(step1.get("variables", {})))
             load_study(folder / "study.yaml")
         except (known_truth.KnownTruthError, StudySpecError, dataset_builder.DatasetError, ValueError) as e:
             shutil.rmtree(folder, ignore_errors=True)

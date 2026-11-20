@@ -40,7 +40,7 @@ jobs:
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
-        run: python scripts/verify_download.py "$RUNNER_TEMP/download-check" data/sst_daily.csv
+        run: python scripts/verify_download.py "$RUNNER_TEMP/download-check" data/sst_daily.csv data/env_copernicus.csv
 
       - name: Publish series, manifests and messages
         if: always()

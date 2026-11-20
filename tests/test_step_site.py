@@ -19,7 +19,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 import climate_change_on_sea_urchins as ccsu
-from climate_change_on_sea_urchins import app_entry, dataset_builder, step_site
+from climate_change_on_sea_urchins import app_entry, catalog, dataset_builder, step_site
 from climate_change_on_sea_urchins.download import Coverage
 from test_download import FakeClient, PASSWORD, USER
 
@@ -451,3 +451,130 @@ def test_the_placeholder_response_of_the_view_is_marked_as_not_real():
     sst = pd.read_csv(FIXTURE_SST, parse_dates=["Datetime"])
     ds = dataset_builder.environment_dataset(sst, (2003, 2012))
     assert ds.monthly["response"].isna().all() and ds.monthly["response_imputed"].all()
+
+
+# --- a monthly variable chosen in step 1 (M1.8) ----------------------------------------------------------------------
+
+from test_monthly_variable import FakeMonthlyClient  # noqa: E402
+
+
+@dataclass
+class TwoKindClient(RecordingClient):
+    """The recording client that also serves the monthly variables (a month-by-month cube, the same value in every cell)."""
+    monthly: FakeMonthlyClient = field(default_factory=lambda: FakeMonthlyClient(coverage=Coverage(start=dt.date(1999, 1, 1), end=dt.date(2026, 8, 1), version="202511")))
+
+    def coverage_of(self, variable):
+        return self.monthly.coverage_of(variable) if variable.cadence == "P1M" else super().coverage_of(variable)
+
+    def subset(self, variable, *, credentials, start, end, **kw):
+        if variable.cadence == "P1M":
+            self.credentials_seen.append((credentials.username, credentials.password))
+            self.lock_held.append(ccsu.RERUN_LOCK.locked())
+            return self.monthly.subset(variable, credentials=credentials, start=start, end=end, **kw)
+        return super().subset(variable, credentials=credentials, start=start, end=end, **kw)
+
+
+@pytest.fixture
+def two_kinds(fixture_client, monkeypatch):
+    c = TwoKindClient(coverage=fixture_client.coverage, series=fixture_client.series)
+    monkeypatch.setattr(step_site, "make_client", lambda: c)
+    return c
+
+
+PH_LABEL = "pH (total scale), monthly"
+
+
+def _choose_variables(at, *labels):
+    next(m for m in at.multiselect if m.label == step_site.VARIABLES_LABEL).set_value(list(labels))
+    return at
+
+
+def test_the_form_offers_the_monthly_variables_of_the_catalogue_and_none_is_chosen_for_the_user(two_kinds):
+    at = _open()
+    box = next(m for m in at.multiselect if m.label == step_site.VARIABLES_LABEL)
+    assert list(box.options) == [PH_LABEL] and box.value == []
+
+
+def test_a_chosen_variable_is_downloaded_with_the_temperature_in_the_same_submit_and_shown(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    assert not at.exception, [e.value for e in at.exception]
+    inputs = _ctx(at).workdir / "inputs"
+    assert sorted(p.name for p in inputs.iterdir()) == ["ph_monthly.csv", "ph_monthly.manifest.json", "sst_daily.csv", "sst_daily.manifest.json"]
+    ph = pd.read_csv(inputs / "ph_monthly.csv", parse_dates=["Datetime"])
+    manifest = json.loads((inputs / "ph_monthly.manifest.json").read_text())
+    assert ph["Datetime"].min() == pd.Timestamp("2003-01-01") and manifest["n_months"] == len(ph) and isinstance(manifest["timing"]["download_seconds"], float)
+    done = _ctx(at).data["step1"]["variables"]["ph_monthly"]
+    assert done["n_months"] == len(ph) and done["start"] == "2003-01-01" and done["missing_months"] == 0
+    assert f"{len(ph)} months of {PH_LABEL}" in " ".join(e.value for e in at.success)
+    assert len(at.get("vega_lite_chart")) == 2                                                # the temperature and the pH
+
+
+def test_without_a_choice_nothing_but_the_temperature_is_downloaded(two_kinds):
+    at = _submit(_fill(_open()))
+    assert sorted(p.name for p in (_ctx(at).workdir / "inputs").iterdir()) == ["sst_daily.csv", "sst_daily.manifest.json"]
+    assert _ctx(at).data["step1"]["variables"] == {} and len(at.get("vega_lite_chart")) == 1
+
+
+def test_the_credentials_reach_every_download_of_the_submit_and_are_nowhere_after_it(two_kinds, capsys, caplog):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    assert two_kinds.credentials_seen and set(two_kinds.credentials_seen) == {(USER, PASSWORD)}
+    assert not any(two_kinds.lock_held)                                                  # the global lock is not held during any of them
+    for secret in (PASSWORD, USER):
+        _assert_nowhere(at, capsys, caplog, secret)
+
+
+def test_a_site_outside_the_domain_of_the_chosen_variable_is_refused_before_any_download_call(two_kinds):
+    at = _submit(_choose_variables(_fill(_open(), lon="-5.8"), PH_LABEL))               # inside the temperature product, outside the pH one
+    assert "ph_monthly" in _errors(at) and "outside" in _errors(at) and not two_kinds.credentials_seen
+    assert not (_ctx(at).workdir / "inputs").exists()
+
+
+def test_a_failure_of_the_variable_download_leaves_no_temperature_behind_and_masks_the_credentials(two_kinds):
+    two_kinds.monthly.fail_with = f"authentication failed for {USER} with password {PASSWORD}"
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    assert "authentication failed" in _errors(at) and PASSWORD not in _errors(at) and USER not in _errors(at)
+    assert not (_ctx(at).workdir / "inputs").exists() and "step1" not in _ctx(at).data
+
+
+def test_changing_the_choice_after_a_download_says_the_data_are_for_the_earlier_inputs(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    _choose_variables(at).run()
+    assert "earlier inputs" in _text(at)
+
+
+def test_a_new_download_without_the_variable_removes_the_old_file(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    at = _submit(_choose_variables(_fill(at)))                                            # the choice emptied
+    assert not (_ctx(at).workdir / "inputs" / "ph_monthly.csv").exists() and "variables" in _ctx(at).data["step1"] and _ctx(at).data["step1"]["variables"] == {}
+
+
+def test_a_variable_whose_product_starts_later_is_downloaded_from_its_first_month_and_the_page_says_so(two_kinds):
+    two_kinds.monthly.coverage = Coverage(start=dt.date(2005, 1, 1), end=dt.date(2026, 8, 1), version="202511")
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    assert not at.exception, [e.value for e in at.exception]
+    ph = pd.read_csv(_ctx(at).workdir / "inputs" / "ph_monthly.csv", parse_dates=["Datetime"])
+    sst = pd.read_csv(_ctx(at).workdir / "inputs" / "sst_daily.csv", parse_dates=["Datetime"])
+    assert ph["Datetime"].min() == pd.Timestamp("2005-01-01") and sst["Datetime"].min() == pd.Timestamp("2003-01-01")
+    note = _ctx(at).data["step1"]["variables"]["ph_monthly"]["note"]
+    assert "2005-01" in note and "2003-01" in note
+    assert any("2005-01" in e.value for e in at.info)
+
+
+def test_a_variable_that_ends_before_the_period_is_refused_before_the_temperature_is_downloaded(two_kinds):
+    two_kinds.monthly.coverage = Coverage(start=dt.date(1999, 1, 1), end=dt.date(2002, 12, 1), version="202511")
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    assert "ends" in _errors(at) and not two_kinds.credentials_seen and not (_ctx(at).workdir / "inputs").exists()
+
+
+def test_the_variables_are_kept_in_the_catalogues_order_whatever_the_order_of_the_choice(monkeypatch):
+    other = catalog.CATALOG["ph_monthly"].model_copy(update={"id": "salinity_monthly", "column": "Salinity", "label": "Salinity, monthly"})
+    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", other)
+    assert step_site.chosen_variables(["Salinity, monthly", PH_LABEL]) == ("ph_monthly", "salinity_monthly")
+    assert step_site.chosen_variables([PH_LABEL, "Salinity, monthly"]) == ("ph_monthly", "salinity_monthly")
+
+
+def test_a_variable_file_swept_while_the_tab_stayed_open_is_said_not_crashed(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    (_ctx(at).workdir / "inputs" / "ph_monthly.csv").unlink()
+    at.run()
+    assert not at.exception and "no longer there" in " ".join(w.value for w in at.warning)

@@ -40,6 +40,11 @@ from .catalog import CatalogVariable
 PROBE_DELTA_DEG = 1.0     # half-width of the box used to tell a land cell from a point outside the product
 SERIES_CSV = "sst_daily.csv"
 MANIFEST_JSON = "sst_daily.manifest.json"
+
+
+def series_files(catalog_id: str) -> tuple[str, str]:
+    """The names of the series file and of its manifest: the catalogue id (the SST's are the ones above)."""
+    return f"{catalog_id}.csv", f"{catalog_id}.manifest.json"
 MAX_LISTED_MISSING_DAYS = 200
 
 
@@ -164,6 +169,10 @@ def _version_coverage(version, variable: str):
                             starts.append(coord.minimum_value)
                         if coord.maximum_value is not None:
                             ends.append(coord.maximum_value)
+                        values = getattr(coord, "values", None)         # a monthly product lists its months instead
+                        if values and coord.minimum_value is None and coord.maximum_value is None:
+                            starts.append(min(values))
+                            ends.append(max(values))
     return (max(starts), min(ends)) if starts and ends else None
 
 
@@ -248,36 +257,32 @@ def _package_version() -> str:
         return "unknown"
 
 
-def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credentials: Credentials,
-                    client: Client, catalog_id: str = "sst_daily",
-                    now: Callable[[], dt.datetime] | None = None) -> Result:
-    """Download and reduce the daily SST of `site`. `end` None means up to the product's last day; an
-    `end` beyond it is cut there, and both are recorded in the manifest."""
-    now = now or (lambda: dt.datetime.now(dt.timezone.utc))
+def _open_product(site, variable: CatalogVariable, *, start, end, credentials: Credentials, client: Client, unit: str):
+    """What both kinds of download check before the long request: the credentials, the site inside the domain, the start and
+    the end against the product's coverage, and one first step (a day or a month) to refuse a site that cannot work.
+    Returns the coverage, the last date obtained, the version and the box."""
     _check_credentials(credentials)
-    variable = catalog.get(catalog_id)
     d = variable.domain
     if not catalog.covers(variable, site.lat, site.lon):
         raise SiteError(
             f"site {site.name!r} (lat {site.lat}, lon {site.lon}) is outside the domain of the "
             f"{variable.id!r} product (lat {d.lat_min:.2f} to {d.lat_max:.2f}, lon {d.lon_min:.2f} to {d.lon_max:.2f}).")
-
     coverage = _call(lambda: client.coverage_of(variable), credentials, "reading the product's coverage")
     if start < coverage.start:
-        raise DownloadError(f"the period starts on {start}, before the product's first day {coverage.start}.")
+        raise DownloadError(f"the period starts on {start}, before the product's first {unit} {coverage.start}.")
     if start > coverage.end:
-        raise DownloadError(f"the period starts on {start}, after the product's last day {coverage.end}.")
+        raise DownloadError(f"the period starts on {start}, after the product's last {unit} {coverage.end}.")
     obtained_end = coverage.end if end is None else min(end, coverage.end)
     if obtained_end < start:
         raise DownloadError(f"the period ends on {end}, before it starts on {start}.")
 
     box = dict(lat_min=site.lat - site.bbox_delta, lat_max=site.lat + site.bbox_delta,
                lon_min=site.lon - site.bbox_delta, lon_max=site.lon + site.bbox_delta)
-    # One day first: a site that cannot work is refused before a multi-year download.
+    # One step first: a site that cannot work is refused before a multi-year download.
     ver = coverage.version
     first = _call(lambda: client.subset(variable, start=start, end=start, credentials=credentials,
                                         dataset_version=ver, **box),
-                  credentials, "downloading the first day")
+                  credentials, f"downloading the first {unit}")
     if not _sea_cells(first).any():
         wide = dict(lat_min=site.lat - PROBE_DELTA_DEG, lat_max=site.lat + PROBE_DELTA_DEG,
                     lon_min=site.lon - PROBE_DELTA_DEG, lon_max=site.lon + PROBE_DELTA_DEG)
@@ -287,19 +292,11 @@ def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credent
         problem = _site_problem(probe, site, variable)
         if problem:
             raise SiteError(problem)
+    return coverage, obtained_end, ver, box
 
-    cube = _call(lambda: client.subset(variable, start=start, end=obtained_end, credentials=credentials,
-                                       dataset_version=ver, **box),
-                 credentials, "downloading the series")
-    series = _daily_series(cube, start, obtained_end)
-    missing = [x.date().isoformat() for x in series.index[series.isna()]]
-    sea = _sea_cells(cube)
-    versions = {"climate_change_on_sea_urchins": _package_version()}
-    versions.update(getattr(client, "versions", lambda: {})())
 
-    manifest = {
-        "format": 1,
-        "kind": "daily_sst",
+def _manifest_head(variable, site, coverage, start, end, obtained_end, versions) -> dict:
+    return {
         "catalog_id": variable.id,
         "dataset": {"id": variable.dataset_multiyear, "version": coverage.version,
                     "variable": variable.variable, "depth_m": [variable.depth_min_m, variable.depth_max_m]},
@@ -311,27 +308,106 @@ def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credent
                                  "version": coverage.version},
             "other_versions_coverage": coverage.other_versions,
         },
-        "cells": {"in_box": int(sea.size), "sea_with_data": int(sea.sum())},
-        "n_days": int(len(series)),
-        "missing_days": {"count": len(missing), "days": missing[:MAX_LISTED_MISSING_DAYS],
-                         "truncated": len(missing) > MAX_LISTED_MISSING_DAYS},
-        "downloaded_at": now().isoformat(),
-        "versions": versions,
     }
-    df = pd.DataFrame({"Datetime": series.index, "Temperature": series.to_numpy(float)})
+
+
+def fetch_daily_sst(site, *, start: dt.date, end: dt.date | None = None, credentials: Credentials,
+                    client: Client, catalog_id: str = "sst_daily",
+                    now: Callable[[], dt.datetime] | None = None) -> Result:
+    """Download and reduce the daily SST of `site`. `end` None means up to the product's last day; an
+    `end` beyond it is cut there, and both are recorded in the manifest."""
+    now = now or (lambda: dt.datetime.now(dt.timezone.utc))
+    variable = catalog.get(catalog_id)
+    coverage, obtained_end, ver, box = _open_product(site, variable, start=start, end=end, credentials=credentials,
+                                                     client=client, unit="day")
+    cube = _call(lambda: client.subset(variable, start=start, end=obtained_end, credentials=credentials,
+                                       dataset_version=ver, **box),
+                 credentials, "downloading the series")
+    series = _daily_series(cube, start, obtained_end)
+    missing = [x.date().isoformat() for x in series.index[series.isna()]]
+    sea = _sea_cells(cube)
+    versions = {"climate_change_on_sea_urchins": _package_version()}
+    versions.update(getattr(client, "versions", lambda: {})())
+
+    manifest = {"format": 1, "kind": "daily_sst", **_manifest_head(variable, site, coverage, start, end, obtained_end, versions),
+                "cells": {"in_box": int(sea.size), "sea_with_data": int(sea.sum())},
+                "n_days": int(len(series)),
+                "missing_days": {"count": len(missing), "days": missing[:MAX_LISTED_MISSING_DAYS],
+                                 "truncated": len(missing) > MAX_LISTED_MISSING_DAYS},
+                "downloaded_at": now().isoformat(),
+                "versions": versions}
+    df = pd.DataFrame({"Datetime": series.index, variable.column: series.to_numpy(float)})
     return Result(series=df, manifest=manifest)
 
 
+def _monthly_series(cube: Cube, start: dt.date, end: dt.date, factor: float) -> pd.Series:
+    """Spatial mean per depth, then the mean over depth, for each month; a month without any value is NaN, never filled; the
+    catalogue's conversion is applied here, once."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        per_depth = np.nanmean(cube.values, axis=(2, 3))
+        monthly = np.nanmean(per_depth, axis=1) * factor
+    index = pd.DatetimeIndex(cube.times.astype("datetime64[M]").astype("datetime64[ns]"))
+    if index.duplicated().any():
+        raise DownloadError(f"the product returned more than one time in {index[index.duplicated()][0]:%Y-%m}: it is not a monthly series")
+    return pd.Series(monthly, index=index).reindex(pd.date_range(start, end, freq="MS"))
+
+
+def fetch_monthly(site, *, catalog_id: str, start: dt.date, end: dt.date | None = None, credentials: Credentials,
+                  client: Client, now: Callable[[], dt.datetime] | None = None) -> Result:
+    """Download and reduce a monthly variable of the catalogue for `site`: one value per month (the mean over the sea cells
+    of the box and over depth), from the month of `start` to the product's last month or `end`. A month without a value stays
+    missing. The request is recorded as given; the months obtained start on the first of the month."""
+    now = now or (lambda: dt.datetime.now(dt.timezone.utc))
+    variable = catalog.get(catalog_id)
+    if variable.cadence != "P1M":
+        raise DownloadError(f"{catalog_id!r} is not a monthly variable")
+    first = start.replace(day=1)
+    last = None if end is None else end.replace(day=1)
+    coverage, obtained_end, ver, box = _open_product(site, variable, start=first, end=last, credentials=credentials,
+                                                     client=client, unit="month")
+    cube = _call(lambda: client.subset(variable, start=first, end=obtained_end, credentials=credentials,
+                                       dataset_version=ver, **box),
+                 credentials, "downloading the series")
+    factor = variable.conversion.factor if variable.conversion else 1.0
+    series = _monthly_series(cube, first, obtained_end, factor)
+    missing = [x.strftime("%Y-%m") for x in series.index[series.isna()]]
+    sea = _sea_cells(cube)
+    versions = {"climate_change_on_sea_urchins": _package_version()}
+    versions.update(getattr(client, "versions", lambda: {})())
+    head = _manifest_head(variable, site, coverage, first, end, obtained_end, versions)
+    head["period"]["requested"]["start"] = start.isoformat()
+    manifest = {"format": 1, "kind": "monthly_variable", **head,
+                "conversion": None if variable.conversion is None else {"name": variable.conversion.name, "factor": variable.conversion.factor},
+                "cells": {"in_box": int(sea.size), "sea_with_data": int(sea.sum())},
+                "n_months": int(len(series)),
+                "missing_months": {"count": len(missing), "months": missing[:MAX_LISTED_MISSING_DAYS],
+                                   "truncated": len(missing) > MAX_LISTED_MISSING_DAYS},
+                "downloaded_at": now().isoformat(),
+                "versions": versions}
+    return Result(series=pd.DataFrame({"Datetime": series.index, variable.column: series.to_numpy(float)}), manifest=manifest)
+
+
+def fetch_series(site, *, catalog_id: str, start: dt.date, end: dt.date | None = None, credentials: Credentials,
+                 client: Client, now: Callable[[], dt.datetime] | None = None) -> Result:
+    """The download of a catalogue variable, by its cadence."""
+    if catalog.get(catalog_id).cadence == "P1D":
+        return fetch_daily_sst(site, start=start, end=end, credentials=credentials, client=client, catalog_id=catalog_id, now=now)
+    return fetch_monthly(site, catalog_id=catalog_id, start=start, end=end, credentials=credentials, client=client, now=now)
+
+
 def write_result(result: Result, out_dir: str | Path) -> dict[str, Path]:
-    """Write the series and its manifest (with the series' hash) into `out_dir`: nothing else."""
+    """Write the series and its manifest (with the series' hash) into `out_dir`: nothing else. The files are named after the
+    catalogue id (the SST's are sst_daily.csv and sst_daily.manifest.json)."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    csv = out / SERIES_CSV
+    csv_name, manifest_name = series_files(result.manifest["catalog_id"])
+    csv = out / csv_name
     result.series.to_csv(csv, index=False)
     manifest = json.loads(json.dumps(result.manifest))
-    manifest["files"] = {SERIES_CSV: {"sha256": hashlib.sha256(csv.read_bytes()).hexdigest(),
-                                       "rows": int(len(result.series))}}
-    path = out / MANIFEST_JSON
+    manifest["files"] = {csv_name: {"sha256": hashlib.sha256(csv.read_bytes()).hexdigest(),
+                                    "rows": int(len(result.series))}}
+    path = out / manifest_name
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     return {"csv": csv, "manifest": path}
 
@@ -400,6 +476,7 @@ def main(argv: list[str] | None = None, client: Client | None = None) -> None:
     ap.add_argument("--lon", type=float, required=True)
     ap.add_argument("--name", default="site")
     ap.add_argument("--bbox-delta", type=float, default=0.1)
+    ap.add_argument("--variable", default="sst_daily", choices=catalog.known_ids(), help="a catalogue id (default: the daily SST)")
     ap.add_argument("--start", type=dt.date.fromisoformat, required=True)
     ap.add_argument("--end", type=dt.date.fromisoformat, default=None, help="default: the product's last day")
     ap.add_argument("--out", type=Path, required=True)
@@ -409,12 +486,13 @@ def main(argv: list[str] | None = None, client: Client | None = None) -> None:
     password = os.environ.get("COPERNICUSMARINE_SERVICE_PASSWORD") or getpass.getpass("Copernicus password: ")
     site = SiteSpec(id="site", lat=args.lat, lon=args.lon, name=args.name, bbox_delta=args.bbox_delta)
     try:
-        result = fetch_daily_sst(site, start=args.start, end=args.end, credentials=Credentials(user, password),
-                                 client=client or CopernicusClient())
+        result = fetch_series(site, catalog_id=args.variable, start=args.start, end=args.end, credentials=Credentials(user, password),
+                              client=client or CopernicusClient())
     except DownloadError as e:
         print(f"error: {e}", file=sys.stderr)
         raise SystemExit(1)
     paths = write_result(result, args.out)
     m = result.manifest
-    print(f"{m['n_days']} days {m['period']['obtained']['start']} to {m['period']['obtained']['end']}, "
-          f"{m['missing_days']['count']} missing; written to {paths['csv']} and {paths['manifest']}")
+    n, missing, what = (m["n_days"], m["missing_days"]["count"], "days") if "n_days" in m else (m["n_months"], m["missing_months"]["count"], "months")
+    print(f"{n} {what} {m['period']['obtained']['start']} to {m['period']['obtained']['end']}, "
+          f"{missing} missing; written to {paths['csv']} and {paths['manifest']}")

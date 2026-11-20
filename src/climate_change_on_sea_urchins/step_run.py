@@ -31,7 +31,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from . import known_truth
+from . import catalog, known_truth
 
 MAX_CONCURRENT = 2
 MAX_SECONDS = 600                     # an analysis that takes longer is stopped (the real ones take seconds)
@@ -179,6 +179,17 @@ def reset(ctx) -> None:
     (ctx.workdir / LOG_FILE).unlink(missing_ok=True)
 
 
+def describe_variables(run: dict) -> str | None:
+    """The monthly variables in the dataset, from the run's coverage: what each covers, how many months have a value. None when
+    the study has only the temperature."""
+    variables = run["coverage"].get("variables")
+    if not variables:
+        return None
+    parts = [f"{catalog.get(i).label}: {v['months_with_value']} months with a value ({v['months_without_value']} without), "
+             f"{v['first']} to {v['last']}" for i, v in variables.items()]
+    return "Monthly variables in the dataset: " + "; ".join(parts) + "."
+
+
 STATE_WORDS = {"runs": "ran", "pending": "possible, not run", "not_applicable": "off"}
 
 
@@ -304,6 +315,9 @@ def _show_result(ctx) -> None:
     if excluded:
         st.caption(f"{len(excluded)} month(s) with a missing temperature day have no monthly temperature.")
     states = json.loads((out / "analyses.json").read_text())["analyses"]
+    variables = describe_variables(run)
+    if variables:
+        st.caption(variables)
     st.markdown("**Other analyses of this tool**")
     st.caption("The tool has more analyses than this version runs. For this study, which ones its data allow (\"possible, not run\": the data "
                "are there, this version does not run it yet) and which are off, with the reason. An analysis that is off wrote no file.")

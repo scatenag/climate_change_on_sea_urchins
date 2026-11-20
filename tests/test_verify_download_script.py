@@ -65,3 +65,83 @@ def test_pisa_with_the_wrong_distance_or_the_wrong_kind_of_refusal_is_flagged():
 def test_the_black_sea_with_a_message_that_chooses_is_flagged():
     r = _ok_results(); r["mar_nero"]["stderr"] = "error: it is outside the area the product covers"
     assert any("another message" in f for f in vd.check(r, GOOD))
+
+
+# --- the monthly pH against data/env_copernicus.csv (M1.8) -------------------------------------------------------------
+
+def _monthly(path, months, values, column="pH"):
+    pd.DataFrame({"Datetime": pd.to_datetime(months), column: values}).to_csv(path, index=False)
+
+
+def test_the_comparison_can_name_the_column_and_counts_the_months_that_differ(tmp_path):
+    _monthly(tmp_path / "a.csv", ["2024-01-01", "2024-02-01", "2024-03-01"], [8.10, 8.11, None])
+    _monthly(tmp_path / "b.csv", ["2024-01-01", "2024-02-01", "2024-03-01"], [8.10, 8.1102, 8.2])
+    r = vd.compare_series(tmp_path / "a.csv", tmp_path / "b.csv", column="pH")
+    assert r["common_days"] == 2 and r["max_abs_diff"] == pytest.approx(2e-4) and r["over_1e-4"] == 1
+
+
+def test_a_gross_difference_in_the_ph_is_flagged_and_a_small_one_is_only_reported():
+    ok = {"common_days": 270, "max_abs_diff": 3e-3, "over_1e-4": 40}
+    assert vd.check_monthly({"returncode": 0, "stderr": ""}, ok) == []
+    assert any("pH" in f for f in vd.check_monthly({"returncode": 0, "stderr": ""}, {"common_days": 270, "max_abs_diff": 0.2, "over_1e-4": 270}))
+    assert any("pH" in f and "failed" in f for f in vd.check_monthly({"returncode": 1, "stderr": "boom"}, None))
+    assert any("no common" in f for f in vd.check_monthly({"returncode": 0, "stderr": ""}, {"common_days": 0, "max_abs_diff": None, "over_1e-4": 0}))
+
+
+def test_the_case_downloads_the_catalogue_variable_at_livorno_from_the_start_of_the_series():
+    case = vd.MONTHLY_CASE
+    assert case["variable"] == "ph_monthly" and (case["lat"], case["lon"]) == (43.4278, 10.3956) and case["start"] == "2003-01-01"
+
+
+def test_a_difference_just_below_the_gross_limit_passes_and_at_the_limit_fails_and_too_few_common_months_fail():
+    below = {"common_days": 270, "max_abs_diff": vd.MAX_DIFF_PH - 1e-4, "over_1e-4": 3}
+    assert vd.check_monthly({"returncode": 0, "stderr": ""}, below) == []
+    assert vd.check_monthly({"returncode": 0, "stderr": ""}, {**below, "max_abs_diff": vd.MAX_DIFF_PH})
+    few = vd.check_monthly({"returncode": 0, "stderr": ""}, {**below, "common_days": vd.MIN_COMMON_MONTHS - 1})
+    assert few and "common months" in few[0]
+
+
+def _fake_run_case(ph_values):
+    def run_case(case, out):
+        folder = out / case["name"]; folder.mkdir(parents=True, exist_ok=True)
+        ok = {"returncode": 0, "stderr": "", "stdout": "", "seconds": 1.0}
+        if case["name"] == "livorno":
+            _write(folder / "sst_daily.csv", ["2024-01-01"], [10.0])
+            return ok
+        if case["name"] == "ph_livorno":
+            months = pd.date_range("2003-01-01", periods=24, freq="MS")
+            _monthly(folder / "ph_monthly.csv", months, ph_values)
+            return ok
+        return {"returncode": 1, "stderr": PISA if case["name"] == "pisa" else SEA, "stdout": "", "seconds": 1.0}
+    return run_case
+
+
+def _main(tmp_path, monkeypatch, ph_values, third=True):
+    months = pd.date_range("2003-01-01", periods=24, freq="MS")
+    _write(tmp_path / "sst.csv", ["2024-01-01"], [10.0])
+    _monthly(tmp_path / "env.csv", months, [8.10] * 24)
+    monkeypatch.setattr(vd, "run_case", _fake_run_case(ph_values))
+    args = [str(tmp_path / "out"), str(tmp_path / "sst.csv")] + ([str(tmp_path / "env.csv")] if third else [])
+    return vd.main(args), (tmp_path / "out")
+
+
+def test_main_downloads_the_ph_when_given_the_monthly_reference_and_a_gross_difference_fails_the_check(tmp_path, monkeypatch):
+    code, out = _main(tmp_path, monkeypatch, [8.10] * 24)
+    assert code == 0 and "Monthly pH of Livorno" in (out / "summary.md").read_text()
+    assert __import__("json").loads((out / "summary.json").read_text())["ph"]["common_days"] == 24
+    code, out2 = _main(tmp_path / "b", monkeypatch, [8.5] * 24) if (tmp_path / "b").mkdir() is None else (None, None)
+    assert code == 1 and any("pH" in f for f in __import__("json").loads((out2 / "summary.json").read_text())["failures"])
+
+
+def test_without_the_third_argument_the_ph_is_not_downloaded_and_the_old_check_is_unchanged(tmp_path, monkeypatch):
+    code, out = _main(tmp_path, monkeypatch, [8.10] * 24, third=False)
+    assert code == 0 and not (out / "ph_livorno").exists() and "pH" not in (out / "summary.md").read_text()
+
+
+def test_the_limits_of_the_monthly_check_are_the_ones_the_adr_states():
+    assert vd.MAX_DIFF_PH == 0.02 and vd.MIN_COMMON_MONTHS == 12
+    ok = {"returncode": 0, "stderr": ""}
+    assert vd.check_monthly(ok, {"common_days": 270, "max_abs_diff": 0.0199, "over_1e-4": 5}) == []
+    assert vd.check_monthly(ok, {"common_days": 270, "max_abs_diff": 0.02, "over_1e-4": 5})
+    assert vd.check_monthly(ok, {"common_days": 12, "max_abs_diff": 1e-5, "over_1e-4": 0}) == []
+    assert vd.check_monthly(ok, {"common_days": 11, "max_abs_diff": 1e-5, "over_1e-4": 0})
