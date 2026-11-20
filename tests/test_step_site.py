@@ -483,6 +483,7 @@ def two_kinds(fixture_client, monkeypatch):
 
 PH_LABEL = "pH (total scale), monthly"
 SAL_LABEL = "Salinity, monthly"
+O2_LABEL = "Dissolved oxygen, monthly"
 
 
 def _choose_variables(at, *labels):
@@ -493,7 +494,7 @@ def _choose_variables(at, *labels):
 def test_the_form_offers_the_monthly_variables_of_the_catalogue_and_none_is_chosen_for_the_user(two_kinds):
     at = _open()
     box = next(m for m in at.multiselect if m.label == step_site.VARIABLES_LABEL)
-    assert list(box.options) == [PH_LABEL, SAL_LABEL] and box.value == []
+    assert list(box.options) == [PH_LABEL, SAL_LABEL, O2_LABEL] and box.value == []
 
 
 def test_a_chosen_variable_is_downloaded_with_the_temperature_in_the_same_submit_and_shown(two_kinds):
@@ -610,3 +611,12 @@ def test_every_chosen_variable_is_checked_not_only_the_first(two_kinds, monkeypa
     monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", narrow)
     at = _submit(_choose_variables(_fill(_open()), PH_LABEL, SAL_LABEL))                 # the pH is fine at this site, the salinity is not
     assert "salinity_monthly" in _errors(at) and "ph_monthly" not in _errors(at) and not two_kinds.credentials_seen
+
+
+def test_the_oxygen_is_downloaded_with_the_others_in_the_catalogues_order_and_has_the_biogeochemical_box(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), O2_LABEL, PH_LABEL))
+    assert not at.exception, [e.value for e in at.exception]
+    assert list(_ctx(at).data["step1"]["variables"]) == ["ph_monthly", "o2_monthly"]
+    assert (_ctx(at).workdir / "inputs" / "o2_monthly.csv").is_file() and set(two_kinds.credentials_seen) == {(USER, PASSWORD)}
+    at = _submit(_choose_variables(_fill(at, lon="-5.8"), O2_LABEL))                    # west of -5.54: inside the temperature's box, outside the oxygen's
+    assert "o2_monthly" in _errors(at) and "outside" in _errors(at)

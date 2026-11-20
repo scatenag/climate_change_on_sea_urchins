@@ -123,6 +123,23 @@ CATALOG: dict[str, CatalogVariable] = {
             domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
                           lon_min=-6.0, lon_max=36.29166793823242),
         ),
+        CatalogVariable(
+            id="o2_monthly",
+            label="Dissolved oxygen, monthly",
+            column="O2",
+            provider="copernicus_marine",
+            variable="o2",
+            cadence="P1M",
+            unit_native="mmol m-3",
+            unit_analysis="mmol m-3",
+            depth_min_m=0.0,
+            depth_max_m=10.0,
+            dataset_multiyear="cmems_mod_med_bgc-bio_my_4.2km_P1M-m",
+            dataset_analysis_forecast="cmems_mod_med_bgc-bio_anfc_4.2km_P1M-m",
+            # The biogeochemical product's box, the same as the pH's (read from the Copernicus catalogue on 2026-11-20).
+            domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
+                          lon_min=-5.541666507720947, lon_max=36.29166793823242),
+        ),
     ]
 }
 

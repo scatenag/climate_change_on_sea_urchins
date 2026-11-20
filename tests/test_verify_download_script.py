@@ -84,19 +84,20 @@ def test_the_comparison_can_name_the_column_and_counts_the_months_that_differ(tm
 
 
 def test_the_cases_are_the_catalogue_variables_at_livorno_from_the_start_of_the_series():
-    assert list(CASES) == ["ph", "salinity"]
+    assert list(CASES) == ["ph", "salinity", "o2"]
     for key, case in CASES.items():
         assert (case["lat"], case["lon"]) == (43.4278, 10.3956) and case["start"] == "2003-01-01" and case["name"] == f"{key}_livorno"
     assert (CASES["ph"]["variable"], CASES["ph"]["column"]) == ("ph_monthly", "pH")
     assert (CASES["salinity"]["variable"], CASES["salinity"]["column"]) == ("salinity_monthly", "Salinity")
+    assert (CASES["o2"]["variable"], CASES["o2"]["column"]) == ("o2_monthly", "O2")
 
 
 def test_the_gross_limits_are_below_the_median_change_from_one_month_to_the_next_so_a_month_of_shift_is_seen():
-    # measured on data/env_copernicus.csv, 2026-11-20: the median |month-to-month change| is 0.0276 for the pH and 0.0549 for the salinity
-    assert CASES["ph"]["max_diff"] == 0.02 and CASES["salinity"]["max_diff"] == 0.04 and vd.MIN_COMMON_MONTHS == 12
+    # measured on data/env_copernicus.csv, 2026-11-20: the median |month-to-month change| is 0.0276 for the pH, 0.0549 for the salinity and 5.79 for the oxygen
+    assert CASES["ph"]["max_diff"] == 0.02 and CASES["salinity"]["max_diff"] == 0.04 and CASES["o2"]["max_diff"] == 4.0 and vd.MIN_COMMON_MONTHS == 12
 
 
-@pytest.mark.parametrize("key", ["ph", "salinity"])
+@pytest.mark.parametrize("key", ["ph", "salinity", "o2"])
 def test_a_difference_just_below_the_gross_limit_passes_and_at_the_limit_fails_and_too_few_common_months_fail(key):
     case, ok = CASES[key], {"returncode": 0, "stderr": ""}
     good = {"common_days": 270, "max_abs_diff": case["max_diff"] - 1e-4, "over_1e-4": 3}
@@ -117,7 +118,7 @@ def _fake_run_case(values):
         for c in CASES.values():
             if case["name"] == c["name"]:
                 _monthly(folder / f"{c['variable']}.csv", pd.date_range("2003-01-01", periods=24, freq="MS"), values[c["column"]], column=c["column"])
-                return {**ok, "seconds": {"pH": 2.0, "Salinity": 3.0}[c["column"]]}
+                return {**ok, "seconds": {"pH": 2.0, "Salinity": 3.0, "O2": 4.0}[c["column"]]}
         return {"returncode": 1, "stderr": PISA if case["name"] == "pisa" else SEA, "stdout": "", "seconds": 1.0}
     return run_case
 
@@ -126,7 +127,7 @@ def _main(tmp_path, monkeypatch, values, third=True):
     tmp_path.mkdir(parents=True, exist_ok=True)
     months = pd.date_range("2003-01-01", periods=24, freq="MS")
     _write(tmp_path / "sst.csv", ["2024-01-01"], [10.0])
-    pd.DataFrame({"Datetime": months, "pH": [8.10] * 24, "Salinity": [38.0] * 24}).to_csv(tmp_path / "env.csv", index=False)
+    pd.DataFrame({"Datetime": months, "pH": [8.10] * 24, "Salinity": [38.0] * 24, "O2": [240.0] * 24}).to_csv(tmp_path / "env.csv", index=False)
     monkeypatch.setattr(vd, "run_case", _fake_run_case(values))
     args = [str(tmp_path / "out"), str(tmp_path / "sst.csv")] + ([str(tmp_path / "env.csv")] if third else [])
     return vd.main(args), tmp_path / "out"
@@ -134,28 +135,28 @@ def _main(tmp_path, monkeypatch, values, third=True):
 
 def test_main_downloads_every_monthly_variable_when_given_the_reference_and_a_gross_difference_fails_the_check(tmp_path, monkeypatch):
     import json
-    code, out = _main(tmp_path / "a", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24})
-    assert code == 0 and "Monthly pH of Livorno" in (out / "summary.md").read_text() and "Monthly Salinity of Livorno" in (out / "summary.md").read_text()
+    code, out = _main(tmp_path / "a", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24, "O2": [240.0] * 24})
+    assert code == 0 and "Monthly pH of Livorno" in (out / "summary.md").read_text() and "Monthly Salinity of Livorno" in (out / "summary.md").read_text() and "Monthly O2 of Livorno" in (out / "summary.md").read_text()
     text = (out / "summary.md").read_text()
-    assert "(gross limit 0.02)" in text and "(gross limit 0.04)" in text and "- download time: **1.0 s**" in text and "- download time: **2.0 s**" in text and "- download time: **3.0 s**" in text
+    assert "(gross limit 0.02)" in text and "(gross limit 0.04)" in text and "- download time: **1.0 s**" in text and "- download time: **2.0 s**" in text and "- download time: **3.0 s**" in text and "- download time: **4.0 s**" in text and "(gross limit 4.0)" in text
     summary = json.loads((out / "summary.json").read_text())
-    assert summary["monthly"]["ph"]["common_days"] == 24 and summary["monthly"]["salinity"]["common_days"] == 24
-    code, out2 = _main(tmp_path / "b", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.5] * 24})       # only the salinity is off
+    assert summary["monthly"]["ph"]["common_days"] == 24 and summary["monthly"]["salinity"]["common_days"] == 24 and summary["monthly"]["o2"]["common_days"] == 24
+    code, out2 = _main(tmp_path / "b", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.5] * 24, "O2": [240.0] * 24})       # only the salinity is off
     failures = json.loads((out2 / "summary.json").read_text())["failures"]
     assert code == 1 and any("Salinity" in f for f in failures) and not any("pH" in f for f in failures)
 
 
 def test_without_the_third_argument_no_monthly_variable_is_downloaded_and_the_old_check_is_unchanged(tmp_path, monkeypatch):
-    code, out = _main(tmp_path, monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24}, third=False)
-    assert code == 0 and not (out / "ph_livorno").exists() and not (out / "salinity_livorno").exists() and "Monthly" not in (out / "summary.md").read_text()
+    code, out = _main(tmp_path, monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24, "O2": [240.0] * 24}, third=False)
+    assert code == 0 and not (out / "ph_livorno").exists() and not (out / "salinity_livorno").exists() and not (out / "o2_livorno").exists() and "Monthly" not in (out / "summary.md").read_text()
 
 
 def test_a_monthly_download_that_failed_is_said_in_the_summary_and_fails_the_check(tmp_path, monkeypatch):
     import json
     tmp_path.mkdir(parents=True, exist_ok=True)
     _write(tmp_path / "sst.csv", ["2024-01-01"], [10.0])
-    pd.DataFrame({"Datetime": pd.date_range("2003-01-01", periods=24, freq="MS"), "pH": 8.1, "Salinity": 38.0}).to_csv(tmp_path / "env.csv", index=False)
-    good = _fake_run_case({"pH": [8.10] * 24, "Salinity": [38.0] * 24})
+    pd.DataFrame({"Datetime": pd.date_range("2003-01-01", periods=24, freq="MS"), "pH": 8.1, "Salinity": 38.0, "O2": 240.0}).to_csv(tmp_path / "env.csv", index=False)
+    good = _fake_run_case({"pH": [8.10] * 24, "Salinity": [38.0] * 24, "O2": [240.0] * 24})
     monkeypatch.setattr(vd, "run_case", lambda case, out: {"returncode": 1, "stderr": "boom", "stdout": "", "seconds": 2.0} if case["name"] == "salinity_livorno" else good(case, out))
     code = vd.main([str(tmp_path / "out"), str(tmp_path / "sst.csv"), str(tmp_path / "env.csv")])
     text = (tmp_path / "out" / "summary.md").read_text()
