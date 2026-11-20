@@ -124,8 +124,10 @@ def _monthly_variables(variables: dict[str, pd.DataFrame], grid: pd.DatetimeInde
         if not own.index.isin(grid).any():
             raise DatasetError(f"{catalog_id!r} covers {own.index.min():%Y-%m} to {own.index.max():%Y-%m}: no month in common with the study")
         columns.append((variable.column, own.reindex(grid)))
+        inside = own[own.index.isin(grid)]                # the counts are those of the study's months; what falls outside is said
         coverage[catalog_id] = {"column": variable.column, "first": f"{own.index.min():%Y-%m}", "last": f"{own.index.max():%Y-%m}",
-                                "months_with_value": int(own.notna().sum()), "months_without_value": int(own.isna().sum())}
+                                "months_with_value": int(inside.notna().sum()), "months_without_value": int(inside.isna().sum()),
+                                "months_outside_the_study": int(len(own) - len(inside))}
     return columns, coverage
 
 

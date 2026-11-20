@@ -61,8 +61,10 @@ def variable_labels() -> dict[str, str]:
 
 
 def chosen_variables(labels) -> tuple[str, ...]:
+    """The ids of the variables chosen by label, in the catalogue's order (not the order of the choice)."""
     by_label = variable_labels()
-    return tuple(by_label[l] for l in (labels or ()) if l in by_label)
+    chosen = {by_label[l] for l in (labels or ()) if l in by_label}
+    return tuple(i for i in catalog.monthly_ids() if i in chosen)
 
 
 def with_variables(inputs: SiteInputs, ids: tuple[str, ...]) -> tuple[SiteInputs, list[str]]:
@@ -159,6 +161,18 @@ def download_sst(ctx, inputs: SiteInputs, credentials: download.Credentials, cli
     download left in the folder is removed first: a failed download leaves nothing that could be mistaken for the new one."""
     shutil.rmtree(ctx.workdir / "inputs", ignore_errors=True)
     start, note = baseline.download_start(inputs.baseline[0], coverage, inputs.first_year, max_lag_months())
+    # The coverage of each chosen variable's product is read first (the catalogue is public): a variable that ends before the period
+    # is refused before the temperature is downloaded, and one that starts later starts at its product's first month.
+    var_starts, var_notes = {}, {}
+    for catalog_id in inputs.variables:
+        variable = catalog.get(catalog_id)
+        cov = download._call(lambda v=variable: client.coverage_of(v), credentials, f"reading the coverage of {variable.label}")
+        if cov.end < start:
+            raise download.DownloadError(f"The {variable.label} product ends in {cov.end:%Y-%m}, before the period starts ({start:%Y-%m}).")
+        var_starts[catalog_id] = max(start, cov.start)
+        if cov.start > start:
+            var_notes[catalog_id] = (f"The {variable.label} product starts in {cov.start:%Y-%m}, after the temperature ({start:%Y-%m}): "
+                                     "the months before have no value, and none is invented.")
     t0 = time.perf_counter()
     result = download.fetch_daily_sst(inputs.site, start=start, credentials=credentials, client=client, catalog_id=CATALOG_ID)
     seconds = time.perf_counter() - t0
@@ -168,7 +182,7 @@ def download_sst(ctx, inputs: SiteInputs, credentials: download.Credentials, cli
     variables = {}
     for catalog_id in inputs.variables:                  # the same credentials, the same submit: one request after the other
         t1 = time.perf_counter()
-        got = download.fetch_series(inputs.site, catalog_id=catalog_id, start=start, credentials=credentials, client=client)
+        got = download.fetch_series(inputs.site, catalog_id=catalog_id, start=var_starts[catalog_id], credentials=credentials, client=client)
         took = time.perf_counter() - t1
         got.manifest["timing"] = {"download_seconds": round(took, 1)}
         written = download.write_result(got, ctx.workdir / "inputs")
@@ -176,7 +190,7 @@ def download_sst(ctx, inputs: SiteInputs, credentials: download.Credentials, cli
         variables[catalog_id] = {"label": catalog.get(catalog_id).label, "column": catalog.get(catalog_id).column,
                                  "n_months": gm["n_months"], "missing_months": gm["missing_months"]["count"],
                                  "start": gm["period"]["obtained"]["start"], "end": gm["period"]["obtained"]["end"],
-                                 "seconds": round(took, 1), "csv": str(written["csv"])}
+                                 "seconds": round(took, 1), "csv": str(written["csv"]), "note": var_notes.get(catalog_id)}
     return {"inputs_key": inputs.key, "site": m["site"], "baseline": inputs.baseline, "start_note": note,
             "n_days": m["n_days"], "missing_days": m["missing_days"]["count"],
             "start": m["period"]["obtained"]["start"], "end": m["period"]["obtained"]["end"],
@@ -284,6 +298,8 @@ def _show_result(ctx, current_key) -> None:
         series = pd.read_csv(v["csv"], parse_dates=["Datetime"])
         st.success(f"{v['n_months']} months of {v['label']}, {v['start']} to {v['end']}, downloaded in {v['seconds']} seconds "
                    f"({v['missing_months']} months without a value).")
+        if v.get("note"):
+            st.info(v["note"])
         st.line_chart(series.set_index("Datetime")[v["column"]], height=180)
     if view["error"]:
         st.error(f"The heatwaves cannot be detected on this series: {view['error']}")

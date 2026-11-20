@@ -310,7 +310,8 @@ def test_a_month_missing_in_the_variable_stays_missing_and_is_reported():
     ds = _with_ph(_ph(months, values))
     assert ds.monthly.set_index("Datetime").loc[pd.Timestamp("2004-06-01"), "pH"] != ds.monthly.set_index("Datetime").loc[pd.Timestamp("2004-06-01"), "pH"]
     cov = ds.coverage["variables"]["ph_monthly"]
-    assert cov == {"column": "pH", "first": "2004-01", "last": "2005-12", "months_with_value": 23, "months_without_value": 1}
+    assert cov == {"column": "pH", "first": "2004-01", "last": "2005-12", "months_with_value": 23, "months_without_value": 1,
+                   "months_outside_the_study": 0}
 
 
 def test_a_variable_that_is_not_the_catalogues_or_has_the_wrong_shape_is_refused():
@@ -335,3 +336,10 @@ def test_the_dataset_written_to_disk_carries_the_variable_and_its_coverage(tmp_p
     dataset_builder.write_dataset(ds, tmp_path, now=lambda: dt.datetime(2026, 11, 20, tzinfo=dt.timezone.utc))
     assert "pH" in pd.read_csv(tmp_path / "monthly.csv").columns
     assert json.loads((tmp_path / "dataset.manifest.json").read_text())["coverage"]["variables"]["ph_monthly"]["months_with_value"] == 12
+
+
+def test_the_coverage_counts_the_months_of_the_study_and_says_how_many_of_the_file_fall_outside_it():
+    ds = _with_ph(_ph(pd.date_range("2000-01-01", "2030-12-01", freq="MS")))            # the study's months are 2003-2008 (and the response)
+    cov = ds.coverage["variables"]["ph_monthly"]
+    assert cov["months_with_value"] == int(ds.monthly["pH"].notna().sum()) and cov["months_without_value"] == 0
+    assert cov["months_outside_the_study"] == 372 - cov["months_with_value"] and (cov["first"], cov["last"]) == ("2000-01", "2030-12")

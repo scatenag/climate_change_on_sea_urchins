@@ -690,3 +690,11 @@ def test_the_files_of_the_variables_go_into_the_study_folder_with_the_temperatur
     assert sorted(p.name for p in folder.iterdir()) == ["ph_monthly.csv", "ph_monthly.manifest.json", "response.csv", "sst_daily.csv",
                                                         "sst_daily.manifest.json", "study.yaml"]
     assert [e.catalog_id for e in load_study(folder / "study.yaml").environment] == ["sst_daily", "ph_monthly"]
+
+
+def test_a_chosen_variable_whose_file_is_missing_stops_the_study_from_being_written(tmp_path):
+    inputs = tmp_path / "inputs"; inputs.mkdir()
+    (inputs / "sst_daily.csv").write_text("x"); (inputs / "sst_daily.manifest.json").write_text("{}")
+    ctx = types.SimpleNamespace(workdir=tmp_path)
+    with pytest.raises(FileNotFoundError):
+        step_response.write_study(ctx, _step1({"ph_monthly": {}}), {"id": "response"}, b"d,v\n")

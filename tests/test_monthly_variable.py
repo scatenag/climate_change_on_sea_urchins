@@ -251,3 +251,19 @@ def test_the_command_still_downloads_the_daily_sst_by_default(tmp_path, monkeypa
     monkeypatch.setenv("COPERNICUSMARINE_SERVICE_PASSWORD", "s3cr3t-pa55-w0rd")
     download.main(["--lat", "43.4278", "--lon", "10.3956", "--start", "2024-01-01", "--end", "2024-01-05", "--out", str(tmp_path)], client=FakeClient())
     assert sorted(p.name for p in tmp_path.iterdir()) == ["sst_daily.csv", "sst_daily.manifest.json"]
+
+
+def test_the_mean_is_over_the_cells_per_depth_and_then_over_depth_not_over_every_value():
+    # two cells, two depths: one cell has no value at the deeper one. Per depth: (8 + 12) / 2 = 10 and 8; then 9. Over every value: 9.33.
+    values = np.array([[[[8.0, 12.0]], [[8.0, np.nan]]]])                      # (time 1, depth 2, lat 1, lon 2)
+    cube = Cube(times=np.array(["2024-01-01"], dtype="datetime64[D]"), depths=np.array([0.5, 5.0]), lats=np.array([43.4]),
+                lons=np.array([10.3, 10.4]), values=values, dataset_version="202511")
+    s = download._monthly_series(cube, dt.date(2024, 1, 1), dt.date(2024, 1, 1), 1.0)
+    assert s.iloc[0] == pytest.approx(9.0)
+
+
+def test_a_cube_with_two_times_in_a_month_is_a_download_error_not_a_crash():
+    cube = Cube(times=np.array(["2024-01-01", "2024-01-15"], dtype="datetime64[D]"), depths=np.array([0.5]), lats=np.array([43.4]),
+                lons=np.array([10.4]), values=np.ones((2, 1, 1, 1)), dataset_version="202511")
+    with pytest.raises(DownloadError, match="more than one time in 2024-01"):
+        download._monthly_series(cube, dt.date(2024, 1, 1), dt.date(2024, 1, 1), 1.0)

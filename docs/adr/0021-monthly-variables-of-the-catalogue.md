@@ -34,14 +34,20 @@ parte comune e la prima variabile, il pH, perché è quella che fa sparire un mo
   entra nel dataset e fa cambiare lo stato delle analisi (`analyses.json`).
 - **App.** Nel passo 1 un multiselect («Monthly variables to download with the temperature (optional)», nessuna scelta di
   partenza): le scelte si scaricano nello stesso invio, con le stesse credenziali, una richiesta dopo l'altra; un sito fuori dal dominio
-  di una variabile scelta è rifiutato prima di ogni richiesta; un errore di una variabile non lascia nulla (neppure la SST); cambiare
+  di una variabile scelta è rifiutato prima di ogni richiesta; la copertura del prodotto di ogni variabile si legge prima di scaricare
+  la SST (il catalogo è pubblico): se finisce prima del periodo, errore prima di scaricare; se **comincia dopo** (il pH dal 1999, la
+  baseline suggerita da 1991), la variabile parte dal primo mese del suo prodotto e la pagina lo dice, i mesi prima restano senza
+  valore e nessuno è inventato; un errore di una variabile non lascia nulla (neppure la SST); cambiare
   la scelta dopo il download dice che i dati sono per gli ingressi precedenti. Il passo 2 mette le variabili nell'`environment`
   dello studio e ne copia i file (anche per la serie di prova); la pagina dei risultati dice le variabili del dataset e quanti mesi
-  hanno un valore.
-- **Verifica sul servizio vero.** `scripts/verify_download.py` (workflow `verify_download.yml`, a mano o con l'etichetta) scarica il
+  hanno un valore. I conteggi di `coverage.variables` sono quelli dei mesi dello studio
+  (`months_with_value`, `months_without_value`); i mesi del file fuori dallo studio sono in `months_outside_the_study`.
+- **Verifica sul servizio vero (non ancora eseguita).** `scripts/verify_download.py` (workflow `verify_download.yml`, a mano o con l'etichetta) scarica il
   pH di Livorno e lo confronta con la colonna `pH` di `data/env_copernicus.csv` sui mesi comuni: **fallisce per una differenza
   grossolana (≥ 0.02)**, conta e riporta i mesi che differiscono di più di 1e-4 (la versione della rianalisi può non essere la stessa
-  dei mesi più vecchi del file: PROVVISORIA, la soglia si stringe dopo la prima misura).
+  dei mesi più vecchi del file: PROVVISORIA, la soglia si stringe dopo la prima misura) o per meno di 12 mesi in comune. Il cubo mensile, i tempi
+  del toolbox (primo del mese) e la richiesta di un solo mese non sono provati con il toolbox vero: la prova è il workflow con
+  l'etichetta `verifica-download` (a mano, del proprietario), e fino ad allora il pezzo non è chiuso.
 - **PROVVISORIA: nessuna coda analysis-forecast.** Il file di Livorno aggiunge ai mesi del prodotto reprocessato quelli del prodotto
   che lo segue; qui, come per la SST, si scarica solo il prodotto reprocessato e la serie finisce dove finisce il prodotto (la voce
   del catalogo registra l'id del seguente). Aggiungere la coda è una scelta che cambia la fine della serie.

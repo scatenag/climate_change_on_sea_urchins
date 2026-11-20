@@ -135,10 +135,10 @@ def write_study(ctx, step1: dict, response: dict, csv_bytes: bytes) -> Path:
     inputs = ctx.workdir / "inputs"
     shutil.copyfile(inputs / "sst_daily.csv", folder / "sst_daily.csv")
     shutil.copyfile(inputs / "sst_daily.manifest.json", folder / "sst_daily.manifest.json")
-    for catalog_id in step1.get("variables", {}):                 # the monthly variables chosen in step 1, with their manifests
-        for name in (f"{catalog_id}.csv", f"{catalog_id}.manifest.json"):
-            if (inputs / name).is_file():
-                shutil.copyfile(inputs / name, folder / name)
+    for catalog_id in step1.get("variables", {}):                 # the monthly variables chosen in step 1: the series is required
+        shutil.copyfile(inputs / f"{catalog_id}.csv", folder / f"{catalog_id}.csv")
+        if (inputs / f"{catalog_id}.manifest.json").is_file():
+            shutil.copyfile(inputs / f"{catalog_id}.manifest.json", folder / f"{catalog_id}.manifest.json")
     (folder / RESPONSE_FILE).write_bytes(csv_bytes)
     (folder / "study.yaml").write_text(yaml.safe_dump(study_dict(step1, response), sort_keys=False, allow_unicode=True))
     load_study(folder / "study.yaml")

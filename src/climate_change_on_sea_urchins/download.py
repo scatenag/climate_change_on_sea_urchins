@@ -348,6 +348,8 @@ def _monthly_series(cube: Cube, start: dt.date, end: dt.date, factor: float) -> 
         per_depth = np.nanmean(cube.values, axis=(2, 3))
         monthly = np.nanmean(per_depth, axis=1) * factor
     index = pd.DatetimeIndex(cube.times.astype("datetime64[M]").astype("datetime64[ns]"))
+    if index.duplicated().any():
+        raise DownloadError(f"the product returned more than one time in {index[index.duplicated()][0]:%Y-%m}: it is not a monthly series")
     return pd.Series(monthly, index=index).reindex(pd.date_range(start, end, freq="MS"))
 
 

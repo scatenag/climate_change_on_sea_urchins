@@ -114,16 +114,19 @@ def test_a_study_without_ph_has_the_speciation_and_the_forecast_off_with_the_rea
 
 
 def test_the_reason_says_when_the_variable_is_not_in_the_catalogue_yet_and_says_so_no_more_when_it_is(monkeypatch):
-    def ph_reason():
+    def reason(word):
         reasons = _state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"]
-        return next(r for r in reasons if "pH" in r)
-    why = ph_reason()
-    assert "does not list" in why and "not in the variable catalogue yet" in why
+        return next(r for r in reasons if word in r)
+    assert "ph_monthly" in catalog.CATALOG                                           # M1.8 added it: the pH is in the catalogue
+    ph = reason("pH")
+    assert "does not list" in ph and "not in the variable catalogue yet" not in ph
+    salinity = reason("salinity")                                                    # not yet: a later PR of M1.8
+    assert "does not list" in salinity and "not in the variable catalogue yet" in salinity
     only_sst = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"])
     assert "salinity" in only_sst and "pH" in only_sst and "temperature" not in only_sst      # the SST provides the temperature and nothing else
-    monkeypatch.setitem(catalog.CATALOG, "ph_monthly", catalog.CATALOG["sst_daily"])        # as if M1.8 had added it
-    why = ph_reason()
-    assert "does not list" in why and "not in the variable catalogue yet" not in why
+    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", catalog.CATALOG["sst_daily"])    # as if the salinity had been added
+    salinity = reason("salinity")
+    assert "does not list" in salinity and "not in the variable catalogue yet" not in salinity
 
 
 def test_each_requirement_turns_its_analyses_off_with_its_own_reason():
@@ -317,8 +320,7 @@ def test_a_study_of_another_format_is_refused_not_guessed():
         analyses.evaluate_study(load_study(ROOT / "examples" / "livorno_paracentrotus" / "study.yaml"), r_available=True)
 
 
-def test_every_listed_variable_counts_and_the_cas_of_copper_is_enough(monkeypatch):
-    monkeypatch.setitem(catalog.CATALOG, "ph_monthly", catalog.CATALOG["sst_daily"])        # as if M1.8 had added it
+def test_every_listed_variable_counts_and_the_cas_of_copper_is_enough():
     assert "cu_speciation" in _off(analyses.evaluate_study(_spec(environment=("sst_daily",)), r_available=True))
     assert "thermal_legacy" not in _off(analyses.evaluate_study(_spec(environment=("sst_daily",)), r_available=True))
     two = analyses.evaluate_study(_spec(environment=("ph_monthly", "sst_daily")), r_available=True)        # the SST is not the first entry

@@ -33,6 +33,7 @@ CASES = [
 ]
 MAX_DIFF = 1e-4
 MAX_DIFF_PH = 0.02
+MIN_COMMON_MONTHS = 12
 PISA_KM = (5, 25)
 MONTHLY_CASE = dict(name="ph_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="ph_monthly", column="pH")
 
@@ -102,6 +103,8 @@ def check_monthly(result: dict, cmp: dict | None) -> list[str]:
         return [f"pH: download failed ({result['stderr'].strip()[:300]})"]
     if not cmp or not cmp["common_days"]:
         return ["pH: no common month with data/env_copernicus.csv"]
+    if cmp["common_days"] < MIN_COMMON_MONTHS:
+        return [f"pH: only {cmp['common_days']} common months with data/env_copernicus.csv (at least {MIN_COMMON_MONTHS})"]
     if cmp["max_abs_diff"] >= MAX_DIFF_PH:
         return [f"pH: max |diff| {cmp['max_abs_diff']:.3g} is not below {MAX_DIFF_PH}"]
     return []
