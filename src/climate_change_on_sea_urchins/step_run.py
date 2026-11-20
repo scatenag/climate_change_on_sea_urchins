@@ -179,6 +179,16 @@ def reset(ctx) -> None:
     (ctx.workdir / LOG_FILE).unlink(missing_ok=True)
 
 
+STATE_WORDS = {"runs": "ran", "pending": "possible, not run", "not_applicable": "off"}
+
+
+def analyses_table(states: list[dict]) -> pd.DataFrame:
+    """The analyses of the tool and what this study allows, as the page shows them: one row each, the state in words, why, and
+    the note about a choice the code fixes. Built from analyses.json only."""
+    return pd.DataFrame([{"analysis": s["label"], "state": STATE_WORDS[s["status"]], "why": "; ".join(s["reasons"]), "note": s["note"] or ""}
+                         for s in states])
+
+
 def read_state(ctx) -> dict:
     """What the page needs: status (starting, running, done, failed, interrupted), the step, the error, the elapsed seconds."""
     run = ctx.data.get("run")
@@ -293,6 +303,11 @@ def _show_result(ctx) -> None:
     excluded = run["coverage"]["temperature"]["incomplete_months"]
     if excluded:
         st.caption(f"{len(excluded)} month(s) with a missing temperature day have no monthly temperature.")
+    states = json.loads((out / "analyses.json").read_text())["analyses"]
+    st.markdown("**Other analyses of this tool**")
+    st.caption("The tool has more analyses than this version runs. For this study, which ones its data allow (\"possible, not run\": the data "
+               "are there, this version does not run it yet) and which are off, with the reason. An analysis that is off wrote no file.")
+    st.dataframe(analyses_table(states), hide_index=True)
     st.markdown("**What this result is, and is not**")
     for line in LIMITS:
         st.markdown(f"- {line}")

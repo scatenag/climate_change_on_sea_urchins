@@ -70,7 +70,7 @@ def test_the_test_series_is_run_and_its_known_lag_is_found_and_said(after_step1)
     shown = _shown(at)
     assert "The analysis finished" in shown and "The known lag was FOUND" in shown and "lag 3" in shown
     assert len(at.dataframe) >= 1
-    table = at.dataframe[-1].value            # the last one: step 1 shows its own table of events above
+    table = next(d.value for d in at.dataframe if {"lag", "pairs"} <= set(d.value.columns))      # step 1 and the analyses have tables of their own
     assert table["lag"].tolist() == ccf["lag"].tolist() and table["pairs"].tolist() == ccf["n"].tolist()
     assert known_truth.verify(out)["recovered"]
 
@@ -466,3 +466,41 @@ def test_the_increase_direction_gives_the_matching_sign_end_to_end(after_step1, 
 def test_an_independent_test_series_is_reported_as_not_found(after_step1):
     at = _run_to_the_end(_generate(after_step1, seed=1, lag=3, share=0.0))
     assert "NOT found" in _shown(at) and "FOUND" not in _shown(at).replace("NOT found", "")
+
+
+# --- the other analyses of the tool, which this study allows or not (M1.7) -------------------------------------------
+
+def _analyses_table(at):
+    """The table of analyses on the result page: the dataframe with an 'analysis' column."""
+    return next(d.value for d in at.dataframe if "analysis" in d.value.columns)
+
+
+def test_the_result_page_lists_the_analyses_that_are_off_with_the_same_reasons_as_the_file(after_step1):
+    at = _run_to_the_end(_generate(after_step1))
+    assert not at.exception, [e.value for e in at.exception]
+    doc = json.loads((_ctx(at).workdir / "run" / "analyses.json").read_text())["analyses"]
+    table = _analyses_table(at)
+    assert len(table) == len(doc)
+    by_label = {r["analysis"]: r for _, r in table.iterrows()}
+    for a in doc:
+        row = by_label[a["label"]]
+        assert row["state"] == step_run.STATE_WORDS[a["status"]]
+        assert row["why"] == "; ".join(a["reasons"])
+    assert table["analysis"].tolist() == [a["label"] for a in doc]                  # the order of the registry
+    off = [a for a in doc if a["status"] == "not_applicable"]
+    assert off and any("pH" in " ".join(a["reasons"]) for a in off)            # a study with the SST only has no pH
+    assert "Other analyses" in _shown(at)
+
+
+def test_the_page_says_that_an_analysis_that_is_off_wrote_nothing_and_one_that_is_possible_is_not_yet_run(after_step1):
+    at = _run_to_the_end(_generate(after_step1))
+    shown = _shown(at)
+    assert "does not run it yet" in " ".join(_analyses_table(at)["why"]) and "wrote no file" in shown
+    assert 'possible, not run": the data are there' in shown.replace("\\", "")        # the word is defined where it is shown
+
+
+def test_the_states_are_the_same_words_in_the_table_and_in_the_function():
+    assert step_run.STATE_WORDS == {"runs": "ran", "pending": "possible, not run", "not_applicable": "off"}
+    table = step_run.analyses_table([{"id": "x", "label": "L", "status": "not_applicable", "reasons": ["a", "b"], "note": "n", "outputs": []}])
+    assert table.iloc[0].to_dict() == {"analysis": "L", "state": step_run.STATE_WORDS["not_applicable"], "why": "a; b", "note": "n"}
+    assert step_run.analyses_table([{"id": "x", "label": "L", "status": "runs", "reasons": [], "note": None, "outputs": []}]).iloc[0]["note"] == ""
