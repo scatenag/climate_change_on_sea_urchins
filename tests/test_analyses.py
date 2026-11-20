@@ -120,15 +120,15 @@ def _not_yet_in_the_catalogue():
 
 def test_the_reason_says_when_the_variable_is_not_in_the_catalogue_yet_and_says_so_no_more_when_it_is(monkeypatch):
     def reason(word):
-        reasons = _state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"]
+        reasons = _state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "regime_shift")["reasons"]       # it needs all five
         return next(r for r in reasons if word in r)
-    for in_catalogue, word in (("ph_monthly", "pH"), ("salinity_monthly", "salinity")):
+    for in_catalogue, word in (("ph_monthly", "pH"), ("salinity_monthly", "salinity"), ("o2_monthly", "dissolved oxygen"), ("co2_monthly", "CO2")):
         assert in_catalogue in catalog.CATALOG                                       # M1.8 added them: no "not in the catalogue" clause
         why = reason(word)
         assert "does not list" in why and "not in the variable catalogue yet" not in why
     only_sst = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"])
     assert "salinity" in only_sst and "pH" in only_sst and "temperature" not in only_sst      # the SST provides the temperature and nothing else
-    # a variable that is not in the catalogue yet says so, and stops saying it when it is (the oxygen and the CO2 are still planned)
+    # a variable that is not in the catalogue yet says so, and stops saying it when it is (none is missing now: the clause is shown below)
     model = catalog.CATALOG["ph_monthly"]
     for variable in _not_yet_in_the_catalogue():
         planned_id = analyses.VARIABLE_SOURCES[variable][0]
@@ -346,3 +346,12 @@ def test_every_listed_variable_counts_and_the_cas_of_copper_is_enough():
 
 def test_the_analyses_that_need_a_split_date_are_these_three():
     assert {a.id for a in ANALYSES if a.needs.split_date} == {"period_split", "cu_speciation", "negative_control"}
+
+
+def test_a_variable_that_is_removed_from_the_catalogue_says_again_that_it_is_not_in_it_yet(monkeypatch):
+    # every planned variable is in the catalogue now (M1.8): the clause is shown with one taken out
+    assert _not_yet_in_the_catalogue() == []
+    monkeypatch.delitem(catalog.CATALOG, "co2_monthly")
+    assert _not_yet_in_the_catalogue() == ["co2"]
+    why = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "regime_shift")["reasons"])
+    assert "it needs CO2, and the study does not list it (it is not in the variable catalogue yet)" in why

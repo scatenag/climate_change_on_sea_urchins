@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The CO2 partial pressure, the last monthly variable of Livorno's environment** (milestone M1.8, ADR-0021). `co2_monthly` carries the named
+  conversion from pascal to µatm (the same constant as `config.CO2_PA_TO_UATM`, checked by a test), applied once and recorded in the
+  manifest; step 1 offers it and `scripts/verify_download.py` has a case for it (gross limit 22.0). The product has no depth coordinate:
+  how the toolbox answers the depth request is the first thing to look at in the verification on the real service.
 - **The dissolved oxygen, third monthly variable** (milestone M1.8, ADR-0021). `o2_monthly` is what `scripts/fetch_copernicus.py` downloads for
   Livorno, with the biogeochemical product's box like the pH; step 1 offers it and `scripts/verify_download.py` has a case for it
   (gross limit 4.0, below the median month-to-month change of the file).
