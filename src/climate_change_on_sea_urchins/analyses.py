@@ -31,7 +31,7 @@ LABELS = {"temperature": "temperature", "salinity": "salinity", "o2": "dissolved
 # the catalogue ids that provide each variable (several would be alternatives)
 VARIABLE_SOURCES = {"temperature": ("sst_daily",), "salinity": ("salinity_monthly",), "o2": ("o2_monthly",),
                     "ph": ("ph_monthly",), "co2": ("co2_monthly",)}
-PLANNED_CATALOG_IDS = frozenset({"salinity_monthly", "o2_monthly", "ph_monthly", "co2_monthly"})     # M1.8 adds them one at a time (ph_monthly is in)
+PLANNED_CATALOG_IDS = frozenset({"salinity_monthly", "o2_monthly", "ph_monthly", "co2_monthly"})     # M1.8 adds them one at a time (ph_monthly and salinity_monthly are in)
 PENDING_REASON = "this version of the tool does not run it yet"
 SST_REASON_DAILY = "it needs the daily sea-surface temperature (sst_daily), and the study does not list it"
 SST_REASON_HEAT = ("it needs the heatwave catalogue, which is built from the daily sea-surface temperature (sst_daily), "

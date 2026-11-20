@@ -113,20 +113,31 @@ def test_a_study_without_ph_has_the_speciation_and_the_forecast_off_with_the_rea
     assert {s["id"] for s in states if s["status"] == "not_applicable"} >= {"cu_speciation", "forecast", "timeseries", "period_split", "correlations", "regime_shift"}
 
 
+def _not_yet_in_the_catalogue():
+    """The variables (analysis names) whose planned catalogue id is not in the catalogue yet: M1.8 adds them one at a time."""
+    return [v for v, ids in analyses.VARIABLE_SOURCES.items() if not any(i in catalog.CATALOG for i in ids)]
+
+
 def test_the_reason_says_when_the_variable_is_not_in_the_catalogue_yet_and_says_so_no_more_when_it_is(monkeypatch):
     def reason(word):
         reasons = _state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"]
         return next(r for r in reasons if word in r)
-    assert "ph_monthly" in catalog.CATALOG                                           # M1.8 added it: the pH is in the catalogue
-    ph = reason("pH")
-    assert "does not list" in ph and "not in the variable catalogue yet" not in ph
-    salinity = reason("salinity")                                                    # not yet: a later PR of M1.8
-    assert "does not list" in salinity and "not in the variable catalogue yet" in salinity
+    for in_catalogue, word in (("ph_monthly", "pH"), ("salinity_monthly", "salinity")):
+        assert in_catalogue in catalog.CATALOG                                       # M1.8 added them: no "not in the catalogue" clause
+        why = reason(word)
+        assert "does not list" in why and "not in the variable catalogue yet" not in why
     only_sst = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "cu_speciation")["reasons"])
     assert "salinity" in only_sst and "pH" in only_sst and "temperature" not in only_sst      # the SST provides the temperature and nothing else
-    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", catalog.CATALOG["sst_daily"])    # as if the salinity had been added
-    salinity = reason("salinity")
-    assert "does not list" in salinity and "not in the variable catalogue yet" not in salinity
+    # a variable that is not in the catalogue yet says so, and stops saying it when it is (the oxygen and the CO2 are still planned)
+    model = catalog.CATALOG["ph_monthly"]
+    for variable in _not_yet_in_the_catalogue():
+        planned_id = analyses.VARIABLE_SOURCES[variable][0]
+        why = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "regime_shift")["reasons"])
+        label = analyses.LABELS[variable]
+        assert f"it needs {label}, and the study does not list it (it is not in the variable catalogue yet)" in why
+        monkeypatch.setitem(catalog.CATALOG, planned_id, model)                  # as if it had been added
+        why = " ".join(_state(evaluate(**{**EVERYTHING, "listed": {"sst_daily"}}), "regime_shift")["reasons"])
+        assert f"it needs {label}, and the study does not list it" in why and f"it needs {label}, and the study does not list it (it is not" not in why
 
 
 def test_each_requirement_turns_its_analyses_off_with_its_own_reason():

@@ -41,27 +41,34 @@ def _script():
     return consts, {d["name"]: d for d in datasets}
 
 
-def test_the_ph_entry_is_what_the_livorno_script_downloads():
+# catalogue id -> (the script's name for it, its variable, the column, the unit)
+ENTRIES = {"ph_monthly": ("carbonate", "ph", "pH", "1"), "salinity_monthly": ("salinity", "so", "Salinity", "0.001")}
+
+
+@pytest.mark.parametrize("catalog_id", list(ENTRIES))
+def test_the_entry_is_what_the_livorno_script_downloads(catalog_id):
+    name, variable, column, unit = ENTRIES[catalog_id]
     consts, datasets = _script()
-    carbonate, ph = datasets["carbonate"], catalog.get("ph_monthly")
-    assert ph.dataset_multiyear == carbonate["dataset_id"] and ph.dataset_analysis_forecast == carbonate["fallback_id"]
-    assert [ph.variable] == carbonate["variables"] == ["ph"]
-    assert (ph.depth_min_m, ph.depth_max_m) == (consts["DEPTH_MIN"], consts["DEPTH_MAX"]) == (0.0, 10.0)
-    assert ph.cadence == "P1M" and ph.provider == "copernicus_marine" and ph.conversion is None
-    assert ph.column == "pH" and ph.unit_native == ph.unit_analysis == "1"
+    d, entry = datasets[name], catalog.get(catalog_id)
+    assert entry.dataset_multiyear == d["dataset_id"] and entry.dataset_analysis_forecast == d["fallback_id"]
+    assert [entry.variable] == d["variables"] == [variable]
+    assert (entry.depth_min_m, entry.depth_max_m) == (consts["DEPTH_MIN"], consts["DEPTH_MAX"]) == (0.0, 10.0)
+    assert entry.cadence == "P1M" and entry.provider == "copernicus_marine" and entry.conversion is None
+    assert entry.column == column and entry.unit_native == entry.unit_analysis == unit
 
 
 def test_the_domain_of_the_biogeochemical_product_is_its_own_not_the_physics_one():
-    ph, sst = catalog.get("ph_monthly"), catalog.get("sst_daily")
+    ph, sal, sst = catalog.get("ph_monthly"), catalog.get("salinity_monthly"), catalog.get("sst_daily")
     assert (ph.domain.lat_min, ph.domain.lat_max) == (30.1875, 45.97916793823242)
     assert (ph.domain.lon_min, ph.domain.lon_max) == (-5.541666507720947, 36.29166793823242)      # read from the Copernicus catalogue, 2026-11-20
-    assert catalog.covers(ph, 43.4278, 10.3956) and catalog.covers(sst, 43.0, -5.8) and not catalog.covers(ph, 43.0, -5.8)
+    assert sal.domain == sst.domain                                                                 # the physics products share their box (2026-11-20)
+    assert catalog.covers(ph, 43.4278, 10.3956) and catalog.covers(sst, 43.0, -5.8) and catalog.covers(sal, 43.0, -5.8) and not catalog.covers(ph, 43.0, -5.8)
 
 
 def test_every_entry_names_its_column_and_the_columns_do_not_collide():
     columns = [v.column for v in catalog.CATALOG.values()]
     assert catalog.get("sst_daily").column == "Temperature" and len(columns) == len(set(columns))
-    assert catalog.monthly_ids() == ["ph_monthly"]
+    assert catalog.monthly_ids() == ["ph_monthly", "salinity_monthly"]
 
 
 # --- the coverage of a monthly product -------------------------------------------------------------------------

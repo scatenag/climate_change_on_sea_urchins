@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **The salinity, second monthly variable** (milestone M1.8, ADR-0021). `salinity_monthly` is what `scripts/fetch_copernicus.py` downloads for
+  Livorno (the physics product's box, so a site west of -5.54 has it and not the pH); step 1 offers it next to the pH and the analyses
+  that needed it no longer say it is missing; `scripts/verify_download.py` compares each monthly variable of Livorno with
+  `data/env_copernicus.csv` with a limit below the median month-to-month change.
 - **Monthly variables of the catalogue, the pH first** (milestone M1.8, ADR-0021). `ph_monthly` is what `scripts/fetch_copernicus.py` downloads
   for Livorno (checked against its source), with the biogeochemical product's own domain; the download of a monthly variable
   (`download.fetch_monthly`, `ccsu-download-sst --variable`) gives one value per month, a missing month stays missing, and the
