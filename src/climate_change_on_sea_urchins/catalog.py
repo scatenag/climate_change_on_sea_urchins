@@ -140,6 +140,26 @@ CATALOG: dict[str, CatalogVariable] = {
             domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
                           lon_min=-5.541666507720947, lon_max=36.29166793823242),
         ),
+        CatalogVariable(
+            id="co2_monthly",
+            label="Surface CO2 partial pressure, monthly",
+            column="CO2",
+            provider="copernicus_marine",
+            variable="spco2",
+            cadence="P1M",
+            # The product delivers the partial pressure in pascal (the CF standard name it carries is the one the CF conventions
+            # associate with pascal); the analyses use microatmospheres. config.CO2_PA_TO_UATM is the same constant (a test keeps them equal).
+            unit_native="Pa",
+            unit_analysis="µatm",
+            conversion=Conversion(name="spco2 from pascal (Pa) to µatm (1 atm = 101325 Pa)", factor=1e6 / 101325),
+            # A surface variable: the product has no depth coordinate, and scripts/fetch_copernicus.py asks for depth 0-10 m all the same.
+            depth_min_m=0.0,
+            depth_max_m=10.0,
+            dataset_multiyear="cmems_mod_med_bgc-co2_my_4.2km_P1M-m",
+            dataset_analysis_forecast="cmems_mod_med_bgc-co2_anfc_4.2km_P1M-m",
+            domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
+                          lon_min=-5.541666507720947, lon_max=36.29166793823242),
+        ),
     ]
 }
 

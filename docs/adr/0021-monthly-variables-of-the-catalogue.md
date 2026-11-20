@@ -70,9 +70,22 @@ colonna `O2`, unità `mmol m-3` (che è µmol/L, come dice lo script di Livorno)
 vuole uguale). Caso di verifica con limite grossolano 4.0, sotto la mediana della variazione mese-mese (5.79) di `data/env_copernicus.csv`.
 Resta la CO₂.
 
+## La CO₂ (20/11)
+
+`co2_monthly`: prodotto `cmems_mod_med_bgc-co2_my_4.2km_P1M-m` (e `…_anfc_…`), variabile `spco2`, colonna `CO2`, dominio biogeochimico.
+**La conversione è nel catalogo, con nome**: il prodotto dà la pressione parziale in pascal (`unit_native: Pa`), le analisi usano i µatm
+(`unit_analysis: µatm`), fattore `1e6 / 101325` (1 atm = 101325 Pa), applicato una volta sola da `fetch_monthly` e scritto nel manifest;
+un test vuole il fattore uguale a `config.CO2_PA_TO_UATM`, la costante che gli script di Livorno applicano. È la correzione dell'errore
+del 10/9 (il valore letto come µatm), che qui non si ripete perché l'unità è dichiarata in un punto solo. Il prodotto è di superficie e
+non ha una coordinata di profondità: la voce dichiara comunque 0–10 m, perché è ciò che lo script di Livorno chiede al toolbox (e uguale a
+ciò che lo script scarica è il criterio); **come il toolbox tratti la richiesta di profondità su un prodotto senza profondità non è
+provato fuori dallo script di Livorno**: è il primo punto da guardare nella prova sul servizio vero. Limite grossolano di verifica 22.0,
+sotto la mediana della variazione mese-mese (32.4) di `data/env_copernicus.csv` (che è già in µatm). Con la CO₂ tutte le variabili mensili
+di Livorno sono nel catalogo.
+
 ## Cosa non è in questa PR
 
-La CO₂ (una PR a sé, M1.8; porta la conversione Pa → µatm nominata, `config.CO2_PA_TO_UATM`; la CO₂ può non avere profondità e va provata sul servizio); la temperatura 0–10 m come voce a sé (oggi la fornisce la SST: la
+La temperatura 0–10 m come voce a sé (oggi la fornisce la SST: la
 scelta di quale temperatura entra nelle analisi è del proprietario, e `analyses.VARIABLE_SOURCES` si aggiorna se cambia).
 
 ## Alternative
