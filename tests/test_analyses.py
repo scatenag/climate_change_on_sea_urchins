@@ -7,14 +7,17 @@ from __future__ import annotations
 
 import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-from climate_change_on_sea_urchins import analyses, catalog, pipeline
-from climate_change_on_sea_urchins.analyses import ANALYSES, Needs, evaluate
-
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))      # config.py lives at the repo root, not in the installed package (pipeline imports it)
+
+from climate_change_on_sea_urchins import analyses, catalog, pipeline  # noqa: E402
+from climate_change_on_sea_urchins.analyses import ANALYSES, Needs, evaluate  # noqa: E402
+
 PKG = ROOT / "src" / "climate_change_on_sea_urchins"
 REFERENCE = ROOT / "tests" / "fixtures" / "results_v1_5_0"
 BY_ID = {a.id: a for a in ANALYSES}
