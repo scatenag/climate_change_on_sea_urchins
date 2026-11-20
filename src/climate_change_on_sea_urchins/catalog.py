@@ -119,7 +119,7 @@ CATALOG: dict[str, CatalogVariable] = {
             depth_max_m=10.0,
             dataset_multiyear="cmems_mod_med_phy-sal_my_4.2km_P1M-m",
             dataset_analysis_forecast="cmems_mod_med_phy-sal_anfc_4.2km_P1M-m",
-            # The physics product's box, the same as the temperature's (read from the Copernicus catalogue on 2026-11-21).
+            # The physics product's box, the same as the temperature's (read from the Copernicus catalogue on 2026-11-20).
             domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
                           lon_min=-6.0, lon_max=36.29166793823242),
         ),

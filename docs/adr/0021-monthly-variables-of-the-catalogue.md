@@ -52,7 +52,7 @@ parte comune e la prima variabile, il pH, perché è quella che fa sparire un mo
   che lo segue; qui, come per la SST, si scarica solo il prodotto reprocessato e la serie finisce dove finisce il prodotto (la voce
   del catalogo registra l'id del seguente). Aggiungere la coda è una scelta che cambia la fine della serie.
 
-## La salinità (21/11)
+## La salinità (20/11)
 
 `salinity_monthly` segue lo stesso schema, senza codice nuovo oltre alla voce e alla verifica: prodotto
 `cmems_mod_med_phy-sal_my_4.2km_P1M-m` (e `…_anfc_…`), variabile `so`, profondità 0–10 m, colonna `Salinity`, unità `0.001` (come la dà
@@ -60,12 +60,12 @@ il catalogo Copernicus), **dominio fisico, uguale a quello della temperatura** (
 salinità e non il pH). Uguale a ciò che scarica `scripts/fetch_copernicus.py` (un test, per ogni voce, vuole l'uguaglianza). Lo script
 di verifica ha un caso per ogni variabile mensile (`MONTHLY_CASES`), con il proprio limite grossolano, scelto **sotto la mediana
 della variazione da un mese al successivo** in `data/env_copernicus.csv` (pH 0.0276 → 0.02; salinità 0.0549 → 0.04; misura del
-21/11), così che anche uno sfasamento di un mese sia visto: PROVVISORIO come il resto della verifica, non eseguita sul servizio vero.
+20/11), così che anche uno sfasamento di un mese sia visto: PROVVISORIO come il resto della verifica, non eseguita sul servizio vero.
 Restano O₂ e CO₂ (la CO₂ con la conversione Pa → µatm).
 
 ## Cosa non è in questa PR
 
-Salinità, ossigeno e CO₂ (una PR ciascuna, M1.8; la CO₂ porta la conversione Pa → µatm nominata, `config.CO2_PA_TO_UATM`; l'ossigeno e
+Ossigeno e CO₂ (una PR ciascuna, M1.8; la CO₂ porta la conversione Pa → µatm nominata, `config.CO2_PA_TO_UATM`; l'ossigeno e
 la CO₂ possono non avere profondità e vanno provati sul servizio); la temperatura 0–10 m come voce a sé (oggi la fornisce la SST: la
 scelta di quale temperatura entra nelle analisi è del proprietario, e `analyses.VARIABLE_SOURCES` si aggiorna se cambia).
 

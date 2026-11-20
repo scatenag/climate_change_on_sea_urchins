@@ -92,7 +92,7 @@ def test_the_cases_are_the_catalogue_variables_at_livorno_from_the_start_of_the_
 
 
 def test_the_gross_limits_are_below_the_median_change_from_one_month_to_the_next_so_a_month_of_shift_is_seen():
-    # measured on data/env_copernicus.csv, 2026-11-21: the median |month-to-month change| is 0.0276 for the pH and 0.0549 for the salinity
+    # measured on data/env_copernicus.csv, 2026-11-20: the median |month-to-month change| is 0.0276 for the pH and 0.0549 for the salinity
     assert CASES["ph"]["max_diff"] == 0.02 and CASES["salinity"]["max_diff"] == 0.04 and vd.MIN_COMMON_MONTHS == 12
 
 
@@ -117,7 +117,7 @@ def _fake_run_case(values):
         for c in CASES.values():
             if case["name"] == c["name"]:
                 _monthly(folder / f"{c['variable']}.csv", pd.date_range("2003-01-01", periods=24, freq="MS"), values[c["column"]], column=c["column"])
-                return ok
+                return {**ok, "seconds": {"pH": 2.0, "Salinity": 3.0}[c["column"]]}
         return {"returncode": 1, "stderr": PISA if case["name"] == "pisa" else SEA, "stdout": "", "seconds": 1.0}
     return run_case
 
@@ -136,6 +136,8 @@ def test_main_downloads_every_monthly_variable_when_given_the_reference_and_a_gr
     import json
     code, out = _main(tmp_path / "a", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24})
     assert code == 0 and "Monthly pH of Livorno" in (out / "summary.md").read_text() and "Monthly Salinity of Livorno" in (out / "summary.md").read_text()
+    text = (out / "summary.md").read_text()
+    assert "(gross limit 0.02)" in text and "(gross limit 0.04)" in text and "- download time: **1.0 s**" in text and "- download time: **2.0 s**" in text and "- download time: **3.0 s**" in text
     summary = json.loads((out / "summary.json").read_text())
     assert summary["monthly"]["ph"]["common_days"] == 24 and summary["monthly"]["salinity"]["common_days"] == 24
     code, out2 = _main(tmp_path / "b", monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.5] * 24})       # only the salinity is off
@@ -146,3 +148,16 @@ def test_main_downloads_every_monthly_variable_when_given_the_reference_and_a_gr
 def test_without_the_third_argument_no_monthly_variable_is_downloaded_and_the_old_check_is_unchanged(tmp_path, monkeypatch):
     code, out = _main(tmp_path, monkeypatch, {"pH": [8.10] * 24, "Salinity": [38.0] * 24}, third=False)
     assert code == 0 and not (out / "ph_livorno").exists() and not (out / "salinity_livorno").exists() and "Monthly" not in (out / "summary.md").read_text()
+
+
+def test_a_monthly_download_that_failed_is_said_in_the_summary_and_fails_the_check(tmp_path, monkeypatch):
+    import json
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    _write(tmp_path / "sst.csv", ["2024-01-01"], [10.0])
+    pd.DataFrame({"Datetime": pd.date_range("2003-01-01", periods=24, freq="MS"), "pH": 8.1, "Salinity": 38.0}).to_csv(tmp_path / "env.csv", index=False)
+    good = _fake_run_case({"pH": [8.10] * 24, "Salinity": [38.0] * 24})
+    monkeypatch.setattr(vd, "run_case", lambda case, out: {"returncode": 1, "stderr": "boom", "stdout": "", "seconds": 2.0} if case["name"] == "salinity_livorno" else good(case, out))
+    code = vd.main([str(tmp_path / "out"), str(tmp_path / "sst.csv"), str(tmp_path / "env.csv")])
+    text = (tmp_path / "out" / "summary.md").read_text()
+    assert code == 1 and "Monthly Salinity of Livorno (M1.8)" in text and "no comparison (download failed)" in text
+    assert any("Salinity: download failed" in f for f in json.loads((tmp_path / "out" / "summary.json").read_text())["failures"])

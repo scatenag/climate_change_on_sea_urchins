@@ -36,7 +36,7 @@ jobs:
         # Only the extra, as a user would install it.
         run: pip install -e ".[acquisition]"
 
-      - name: Download three points and compare
+      - name: Download the cases and compare
         env:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}

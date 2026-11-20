@@ -36,7 +36,7 @@ MAX_DIFF = 1e-4
 MIN_COMMON_MONTHS = 12
 PISA_KM = (5, 25)
 # The gross limits are below the median |month-to-month change| of data/env_copernicus.csv (pH 0.0276, salinity 0.0549, measured
-# 2026-11-21), so a shift of one month is seen; they are PROVISIONAL (ADR-0021) until the first measurement on the real service.
+# 2026-11-20), so a shift of one month is seen; they are PROVISIONAL (ADR-0021) until the first measurement on the real service.
 MONTHLY_CASES = {
     "ph": dict(name="ph_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="ph_monthly", column="pH", max_diff=0.02),
     "salinity": dict(name="salinity_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="salinity_monthly",

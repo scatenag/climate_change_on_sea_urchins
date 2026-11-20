@@ -567,9 +567,7 @@ def test_a_variable_that_ends_before_the_period_is_refused_before_the_temperatur
     assert "ends" in _errors(at) and not two_kinds.credentials_seen and not (_ctx(at).workdir / "inputs").exists()
 
 
-def test_the_variables_are_kept_in_the_catalogues_order_whatever_the_order_of_the_choice(monkeypatch):
-    other = catalog.CATALOG["ph_monthly"].model_copy(update={"id": "salinity_monthly", "column": "Salinity", "label": "Salinity, monthly"})
-    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", other)
+def test_the_variables_are_kept_in_the_catalogues_order_whatever_the_order_of_the_choice():
     assert step_site.chosen_variables(["Salinity, monthly", PH_LABEL]) == ("ph_monthly", "salinity_monthly")
     assert step_site.chosen_variables([PH_LABEL, "Salinity, monthly"]) == ("ph_monthly", "salinity_monthly")
 
@@ -596,3 +594,19 @@ def test_a_site_west_of_the_biogeochemical_domain_keeps_the_salinity_and_refuses
     assert not at.exception and _ctx(at).data["step1"]["variables"]["salinity_monthly"]["n_months"] > 0
     at = _submit(_choose_variables(_fill(at, lon="-5.8"), SAL_LABEL, PH_LABEL))
     assert "ph_monthly" in _errors(at) and "salinity_monthly" not in _errors(at)
+
+
+def test_a_site_outside_the_domain_of_the_salinity_is_refused_before_any_download_call_and_the_error_names_it(two_kinds, monkeypatch):
+    # the physics products share one box today, so the check is shown with a narrower box for the salinity alone
+    narrow = catalog.CATALOG["salinity_monthly"].model_copy(update={"domain": catalog.Domain(lat_min=30.0, lat_max=46.0, lon_min=11.0, lon_max=36.0)})
+    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", narrow)
+    at = _submit(_choose_variables(_fill(_open()), SAL_LABEL))                           # the site is at 10.40 east: inside the temperature's box
+    assert "salinity_monthly" in _errors(at) and "ph_monthly" not in _errors(at) and "outside" in _errors(at) and not two_kinds.credentials_seen
+    assert not (_ctx(at).workdir / "inputs").exists()
+
+
+def test_every_chosen_variable_is_checked_not_only_the_first(two_kinds, monkeypatch):
+    narrow = catalog.CATALOG["salinity_monthly"].model_copy(update={"domain": catalog.Domain(lat_min=30.0, lat_max=46.0, lon_min=11.0, lon_max=36.0)})
+    monkeypatch.setitem(catalog.CATALOG, "salinity_monthly", narrow)
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL, SAL_LABEL))                 # the pH is fine at this site, the salinity is not
+    assert "salinity_monthly" in _errors(at) and "ph_monthly" not in _errors(at) and not two_kinds.credentials_seen
