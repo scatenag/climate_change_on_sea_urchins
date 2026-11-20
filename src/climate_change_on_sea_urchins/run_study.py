@@ -17,6 +17,10 @@ temperature the seasonal cycle alone makes several lags significant (ADR-0012). 
 the non-seasonal association only: a dependence that goes through the seasonal part of the temperature alone
 is not seen by it. The heatwave metrics join later (M1.9).
 
+`analyses.json` says, for every analysis of the pipeline, whether this study allows it (`pending`: the command does not run it
+yet), or why not (`not_applicable`), and which one the command ran (`runs`): analyses.py, ADR-0020. Nothing is written for an
+analysis that is off.
+
 Limit accepted for milestone M1 (docs/adr/0000, item 19): `common` loads the Livorno study when it is
 imported, so this command runs in a process where that state exists. Nothing on the path of this command may
 read it -- the data and results folders, the split date, a module-level heatwave baseline, `config` --
@@ -31,6 +35,7 @@ import hashlib
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from importlib import metadata
@@ -41,7 +46,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.stats.multitest import multipletests
 
-from . import dataset_builder, mhw_analysis, response_csv
+from . import analyses, dataset_builder, mhw_analysis, response_csv
 from .study_spec import load_study
 
 STEPS = ["load_study", "read_response", "read_sst", "build_dataset", "correlate", "write_results"]
@@ -62,6 +67,10 @@ def consecutive_real_difference(monthly: pd.DataFrame, value_col: str, imputed_c
     both = real & np.r_[False, real[:-1]]
     diff = np.r_[np.nan, np.diff(monthly[value_col].to_numpy(float))]
     return np.where(both, diff, np.nan)
+
+
+def _r_available() -> bool:
+    return shutil.which("Rscript") is not None
 
 
 def _sha256(path: Path) -> str:
@@ -115,7 +124,7 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
     now = now or (lambda: dt.datetime.now(dt.timezone.utc))
     study_path, inputs, out = Path(study_path), Path(inputs_dir), Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    for stale in ("ccf.csv", "run.json"):
+    for stale in ("ccf.csv", "run.json", "analyses.json"):
         (out / stale).unlink(missing_ok=True)
     started = now().isoformat()
     progress = {"status": "running", "step": None, "steps": [{"name": s, "status": "pending", "at": None} for s in STEPS],
@@ -187,6 +196,8 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
 
         begin("write_results")
         ccf.to_csv(out / "ccf.csv", index=False)
+        # which analyses this study allows and why the others are off (M1.7): names and rules only, never a word the study wrote
+        _write_json_atomic(out / "analyses.json", analyses.document(analyses.evaluate_study(spec, r_available=_r_available())))
         dataset_builder.write_dataset(ds, out / "dataset", now=now)
         manifest_path = inputs / SST_MANIFEST
         # a declaration next to the response file (the known-truth generator writes one), copied as it is

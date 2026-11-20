@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **What each analysis needs and which ones a study allows** (milestone M1.7, new `analyses.py`, ADR-0020). A declarative registry of the
+  fifteen analyses of the pipeline, the generic correlation and the R model: variables, daily SST, heatwave catalogue, individual
+  determinations, negative controls, split date, contaminant, R, the files each writes and a note where the code fixes a choice a study
+  should declare. `ccsu-run-study` writes `analyses.json` (each analysis `runs`, `pending` — the study has what it needs but the command
+  does not run it yet — or `not_applicable` with the reasons) and the result page shows the table: an analysis that is off wrote no file.
+  Checked against the sources and against the 65 files of the frozen results.
 - **Manual workflow `download_sst_product.yml`** that downloads the case study's daily SST from the first day of the Copernicus product (read from the catalogue at every run) to the last, with the repository's Copernicus secrets given to one step only, and publishes the series and its manifest as an artifact: it commits and pushes nothing, so the series does not enter the repository. Guarded by `tests/test_workflow_download_sst_product.py`.
 - **Hobday climatology and events in the generic engine** (ADR-0019, new `mhw_hobday.py`). The dataset builder, and so the app and
   `ccsu-run-study`, now take the 90th-percentile threshold and the seasonal climatology over the values within 5 days of each day

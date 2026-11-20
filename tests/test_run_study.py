@@ -99,7 +99,7 @@ def _run(study, **kw):
 def test_runs_from_the_study_and_the_inputs_to_results_and_provenance(study):
     code, out = _run(study)
     assert code == 0
-    assert sorted(p.name for p in out.iterdir()) == ["ccf.csv", "dataset", "progress.json", "run.json"]
+    assert sorted(p.name for p in out.iterdir()) == ["analyses.json", "ccf.csv", "dataset", "progress.json", "run.json"]
     ccf = pd.read_csv(out / "ccf.csv")
     assert list(ccf.columns) == ["driver", "response", "lag", "n", "spearman_r", "p_value", "p_bh", "r_toward_adverse"]
     assert ccf["lag"].tolist() == list(range(13))
@@ -432,3 +432,64 @@ def test_the_same_results_whichever_study_the_process_has_loaded(tmp_path):
     for r in (a, b):
         r.pop("code", None)
     assert a == b
+
+
+# --- which analyses the study allows (M1.7) ------------------------------------------------------------------------
+
+def _analyses(out):
+    return {a["id"]: a for a in json.loads((out / "analyses.json").read_text())["analyses"]}
+
+
+def test_a_run_writes_the_state_of_every_analysis_for_the_study(tmp_path, monkeypatch):
+    monkeypatch.setattr(run_study, "_r_available", lambda: False)
+    spec = _write_study(tmp_path / "study")
+    _write_inputs(tmp_path / "inputs")
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 0
+    states = _analyses(tmp_path / "out")
+    from climate_change_on_sea_urchins import analyses
+    assert list(states) == [a.id for a in analyses.ANALYSES]
+    assert states["ccf_sst_anomaly"]["status"] == "runs" and states["ccf_sst_anomaly"]["reasons"] == []
+    # this study lists only the daily SST, has individual determinations, no controls, no split date, no contaminant
+    for off in ("cu_speciation", "forecast", "timeseries", "negative_control", "period_split", "dlnm"):
+        assert states[off]["status"] == "not_applicable" and states[off]["reasons"], off
+    assert any("pH" in r for r in states["cu_speciation"]["reasons"]) and any("copper" in r for r in states["cu_speciation"]["reasons"])
+    assert any("Rscript" in r for r in states["dlnm"]["reasons"])
+    assert states["thermal_legacy"]["status"] == "pending" and states["mhw_lag_annual"]["status"] == "pending"
+    assert states["changepoint"]["status"] == "pending"            # individual determinations are there
+
+
+def test_no_file_of_an_analysis_that_is_not_run_is_written(tmp_path):
+    spec = _write_study(tmp_path / "study")
+    _write_inputs(tmp_path / "inputs")
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 0
+    out = tmp_path / "out"
+    written = {p.name for p in out.rglob("*") if p.is_file()}
+    states = _analyses(out)
+    claimed = {f for s in states.values() if s["status"] != "runs" for f in s["outputs"]}
+    assert not written & claimed, sorted(written & claimed)
+    assert "ccf.csv" in written and "analyses.json" in written
+
+
+def test_the_reasons_do_not_depend_on_what_the_user_typed(tmp_path):
+    spec = _write_study(tmp_path / "study", study_id="a-name-with-<b>markup</b>")
+    _write_inputs(tmp_path / "inputs")
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 0
+    text = (tmp_path / "out" / "analyses.json").read_text()
+    assert "markup" not in text and "Site 0" not in text and "Fertility" not in text
+
+
+def test_a_failed_run_drops_the_analyses_of_the_previous_one(tmp_path):
+    spec = _write_study(tmp_path / "study")
+    _write_inputs(tmp_path / "inputs")
+    out = tmp_path / "out"
+    assert run_study.run_study(spec, tmp_path / "inputs", out, now=CLOCK) == 0 and (out / "analyses.json").is_file()
+    (tmp_path / "inputs" / "response.csv").unlink()
+    assert run_study.run_study(spec, tmp_path / "inputs", out, now=CLOCK) == 1
+    assert not (out / "analyses.json").exists()
+
+
+def test_r_is_available_when_rscript_is_found_and_not_otherwise(monkeypatch):
+    monkeypatch.setattr(run_study.shutil, "which", lambda name: None)
+    assert run_study._r_available() is False
+    monkeypatch.setattr(run_study.shutil, "which", lambda name: "/usr/bin/Rscript" if name == "Rscript" else None)
+    assert run_study._r_available() is True
