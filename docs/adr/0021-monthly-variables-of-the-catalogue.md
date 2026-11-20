@@ -63,10 +63,16 @@ della variazione da un mese al successivo** in `data/env_copernicus.csv` (pH 0.0
 20/11), così che anche uno sfasamento di un mese sia visto: PROVVISORIO come il resto della verifica, non eseguita sul servizio vero.
 Restano O₂ e CO₂ (la CO₂ con la conversione Pa → µatm).
 
+## L'ossigeno (20/11)
+
+`o2_monthly`, ancora la stessa forma: prodotto `cmems_mod_med_bgc-bio_my_4.2km_P1M-m` (e `…_anfc_…`), variabile `o2`, profondità 0–10 m,
+colonna `O2`, unità `mmol m-3` (che è µmol/L, come dice lo script di Livorno), **dominio biogeochimico** (lo stesso del pH: un test lo
+vuole uguale). Caso di verifica con limite grossolano 4.0, sotto la mediana della variazione mese-mese (5.79) di `data/env_copernicus.csv`.
+Resta la CO₂.
+
 ## Cosa non è in questa PR
 
-Ossigeno e CO₂ (una PR ciascuna, M1.8; la CO₂ porta la conversione Pa → µatm nominata, `config.CO2_PA_TO_UATM`; l'ossigeno e
-la CO₂ possono non avere profondità e vanno provati sul servizio); la temperatura 0–10 m come voce a sé (oggi la fornisce la SST: la
+La CO₂ (una PR a sé, M1.8; porta la conversione Pa → µatm nominata, `config.CO2_PA_TO_UATM`; la CO₂ può non avere profondità e va provata sul servizio); la temperatura 0–10 m come voce a sé (oggi la fornisce la SST: la
 scelta di quale temperatura entra nelle analisi è del proprietario, e `analyses.VARIABLE_SOURCES` si aggiorna se cambia).
 
 ## Alternative
