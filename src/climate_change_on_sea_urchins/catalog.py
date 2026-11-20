@@ -47,6 +47,7 @@ class Domain(_Strict):
 class CatalogVariable(_Strict):
     id: str
     label: str
+    column: str = Field(..., description="The name of the value's column in the series file, and of the variable in the dataset.")
     provider: Literal["copernicus_marine"]
     variable: str = Field(..., description="Variable name inside the dataset (e.g. thetao).")
     cadence: Literal["P1D", "P1M"]
@@ -67,6 +68,7 @@ CATALOG: dict[str, CatalogVariable] = {
         CatalogVariable(
             id="sst_daily",
             label="Sea surface temperature, daily",
+            column="Temperature",
             provider="copernicus_marine",
             variable="thetao",
             cadence="P1D",
@@ -84,12 +86,37 @@ CATALOG: dict[str, CatalogVariable] = {
             domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
                           lon_min=-6.0, lon_max=36.29166793823242),
         ),
+        # The monthly variables are the ones scripts/fetch_copernicus.py downloads for Livorno: the mean over the sea cells
+        # of the box and over depth 0-10 m of the multiyear product (tests/test_monthly_variable.py keeps them equal).
+        CatalogVariable(
+            id="ph_monthly",
+            label="pH (total scale), monthly",
+            column="pH",
+            provider="copernicus_marine",
+            variable="ph",
+            cadence="P1M",
+            unit_native="1",
+            unit_analysis="1",
+            depth_min_m=0.0,
+            depth_max_m=10.0,
+            dataset_multiyear="cmems_mod_med_bgc-car_my_4.2km_P1M-m",
+            dataset_analysis_forecast="cmems_mod_med_bgc-car_anfc_4.2km_P1M-m",
+            # The biogeochemical product's own box, read from the Copernicus catalogue on 2026-11-20: it starts east of the
+            # physics product's (lon -5.54 against -6.0).
+            domain=Domain(lat_min=30.1875, lat_max=45.97916793823242,
+                          lon_min=-5.541666507720947, lon_max=36.29166793823242),
+        ),
     ]
 }
 
 
 def known_ids() -> list[str]:
     return sorted(CATALOG)
+
+
+def monthly_ids() -> list[str]:
+    """The ids of the monthly variables, in the catalogue's order."""
+    return [i for i, v in CATALOG.items() if v.cadence == "P1M"]
 
 
 def get(catalog_id: str) -> CatalogVariable:

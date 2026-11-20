@@ -9,7 +9,11 @@ Three cases, with the outcomes the milestone expects:
   - Pisa, a land cell near the coast: refused as a land cell, the nearest sea cell about ten km away;
   - the Black Sea, inside the domain's bounding box: refused with the message that does not choose between
     an inland point and a sea the product does not cover; if it returns data, that is a failure to report.
-usage: verify_download.py <output dir> [path to data/sst_daily.csv]
+A fourth case when a third argument is given (milestone M1.8): the monthly pH of Livorno, downloaded with
+`--variable ph_monthly`, against the `pH` column of data/env_copernicus.csv on the months both have; a gross
+difference (>= 0.02) fails the check, the months that differ by more than 1e-4 are counted and reported (the product's
+reanalysis version can differ from the one the older months of the file came from).
+usage: verify_download.py <output dir> [path to data/sst_daily.csv [path to data/env_copernicus.csv]]
 """
 import json
 import os
@@ -28,15 +32,18 @@ CASES = [
     dict(name="mar_nero", label="Mar Nero", lat=43.0, lon=31.0, start="2020-01-01"),
 ]
 MAX_DIFF = 1e-4
+MAX_DIFF_PH = 0.02
 PISA_KM = (5, 25)
+MONTHLY_CASE = dict(name="ph_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="ph_monthly", column="pH")
 
 
-def compare_series(downloaded: Path, reference: Path) -> dict:
-    """Days with a value in both series, and the largest absolute difference on them."""
-    a = pd.read_csv(downloaded, parse_dates=["Datetime"]).set_index("Datetime")["Temperature"]
-    b = pd.read_csv(reference, parse_dates=["Datetime"]).set_index("Datetime")["Temperature"]
+def compare_series(downloaded: Path, reference: Path, column: str = "Temperature") -> dict:
+    """Days (or months) with a value in both series, and the largest absolute difference on them."""
+    a = pd.read_csv(downloaded, parse_dates=["Datetime"]).set_index("Datetime")[column]
+    b = pd.read_csv(reference, parse_dates=["Datetime"]).set_index("Datetime")[column]
     both = a.dropna().index.intersection(b.dropna().index)
     return {"common_days": int(len(both)), "max_abs_diff": float((a[both] - b[both]).abs().max()) if len(both) else None,
+            "over_1e-4": int(((a[both] - b[both]).abs() > 1e-4).sum()),
             "downloaded_days": int(a.notna().sum()), "reference_days": int(b.notna().sum()),
             "downloaded_end": a.dropna().index.max().date().isoformat()}
 
@@ -52,6 +59,8 @@ def run_case(case: dict, out: Path) -> dict:
     exe = shutil.which("ccsu-download-sst") or "ccsu-download-sst"
     cmd = [exe, "--lat", str(case["lat"]), "--lon", str(case["lon"]), "--name", case["label"],
            "--start", case["start"], "--out", str(folder)]
+    if case.get("variable"):
+        cmd += ["--variable", case["variable"]]
     t0 = time.perf_counter()
     r = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
     seconds = time.perf_counter() - t0
@@ -86,7 +95,19 @@ def check(results: dict, livorno_cmp: dict | None) -> list[str]:
     return failures
 
 
-def summary(results: dict, livorno_cmp, failures: list[str]) -> str:
+def check_monthly(result: dict, cmp: dict | None) -> list[str]:
+    """The monthly pH of Livorno against data/env_copernicus.csv: the failures (a download that failed, no common month, a gross
+    difference); the small differences are reported, not failed."""
+    if result["returncode"] != 0:
+        return [f"pH: download failed ({result['stderr'].strip()[:300]})"]
+    if not cmp or not cmp["common_days"]:
+        return ["pH: no common month with data/env_copernicus.csv"]
+    if cmp["max_abs_diff"] >= MAX_DIFF_PH:
+        return [f"pH: max |diff| {cmp['max_abs_diff']:.3g} is not below {MAX_DIFF_PH}"]
+    return []
+
+
+def summary(results: dict, livorno_cmp, failures: list[str], ph_cmp: dict | None = None) -> str:
     L, P, B = results["livorno"], results["pisa"], results["mar_nero"]
     lines = ["## Download check (M1.2)", "", "| Case | Exit | Seconds |", "|---|---|---|"]
     for k, label in (("livorno", "Livorno"), ("pisa", "Pisa"), ("mar_nero", "Mar Nero")):
@@ -100,6 +121,12 @@ def summary(results: dict, livorno_cmp, failures: list[str]) -> str:
                   f"- download time: **{L['seconds']} s**"]
     else:
         lines.append("- no comparison (download failed)")
+    if ph_cmp is not None:
+        lines += ["", "### Monthly pH of Livorno against `data/env_copernicus.csv` (M1.8)",
+                  f"- common months: **{ph_cmp['common_days']}**; max |diff|: **{ph_cmp['max_abs_diff']}** (gross limit {MAX_DIFF_PH})",
+                  f"- months that differ by more than 1e-4: **{ph_cmp['over_1e-4']}**; downloaded {ph_cmp['downloaded_days']} months, "
+                  f"reference {ph_cmp['reference_days']}; downloaded series ends {ph_cmp['downloaded_end']}",
+                  f"- download time: **{results['ph']['seconds']} s**"]
     lines += ["", "### Pisa (43.72, 10.45)", "```", (P["stderr"] or P["stdout"]).strip(), "```",
               "", "### Mar Nero (43.0, 31.0)", "```", (B["stderr"] or B["stdout"]).strip(), "```", "",
               "### Outcome", ""]
@@ -111,17 +138,26 @@ def main(argv=None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     out = Path(argv[0])
     reference = Path(argv[1]) if len(argv) > 1 else Path("data/sst_daily.csv")
+    monthly_reference = Path(argv[2]) if len(argv) > 2 else None
     out.mkdir(parents=True, exist_ok=True)
     results = {c["name"]: run_case(c, out) for c in CASES}
+    ph_cmp = None
+    if monthly_reference is not None:
+        results["ph"] = run_case(MONTHLY_CASE, out)
+        ph_csv = out / MONTHLY_CASE["name"] / "ph_monthly.csv"
+        if results["ph"]["returncode"] == 0 and ph_csv.exists():
+            ph_cmp = compare_series(ph_csv, monthly_reference, column="pH")
     livorno_cmp = None
     csv = out / "livorno" / "sst_daily.csv"
     if results["livorno"]["returncode"] == 0 and csv.exists():
         livorno_cmp = compare_series(csv, reference)
     failures = check(results, livorno_cmp)
-    text = summary(results, livorno_cmp, failures)
+    if monthly_reference is not None:
+        failures += check_monthly(results["ph"], ph_cmp)
+    text = summary(results, livorno_cmp, failures, ph_cmp)
     (out / "summary.md").write_text(text)
     (out / "summary.json").write_text(json.dumps(
-        {"livorno": livorno_cmp, "seconds": {k: v["seconds"] for k, v in results.items()},
+        {"livorno": livorno_cmp, "ph": ph_cmp, "seconds": {k: v["seconds"] for k, v in results.items()},
          "pisa_message": results["pisa"]["stderr"].strip(), "mar_nero_message": results["mar_nero"]["stderr"].strip(),
          "failures": failures}, indent=2))
     # The credentials must not be anywhere in the outputs.

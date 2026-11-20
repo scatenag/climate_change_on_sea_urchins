@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Monthly variables of the catalogue, the pH first** (milestone M1.8, ADR-0021). `ph_monthly` is what `scripts/fetch_copernicus.py` downloads
+  for Livorno (checked against its source), with the biogeochemical product's own domain; the download of a monthly variable
+  (`download.fetch_monthly`, `ccsu-download-sst --variable`) gives one value per month, a missing month stays missing, and the
+  coverage is read from the list of months the Copernicus catalogue gives. The dataset carries the variable next to the temperature,
+  `ccsu-run-study` reads the file of every variable a study lists, and step 1 of the app offers the variables to download with the
+  temperature in the same submit; the result says what is in the dataset and the analyses that needed the pH no longer say so.
+  `scripts/verify_download.py` compares the pH of Livorno with `data/env_copernicus.csv`.
 - **What each analysis needs and which ones a study allows** (milestone M1.7, new `analyses.py`, ADR-0020). A declarative registry of the
   fifteen analyses of the pipeline, the generic correlation and the R model: variables, daily SST, heatwave catalogue, individual
   determinations, negative controls, split date, contaminant, R, the files each writes and a note where the code fixes a choice a study

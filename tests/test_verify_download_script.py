@@ -65,3 +65,29 @@ def test_pisa_with_the_wrong_distance_or_the_wrong_kind_of_refusal_is_flagged():
 def test_the_black_sea_with_a_message_that_chooses_is_flagged():
     r = _ok_results(); r["mar_nero"]["stderr"] = "error: it is outside the area the product covers"
     assert any("another message" in f for f in vd.check(r, GOOD))
+
+
+# --- the monthly pH against data/env_copernicus.csv (M1.8) -------------------------------------------------------------
+
+def _monthly(path, months, values, column="pH"):
+    pd.DataFrame({"Datetime": pd.to_datetime(months), column: values}).to_csv(path, index=False)
+
+
+def test_the_comparison_can_name_the_column_and_counts_the_months_that_differ(tmp_path):
+    _monthly(tmp_path / "a.csv", ["2024-01-01", "2024-02-01", "2024-03-01"], [8.10, 8.11, None])
+    _monthly(tmp_path / "b.csv", ["2024-01-01", "2024-02-01", "2024-03-01"], [8.10, 8.1102, 8.2])
+    r = vd.compare_series(tmp_path / "a.csv", tmp_path / "b.csv", column="pH")
+    assert r["common_days"] == 2 and r["max_abs_diff"] == pytest.approx(2e-4) and r["over_1e-4"] == 1
+
+
+def test_a_gross_difference_in_the_ph_is_flagged_and_a_small_one_is_only_reported():
+    ok = {"common_days": 270, "max_abs_diff": 3e-3, "over_1e-4": 40}
+    assert vd.check_monthly({"returncode": 0, "stderr": ""}, ok) == []
+    assert any("pH" in f for f in vd.check_monthly({"returncode": 0, "stderr": ""}, {"common_days": 270, "max_abs_diff": 0.2, "over_1e-4": 270}))
+    assert any("pH" in f and "failed" in f for f in vd.check_monthly({"returncode": 1, "stderr": "boom"}, None))
+    assert any("no common" in f for f in vd.check_monthly({"returncode": 0, "stderr": ""}, {"common_days": 0, "max_abs_diff": None, "over_1e-4": 0}))
+
+
+def test_the_case_downloads_the_catalogue_variable_at_livorno_from_the_start_of_the_series():
+    case = vd.MONTHLY_CASE
+    assert case["variable"] == "ph_monthly" and (case["lat"], case["lon"]) == (43.4278, 10.3956) and case["start"] == "2003-01-01"

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -195,3 +196,40 @@ def test_the_command_line_makes_and_verifies(tmp_path, capsys):
     assert known_truth.main(["verify", str(out)]) == 0
     assert json.loads((out / "verification.json").read_text())["recovered"] is True
     assert "recovered" in capsys.readouterr().out
+
+
+# --- monthly variables in the generated study (M1.8) -----------------------------------------------------------------
+
+def _ph_files(folder):
+    import json as _json
+    idx = pd.date_range("2003-01-01", "2012-12-01", freq="MS")
+    pd.DataFrame({"Datetime": idx, "pH": 8.1}).to_csv(folder / "ph_monthly.csv", index=False)
+    (folder / "ph_monthly.manifest.json").write_text(_json.dumps({"catalog_id": "ph_monthly"}))
+
+
+def test_a_generated_study_lists_the_chosen_variables_and_carries_their_files(tmp_path):
+    from climate_change_on_sea_urchins.study_spec import load_study
+    inputs = tmp_path / "in"; inputs.mkdir()
+    shutil.copyfile(SST, inputs / "sst_daily.csv")
+    _ph_files(inputs)
+    truth = known_truth.make_study(inputs / "sst_daily.csv", tmp_path / "study", seed=1, lat=43.4, lon=10.4, baseline=(2003, 2012), variables=("ph_monthly",))
+    spec = load_study(tmp_path / "study" / "study.yaml")
+    assert [e.catalog_id for e in spec.environment] == ["sst_daily", "ph_monthly"]
+    assert (tmp_path / "study" / "ph_monthly.csv").read_bytes() == (inputs / "ph_monthly.csv").read_bytes()
+    assert (tmp_path / "study" / "ph_monthly.manifest.json").is_file() and truth["seed"] == 1
+
+
+def test_without_variables_the_generated_study_is_what_it_was(tmp_path):
+    from climate_change_on_sea_urchins.study_spec import load_study
+    inputs = tmp_path / "in"; inputs.mkdir()
+    shutil.copyfile(SST, inputs / "sst_daily.csv")
+    known_truth.make_study(inputs / "sst_daily.csv", tmp_path / "study", seed=1, lat=43.4, lon=10.4, baseline=(2003, 2012))
+    assert [e.catalog_id for e in load_study(tmp_path / "study" / "study.yaml").environment] == ["sst_daily"]
+    assert sorted(p.name for p in (tmp_path / "study").iterdir()) == ["response.csv", "response.manifest.json", "sst_daily.csv", "study.yaml"]
+
+
+def test_a_variable_that_is_not_there_is_refused_with_its_file_named(tmp_path):
+    inputs = tmp_path / "in"; inputs.mkdir()
+    shutil.copyfile(SST, inputs / "sst_daily.csv")
+    with pytest.raises(known_truth.KnownTruthError, match="ph_monthly.csv"):
+        known_truth.make_study(inputs / "sst_daily.csv", tmp_path / "study", seed=1, lat=43.4, lon=10.4, baseline=(2003, 2012), variables=("ph_monthly",))

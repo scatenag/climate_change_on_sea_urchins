@@ -504,3 +504,60 @@ def test_the_months_of_the_study_are_counted_for_the_analyses_that_need_a_minimu
     months = int(why.split("study has ")[1].split()[0])
     ds = pd.read_csv(tmp_path / "out" / "dataset" / "monthly.csv")
     assert months == int((ds["response"].notna() & ds["Temperature"].notna()).sum()) and 0 < months < 221
+
+
+# --- a monthly variable of the catalogue in the study (M1.8) -------------------------------------------------------------
+
+def _write_ph(folder, months=("2003-01-01", "2008-12-01"), manifest=True):
+    idx = pd.date_range(*months, freq="MS")
+    pd.DataFrame({"Datetime": idx, "pH": 8.1 - 0.001 * np.arange(len(idx))}).to_csv(folder / "ph_monthly.csv", index=False)
+    if manifest:
+        (folder / "ph_monthly.manifest.json").write_text(json.dumps({"format": 1, "kind": "monthly_variable", "catalog_id": "ph_monthly",
+                                                                      "dataset": {"id": "x", "version": "202511"}}))
+
+
+def _run_with_ph(tmp_path, **kw):
+    spec = _write_study(tmp_path / "study", environment=("sst_daily", "ph_monthly"))
+    _write_inputs(tmp_path / "inputs")
+    _write_ph(tmp_path / "inputs", **kw)
+    return run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK), tmp_path / "out"
+
+
+def test_a_study_that_lists_a_monthly_variable_reads_its_file_and_the_dataset_carries_it(tmp_path):
+    code, out = _run_with_ph(tmp_path)
+    assert code == 0
+    monthly = pd.read_csv(out / "dataset" / "monthly.csv")
+    assert list(monthly.columns)[:3] == ["Datetime", "Temperature", "pH"] and monthly["pH"].notna().sum() == 72
+    run = json.loads((out / "run.json").read_text())
+    assert run["inputs"]["ph_monthly.csv"]["sha256"] == hashlib.sha256((tmp_path / "inputs" / "ph_monthly.csv").read_bytes()).hexdigest()
+    assert run["variable_manifests"]["ph_monthly"]["catalog_id"] == "ph_monthly"
+    assert run["coverage"]["variables"]["ph_monthly"]["months_with_value"] == 72
+
+
+def test_the_correlation_is_the_same_with_or_without_the_variable_and_the_analyses_know_the_ph_is_there(tmp_path):
+    code, out = _run_with_ph(tmp_path)
+    spec = _write_study(tmp_path / "study2")
+    _write_inputs(tmp_path / "inputs2")
+    assert run_study.run_study(spec, tmp_path / "inputs2", tmp_path / "out2", now=CLOCK) == 0
+    assert (out / "ccf.csv").read_bytes() == (tmp_path / "out2" / "ccf.csv").read_bytes()
+    with_ph, without = _analyses(out), _analyses(tmp_path / "out2")
+    assert any("pH" in r for r in without["cu_speciation"]["reasons"]) and not any("pH" in r for r in with_ph["cu_speciation"]["reasons"])
+    assert any("salinity" in r for r in with_ph["cu_speciation"]["reasons"])            # the others are still missing
+
+
+def test_a_listed_variable_without_its_file_fails_at_reading_with_the_file_named(tmp_path):
+    spec = _write_study(tmp_path / "study", environment=("sst_daily", "ph_monthly"))
+    _write_inputs(tmp_path / "inputs")
+    assert run_study.run_study(spec, tmp_path / "inputs", tmp_path / "out", now=CLOCK) == 1
+    p = json.loads((tmp_path / "out" / "progress.json").read_text())
+    assert p["status"] == "failed" and p["step"] == "read_sst" and "'ph_monthly.csv'" in p["error"]
+
+
+def test_a_variable_file_that_does_not_cover_the_study_fails_with_the_reason(tmp_path):
+    code, out = _run_with_ph(tmp_path, months=("1990-01-01", "1990-12-01"))
+    assert code == 1 and "no month in common" in json.loads((out / "progress.json").read_text())["error"]
+
+
+def test_the_manifest_of_a_variable_is_optional_like_the_ssts(tmp_path):
+    code, out = _run_with_ph(tmp_path, manifest=False)
+    assert code == 0 and json.loads((out / "run.json").read_text())["variable_manifests"] == {"ph_monthly": None}

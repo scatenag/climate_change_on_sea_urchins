@@ -46,7 +46,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.stats.multitest import multipletests
 
-from . import analyses, dataset_builder, mhw_analysis, response_csv
+from . import analyses, catalog, dataset_builder, download, mhw_analysis, response_csv
 from .study_spec import load_study
 
 STEPS = ["load_study", "read_response", "read_sst", "build_dataset", "correlate", "write_results"]
@@ -168,12 +168,23 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
         if not sst_file.is_file():
             raise RunError(f"{SST_FILE!r} is not in the inputs folder")
         sst = pd.read_csv(sst_file, parse_dates=["Datetime"])
+        # the monthly variables the study lists: one file each, named after the catalogue id (a download writes it so)
+        variable_files = {}
+        for ref in spec.environment:
+            if ref.catalog_id == "sst_daily":
+                continue
+            csv_name, _ = download.series_files(ref.catalog_id)
+            if not (inputs / csv_name).is_file():
+                raise RunError(f"{csv_name!r} is not in the inputs folder")
+            variable_files[ref.catalog_id] = inputs / csv_name
+        variables = {i: pd.read_csv(f, parse_dates=["Datetime"]) for i, f in variable_files.items()}
         finish("read_sst")
 
         begin("build_dataset")
         ds = dataset_builder.build_dataset(
             sst=sst, response=series.series, imputation=response.imputation,
-            baseline=(spec.mhw_climatology.baseline_start_year, spec.mhw_climatology.baseline_end_year))
+            baseline=(spec.mhw_climatology.baseline_start_year, spec.mhw_climatology.baseline_end_year),
+            variables=variables or None)
         finish("build_dataset")
 
         begin("correlate")
@@ -207,8 +218,11 @@ def run_study(study_path, inputs_dir, out_dir, *, now: Callable[[], dt.datetime]
         run_record = {
             "format": 1, "status": "done", "started_at": started, "finished_at": now().isoformat(),
             "study": {"id": spec.id, "sha256": _sha256(study_path)},
-            "inputs": {response.source.file: {"sha256": _sha256(response_file)}, SST_FILE: {"sha256": _sha256(sst_file)}},
+            "inputs": {response.source.file: {"sha256": _sha256(response_file)}, SST_FILE: {"sha256": _sha256(sst_file)},
+                       **{f.name: {"sha256": _sha256(f)} for f in variable_files.values()}},
             "download_manifest": json.loads(manifest_path.read_text()) if manifest_path.is_file() else None,
+            "variable_manifests": {i: (json.loads(m.read_text()) if (m := inputs / download.series_files(i)[1]).is_file() else None)
+                                   for i in variable_files},
             "response_manifest": json.loads(response_manifest_path.read_text()) if response_manifest_path.is_file() else None,
             "site": {"id": site.id, "name": site.name, "lat": site.lat, "lon": site.lon},
             "parameters": {"driver": DRIVER, "transform": "first differences", "pairs": "consecutive months, both real",

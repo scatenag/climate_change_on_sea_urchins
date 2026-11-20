@@ -504,3 +504,28 @@ def test_the_states_are_the_same_words_in_the_table_and_in_the_function():
     table = step_run.analyses_table([{"id": "x", "label": "L", "status": "not_applicable", "reasons": ["a", "b"], "note": "n", "outputs": []}])
     assert table.iloc[0].to_dict() == {"analysis": "L", "state": step_run.STATE_WORDS["not_applicable"], "why": "a; b", "note": "n"}
     assert step_run.analyses_table([{"id": "x", "label": "L", "status": "runs", "reasons": [], "note": None, "outputs": []}]).iloc[0]["note"] == ""
+
+
+# --- the variables chosen in step 1, in the result (M1.8) ---------------------------------------------------------------
+
+from test_step_site import PH_LABEL, _choose_variables, _fill, _submit, client, fixture_client, two_kinds  # noqa: E402,F401
+
+
+def test_the_variables_of_the_dataset_are_said_from_the_values():
+    run = {"coverage": {"variables": {"ph_monthly": {"column": "pH", "first": "2003-01", "last": "2026-06", "months_with_value": 270, "months_without_value": 4}}}}
+    text = step_run.describe_variables(run)
+    assert "pH (total scale), monthly" in text and "270 months with a value" in text and "2003-01 to 2026-06" in text and "4 without" in text
+    assert step_run.describe_variables({"coverage": {}}) is None
+
+
+def test_a_study_with_a_chosen_variable_runs_and_the_result_says_it_is_in_the_dataset(two_kinds):
+    at = _submit(_choose_variables(_fill(_open()), PH_LABEL))
+    at = _run_to_the_end(_generate(at))
+    assert not at.exception, [e.value for e in at.exception]
+    out = _ctx(at).workdir / "run"
+    run = json.loads((out / "run.json").read_text())
+    assert run["coverage"]["variables"]["ph_monthly"]["months_with_value"] > 0 and "pH" in pd.read_csv(out / "dataset" / "monthly.csv").columns
+    assert "pH (total scale), monthly" in _shown(at) and "months with a value" in _shown(at)
+    reasons = {r["analysis"]: r["why"] for _, r in _analyses_table(at).iterrows()}
+    cu = next(v for k, v in reasons.items() if k.startswith("Copper speciation"))
+    assert "pH" not in cu and "salinity" in cu                                          # the pH is there now; the salinity is not

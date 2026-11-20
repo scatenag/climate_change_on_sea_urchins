@@ -36,7 +36,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from . import common, mhw_detection, mhw_hobday
+from . import catalog, common, mhw_detection, mhw_hobday
 
 TEMPERATURE_RULE = "a month with any missing SST day is missing (decision of 2026-10-03)"
 MONTHLY_COLUMNS = ["Datetime", "Temperature", "response", "response_imputed",
@@ -99,10 +99,42 @@ def _continuous_daily(sst: pd.DataFrame) -> pd.DataFrame:
     return full
 
 
-def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, baseline: tuple[int, int]) -> Dataset:
+def _monthly_variables(variables: dict[str, pd.DataFrame], grid: pd.DatetimeIndex) -> tuple[list[tuple[str, pd.Series]], dict]:
+    """The monthly variables of the catalogue as series on the grid's months, and what each covers. A month the variable does
+    not have stays missing; a file that is not the catalogue's variable, has more than one value for a month, or has no month
+    of the study is refused."""
+    columns, coverage = [], {}
+    for catalog_id in [i for i in catalog.known_ids() if i in variables] + [i for i in variables if i not in catalog.CATALOG]:
+        if catalog_id not in catalog.CATALOG:
+            raise DatasetError(f"{catalog_id!r} is not in the variable catalogue; known ids: {', '.join(catalog.known_ids())}")
+        variable = catalog.get(catalog_id)
+        if variable.cadence != "P1M":
+            raise DatasetError(f"{catalog_id!r} is not a monthly variable")
+        frame = variables[catalog_id]
+        if variable.column not in frame.columns or "Datetime" not in frame.columns:
+            raise DatasetError(f"the file of {catalog_id!r} has no column {variable.column!r} (and Datetime)")
+        s = frame[["Datetime", variable.column]].copy()
+        s["Datetime"] = pd.to_datetime(s["Datetime"])
+        if s["Datetime"].duplicated().any():
+            raise DatasetError(f"{catalog_id!r} has more than one value for {s.loc[s['Datetime'].duplicated(), 'Datetime'].iloc[0]:%Y-%m}")
+        if not (s["Datetime"].dt.day == 1).all():
+            raise DatasetError(f"{catalog_id!r} is not monthly: its dates are not the first of the month")
+        s = s.set_index("Datetime")[variable.column].astype(float).sort_index()
+        own = s.reindex(pd.date_range(s.index.min(), s.index.max(), freq="MS"))
+        if not own.index.isin(grid).any():
+            raise DatasetError(f"{catalog_id!r} covers {own.index.min():%Y-%m} to {own.index.max():%Y-%m}: no month in common with the study")
+        columns.append((variable.column, own.reindex(grid)))
+        coverage[catalog_id] = {"column": variable.column, "first": f"{own.index.min():%Y-%m}", "last": f"{own.index.max():%Y-%m}",
+                                "months_with_value": int(own.notna().sum()), "months_without_value": int(own.isna().sum())}
+    return columns, coverage
+
+
+def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, baseline: tuple[int, int],
+                  variables: dict[str, pd.DataFrame] | None = None) -> Dataset:
     """`sst`: Datetime, Temperature (daily). `response`: one row per month with Datetime (first of the
     month), value, ci_upper, ci_lower, n (response_csv's `series`). `imputation`: an ImputationSpec or None.
-    `baseline`: the climatology years (start, end)."""
+    `baseline`: the climatology years (start, end). `variables`: the monthly variables of the catalogue by id, each a
+    frame with Datetime (first of the month) and its column (M1.8): they join the monthly table next to the temperature."""
     if response is None or response.empty:
         raise DatasetError("the response series has no months")
     resp = response.copy()
@@ -146,11 +178,14 @@ def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, base
         for _ in range(imputation.passes):
             values = common.impute_series(values, imputation.window_months, imputation.min_periods)
     monthly = grid.merge(temperature, on="Datetime", how="left")
+    var_columns, var_coverage = _monthly_variables(variables, pd.DatetimeIndex(grid["Datetime"])) if variables else ([], {})
+    for column, series in var_columns:
+        monthly[column] = series.to_numpy()
     monthly["response"] = values.to_numpy()
     monthly["response_imputed"] = imputed_flag.to_numpy()
     for src, dst in [("ci_upper", "response_ci_upper"), ("ci_lower", "response_ci_lower"), ("n", "response_n")]:
         monthly[dst] = grid["Datetime"].map(r[src]).astype(float).where(~imputed_flag).to_numpy()
-    monthly = monthly[MONTHLY_COLUMNS]
+    monthly = monthly[["Datetime", "Temperature"] + [c for c, _ in var_columns] + MONTHLY_COLUMNS[2:]]
 
     with_value = ~imputed_flag
     coverage = {
@@ -165,6 +200,8 @@ def build_dataset(*, sst: pd.DataFrame, response: pd.DataFrame, imputation, base
         "mhw": {"baseline": [y0, y1], "method": mhw_hobday.METHOD, "events": int(len(mhw_events)),
                 "months_excluded_incomplete_sst": excluded_info},
     }
+    if var_coverage:
+        coverage["variables"] = var_coverage
     return Dataset(monthly=monthly, mhw_events=mhw_events, mhw_monthly=mhw_monthly, mhw_annual=mhw_annual,
                    coverage=coverage, baseline=(y0, y1),
                    imputation=None if imputation is None else imputation.model_dump())
