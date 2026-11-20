@@ -136,3 +136,12 @@ def test_main_downloads_the_ph_when_given_the_monthly_reference_and_a_gross_diff
 def test_without_the_third_argument_the_ph_is_not_downloaded_and_the_old_check_is_unchanged(tmp_path, monkeypatch):
     code, out = _main(tmp_path, monkeypatch, [8.10] * 24, third=False)
     assert code == 0 and not (out / "ph_livorno").exists() and "pH" not in (out / "summary.md").read_text()
+
+
+def test_the_limits_of_the_monthly_check_are_the_ones_the_adr_states():
+    assert vd.MAX_DIFF_PH == 0.02 and vd.MIN_COMMON_MONTHS == 12
+    ok = {"returncode": 0, "stderr": ""}
+    assert vd.check_monthly(ok, {"common_days": 270, "max_abs_diff": 0.0199, "over_1e-4": 5}) == []
+    assert vd.check_monthly(ok, {"common_days": 270, "max_abs_diff": 0.02, "over_1e-4": 5})
+    assert vd.check_monthly(ok, {"common_days": 12, "max_abs_diff": 1e-5, "over_1e-4": 0}) == []
+    assert vd.check_monthly(ok, {"common_days": 11, "max_abs_diff": 1e-5, "over_1e-4": 0})

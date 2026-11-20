@@ -267,3 +267,8 @@ def test_a_cube_with_two_times_in_a_month_is_a_download_error_not_a_crash():
                 lons=np.array([10.4]), values=np.ones((2, 1, 1, 1)), dataset_version="202511")
     with pytest.raises(DownloadError, match="more than one time in 2024-01"):
         download._monthly_series(cube, dt.date(2024, 1, 1), dt.date(2024, 1, 1), 1.0)
+
+
+def test_a_daily_variable_is_refused_by_the_monthly_download():
+    with pytest.raises(DownloadError, match="not a monthly variable"):
+        download.fetch_monthly(LIVORNO, catalog_id="sst_daily", start=dt.date(2024, 1, 1), credentials=CREDS, client=FakeMonthlyClient(), now=CLOCK)
