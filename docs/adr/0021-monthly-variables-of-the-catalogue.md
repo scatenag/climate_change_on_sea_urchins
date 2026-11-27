@@ -76,17 +76,23 @@ un test vuole il fattore uguale a `config.CO2_PA_TO_UATM`, la costante che gli s
 del 10/9 (il valore letto come µatm), che qui non si ripete perché l'unità è dichiarata in un punto solo. Il prodotto è di superficie e
 non ha una coordinata di profondità: la voce dichiara comunque 0–10 m, perché è ciò che lo script di Livorno chiede al toolbox (e
 uguale a ciò che lo script scarica è il criterio). Il proprietario ha verificato sul servizio vero (27/11, toolbox 2.5.2) che il
-dataset non ha l'asse della profondità e che la richiesta senza profondità funziona; la richiesta **con** la profondità, quella che fa
-questa pipeline, è quella del job di aggiornamento, che il 5/10 ha scaricato così il dataset (toolbox 2.5.0, run 37319831363). Con il
-toolbox della pipeline (serie 2.3) non è ancora provata: è il primo punto da guardare nel workflow. Con la CO₂ tutte le variabili
-mensili di Livorno sono nel catalogo.
+dataset non ha l'asse della profondità e che la richiesta senza profondità funziona. La richiesta **con** la profondità, quella che fa
+questa pipeline, è quella del job di aggiornamento: il 5/10 ha scaricato così il dataset `…_my_…` (toolbox 2.5.0, run 37319831363) e il
+5/11, con il toolbox della serie della pipeline (2.3.0, run 42042082130), il dataset `…_anfc_…` (il `…_my_…` finiva ad agosto). Il
+`…_my_…` con la serie 2.3 non è ancora provato: lo prova il workflow. Con la CO₂ tutte le variabili mensili di Livorno sono nel
+catalogo.
 
 ## La verifica in due intervalli (28/11)
 
 **Misura del proprietario sul servizio vero** (27/11, toolbox 2.5.2, fuori da questa pipeline; box di `scripts/fetch_copernicus.py`,
 43.4278 N 10.3956 E ±0.1°, 0–10 m): i cinque dataset riproducono `data/env_copernicus.csv` fino a maggio 2023, con differenza
-mediana di circa 1e-5; da giugno 2023 a ottobre 2026 i valori differiscono, con massimo assoluto di 4.6 per l'O₂ e di 20.3 µatm per la
-CO₂. **La causa non è stabilita**; dati e file di Livorno non cambiano.
+mediana di circa 1e-5; da giugno 2023 a ottobre 2026 (così nella misura; il file nel repository arriva a settembre 2026) i valori
+differiscono, con massimo assoluto di 4.6 per l'O₂ e di 20.3 µatm per la CO₂. L'indagine sulla causa è riferita al proprietario; dati e
+file di Livorno non cambiano.
+
+La soglia si applica al **massimo**, non alla mediana. Sui file grezzi del download di Livorno dell'11/3/2026 (locali, non versionati) la
+riduzione di questa pipeline (`download._monthly_series`, con la conversione del catalogo) riproduce il file fino a 2023-05 con
+massimo 6e-5 (la CO₂, che ha il maggiore; misura del 28/11): è una prova della riduzione, non del servizio di oggi né del toolbox.
 
 **Decisione del proprietario:** il confronto è diviso in due intervalli, ciascuno con il proprio esito, così un fallimento si legge
 per intervallo. Fino a 2023-05 la soglia è **1e-3** per ogni variabile; da 2023-06 è larga. In ogni intervallo servono almeno 12 mesi

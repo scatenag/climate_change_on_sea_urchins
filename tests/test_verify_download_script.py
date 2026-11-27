@@ -193,6 +193,7 @@ def test_main_downloads_every_monthly_variable_and_reports_each_interval(tmp_pat
     code, out = _main(tmp_path, monkeypatch, _values(O2=(30, 4.6), CO2=(40, 20.3)))
     assert code == 0
     text = (out / "summary.md").read_text()
+    assert "- every case as expected" in text      # seven cases, not the three of M1.2
     for column, seconds in (("pH", 2.0), ("Salinity", 3.0), ("O2", 4.0), ("CO2", 5.0)):
         assert f"### Monthly {column} of Livorno against `data/env_copernicus.csv` (M1.8)" in text
         assert f"- download time: **{seconds} s**" in text

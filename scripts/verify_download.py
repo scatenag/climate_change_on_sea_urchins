@@ -179,7 +179,7 @@ def summary(results: dict, livorno_cmp, failures: list[str], monthly: dict | Non
     lines += ["", "### Pisa (43.72, 10.45)", "```", (P["stderr"] or P["stdout"]).strip(), "```",
               "", "### Mar Nero (43.0, 31.0)", "```", (B["stderr"] or B["stdout"]).strip(), "```", "",
               "### Outcome", ""]
-    lines += [f"- FAIL: {f}" for f in failures] if failures else ["- all three as expected"]
+    lines += [f"- FAIL: {f}" for f in failures] if failures else ["- every case as expected"]
     return "\n".join(lines) + "\n"
 
 

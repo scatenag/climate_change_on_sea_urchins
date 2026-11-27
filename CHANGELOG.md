@@ -17,15 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **The CO2 partial pressure, the last monthly variable of Livorno's environment** (milestone M1.8, ADR-0021). `co2_monthly` carries the named
   conversion from pascal to µatm (the same constant as `config.CO2_PA_TO_UATM`, checked by a test), applied once and recorded in the
-  manifest; step 1 offers it and `scripts/verify_download.py` has a case for it (gross limit 22.0). The product has no depth coordinate:
-  how the toolbox answers the depth request is the first thing to look at in the verification on the real service.
+  manifest; step 1 offers it and `scripts/verify_download.py` has a case for it. The product has no depth coordinate.
 - **The dissolved oxygen, third monthly variable** (milestone M1.8, ADR-0021). `o2_monthly` is what `scripts/fetch_copernicus.py` downloads for
-  Livorno, with the biogeochemical product's box like the pH; step 1 offers it and `scripts/verify_download.py` has a case for it
-  (gross limit 4.0, below the median month-to-month change of the file).
+  Livorno, with the biogeochemical product's box like the pH; step 1 offers it and `scripts/verify_download.py` has a case for it.
 - **The salinity, second monthly variable** (milestone M1.8, ADR-0021). `salinity_monthly` is what `scripts/fetch_copernicus.py` downloads for
   Livorno (the physics product's box, so a site west of -5.54 has it and not the pH); step 1 offers it next to the pH and the analyses
   that needed it no longer say it is missing; `scripts/verify_download.py` compares each monthly variable of Livorno with
-  `data/env_copernicus.csv` with a limit below the median month-to-month change.
+  `data/env_copernicus.csv`.
 - **Monthly variables of the catalogue, the pH first** (milestone M1.8, ADR-0021). `ph_monthly` is what `scripts/fetch_copernicus.py` downloads
   for Livorno (checked against its source), with the biogeochemical product's own domain; the download of a monthly variable
   (`download.fetch_monthly`, `ccsu-download-sst --variable`) gives one value per month, a missing month stays missing, and the
