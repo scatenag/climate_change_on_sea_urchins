@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The verification of the monthly variables reads in two intervals** (milestone M1.8, ADR-0021). `scripts/verify_download.py` compares
+  each monthly variable of Livorno with `data/env_copernicus.csv` up to 2023-05 with a limit of 1e-3 and from 2023-06 with a wide,
+  provisional limit per variable (the largest month-to-month change of the file), each with its own minimum of 12 common months and its
+  own failure; this replaces the single limit per variable over the whole series. Not yet run on the real service.
+
 ### Added
 
 - **The CO2 partial pressure, the last monthly variable of Livorno's environment** (milestone M1.8, ADR-0021). `co2_monthly` carries the named

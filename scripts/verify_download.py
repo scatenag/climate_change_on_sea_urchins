@@ -9,11 +9,11 @@ Three cases, with the outcomes the milestone expects:
   - Pisa, a land cell near the coast: refused as a land cell, the nearest sea cell about ten km away;
   - the Black Sea, inside the domain's bounding box: refused with the message that does not choose between
     an inland point and a sea the product does not cover; if it returns data, that is a failure to report.
-More cases when a third argument is given (milestone M1.8): each monthly variable of the catalogue (the pH, the salinity), downloaded
-for Livorno with `--variable`, against its column of data/env_copernicus.csv on the months both have; a gross difference (the
-variable's own limit, below its median month-to-month change) or fewer than 12 common months fails the check, the months that
-differ by more than 1e-4 are counted and reported (the product's reanalysis version can differ from the one the older months of
-the file came from).
+More cases when a third argument is given (milestone M1.8): each monthly variable of the catalogue (pH, salinity, oxygen, CO2),
+downloaded for Livorno with `--variable`, against its column of data/env_copernicus.csv on the months both have, in two intervals
+that pass or fail on their own: up to 2023-05 the values must be the file's (max |diff| below 1e-3), from 2023-06 only a gross
+difference fails (a wide limit per variable: the file and today's product are known to differ there). In either interval fewer
+than 12 common months fail; the months that differ by more than 1e-4 are counted and reported.
 usage: verify_download.py <output dir> [path to data/sst_daily.csv [path to data/env_copernicus.csv]]
 """
 import json
@@ -35,26 +35,50 @@ CASES = [
 MAX_DIFF = 1e-4
 MIN_COMMON_MONTHS = 12
 PISA_KM = (5, 25)
-# The gross limits are below the median |month-to-month change| of data/env_copernicus.csv (pH 0.0276, salinity 0.0549, oxygen 5.79, CO2 32.4, measured
-# 2026-11-20), so a shift of one month is seen; they are PROVISIONAL (ADR-0021) until the first measurement on the real service.
+# data/env_copernicus.csv against today's product (ADR-0021): measured by the owner on the real service, the five variables are the
+# file's up to May 2023 (median |diff| about 1e-5) and differ from June 2023 (up to 4.6 for the oxygen, 20.3 for the CO2).
+SPLIT_MONTH = "2023-06-01"
+MAX_DIFF_UNTIL_SPLIT = 1e-3
+INTERVALS = (("until_2023_05", "until 2023-05"), ("from_2023_06", "from 2023-06"))
+# The wide limit is the largest |month-to-month change| of the file (pH 0.0751, salinity 0.7401, oxygen 22.99, CO2 99.58, measured
+# 2026-11-28): it only stops a gross error (a unit, another variable). PROVISIONAL (ADR-0021).
 MONTHLY_CASES = {
-    "ph": dict(name="ph_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="ph_monthly", column="pH", max_diff=0.02),
+    "ph": dict(name="ph_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="ph_monthly", column="pH",
+               max_diff_after=0.075),
     "salinity": dict(name="salinity_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="salinity_monthly",
-                     column="Salinity", max_diff=0.04),
-    "o2": dict(name="o2_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="o2_monthly", column="O2", max_diff=4.0),
-    "co2": dict(name="co2_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="co2_monthly", column="CO2", max_diff=22.0),
+                     column="Salinity", max_diff_after=0.74),
+    "o2": dict(name="o2_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="o2_monthly", column="O2",
+               max_diff_after=23.0),
+    "co2": dict(name="co2_livorno", label="Livorno", lat=43.4278, lon=10.3956, start="2003-01-01", variable="co2_monthly", column="CO2",
+                max_diff_after=100.0),
 }
 
 
-def compare_series(downloaded: Path, reference: Path, column: str = "Temperature") -> dict:
-    """Days (or months) with a value in both series, and the largest absolute difference on them."""
+def interval_limit(case: dict, interval: str) -> float:
+    return MAX_DIFF_UNTIL_SPLIT if interval == "until_2023_05" else case["max_diff_after"]
+
+
+def compare_series(downloaded: Path, reference: Path, column: str = "Temperature", since: str | None = None,
+                   before: str | None = None) -> dict:
+    """Days (or months) with a value in both series, and the largest absolute difference on them; `since` (included) and
+    `before` (excluded) keep only that part of the common dates."""
     a = pd.read_csv(downloaded, parse_dates=["Datetime"]).set_index("Datetime")[column]
     b = pd.read_csv(reference, parse_dates=["Datetime"]).set_index("Datetime")[column]
     both = a.dropna().index.intersection(b.dropna().index)
+    if since:
+        both = both[both >= pd.Timestamp(since)]
+    if before:
+        both = both[both < pd.Timestamp(before)]
     return {"common_days": int(len(both)), "max_abs_diff": float((a[both] - b[both]).abs().max()) if len(both) else None,
             "over_1e-4": int(((a[both] - b[both]).abs() > 1e-4).sum()),
             "downloaded_days": int(a.notna().sum()), "reference_days": int(b.notna().sum()),
             "downloaded_end": a.dropna().index.max().date().isoformat()}
+
+
+def compare_intervals(downloaded: Path, reference: Path, column: str) -> dict:
+    """The comparison of a monthly variable, one for each interval of INTERVALS."""
+    return {"until_2023_05": compare_series(downloaded, reference, column, before=SPLIT_MONTH),
+            "from_2023_06": compare_series(downloaded, reference, column, since=SPLIT_MONTH)}
 
 
 def nearest_sea_km(message: str):
@@ -105,18 +129,22 @@ def check(results: dict, livorno_cmp: dict | None) -> list[str]:
 
 
 def check_monthly(case: dict, result: dict, cmp: dict | None) -> list[str]:
-    """A monthly variable of Livorno against data/env_copernicus.csv: the failures (a download that failed, no or too few common
-    months, a gross difference); the small differences are reported, not failed."""
+    """A monthly variable of Livorno against data/env_copernicus.csv, interval by interval: the failures (a download that
+    failed or gave no series; in an interval, too few common months or a difference not below its limit)."""
     col = case["column"]
     if result["returncode"] != 0:
         return [f"{col}: download failed ({result['stderr'].strip()[:300]})"]
-    if not cmp or not cmp["common_days"]:
-        return [f"{col}: no common month with data/env_copernicus.csv"]
-    if cmp["common_days"] < MIN_COMMON_MONTHS:
-        return [f"{col}: only {cmp['common_days']} common months with data/env_copernicus.csv (at least {MIN_COMMON_MONTHS})"]
-    if cmp["max_abs_diff"] >= case["max_diff"]:
-        return [f"{col}: max |diff| {cmp['max_abs_diff']:.3g} is not below {case['max_diff']}"]
-    return []
+    if cmp is None:
+        return [f"{col}: no series to compare with data/env_copernicus.csv"]
+    failures = []
+    for interval, label in INTERVALS:
+        part, limit = cmp[interval], interval_limit(case, interval)
+        if part["common_days"] < MIN_COMMON_MONTHS:
+            failures.append(f"{col}, {label}: only {part['common_days']} common months with data/env_copernicus.csv "
+                            f"(at least {MIN_COMMON_MONTHS})")
+        elif part["max_abs_diff"] >= limit:
+            failures.append(f"{col}, {label}: max |diff| {part['max_abs_diff']:.3g} is not below {limit}")
+    return failures
 
 
 def summary(results: dict, livorno_cmp, failures: list[str], monthly: dict | None = None) -> str:
@@ -138,10 +166,15 @@ def summary(results: dict, livorno_cmp, failures: list[str], monthly: dict | Non
         if cmp is None:
             lines += ["", f"### Monthly {case['column']} of Livorno (M1.8)", "- no comparison (download failed)"]
             continue
-        lines += ["", f"### Monthly {case['column']} of Livorno against `data/env_copernicus.csv` (M1.8)",
-                  f"- common months: **{cmp['common_days']}**; max |diff|: **{cmp['max_abs_diff']}** (gross limit {case['max_diff']})",
-                  f"- months that differ by more than 1e-4: **{cmp['over_1e-4']}**; downloaded {cmp['downloaded_days']} months, "
-                  f"reference {cmp['reference_days']}; downloaded series ends {cmp['downloaded_end']}",
+        lines += ["", f"### Monthly {case['column']} of Livorno against `data/env_copernicus.csv` (M1.8)", "",
+                  "| Months | Common | Max abs diff | Limit | Differ by more than 1e-4 |", "|---|---|---|---|---|"]
+        for interval, label in INTERVALS:
+            part = cmp[interval]
+            lines.append(f"| {label} | {part['common_days']} | {part['max_abs_diff']} | {interval_limit(case, interval)} "
+                         f"| {part['over_1e-4']} |")
+        whole = cmp["until_2023_05"]      # what was downloaded is the same in both parts
+        lines += ["", f"- downloaded {whole['downloaded_days']} months, reference {whole['reference_days']}; "
+                      f"downloaded series ends {whole['downloaded_end']}",
                   f"- download time: **{results[key]['seconds']} s**"]
     lines += ["", "### Pisa (43.72, 10.45)", "```", (P["stderr"] or P["stdout"]).strip(), "```",
               "", "### Mar Nero (43.0, 31.0)", "```", (B["stderr"] or B["stdout"]).strip(), "```", "",
@@ -162,7 +195,7 @@ def main(argv=None) -> int:
         for key, case in MONTHLY_CASES.items():
             results[key] = run_case(case, out)
             csv = out / case["name"] / f"{case['variable']}.csv"
-            monthly[key] = (compare_series(csv, monthly_reference, column=case["column"])
+            monthly[key] = (compare_intervals(csv, monthly_reference, case["column"])
                             if results[key]["returncode"] == 0 and csv.exists() else None)
     livorno_cmp = None
     csv = out / "livorno" / "sst_daily.csv"
